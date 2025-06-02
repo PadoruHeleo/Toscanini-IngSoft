@@ -7,6 +7,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import { ViewTitle } from "@/components/ViewTitle";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -114,36 +116,38 @@ const equipos = [
 
 export function ListaDeEquipos() {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-[120px]">Marca</TableHead>
-          <TableHead>Modelo</TableHead>
-          <TableHead>Cliente</TableHead>
-          <TableHead className="text-right">Estado</TableHead>
-          <TableHead>Prioridad</TableHead>
-          <TableHead>Fecha de Ingreso</TableHead>
-          <TableHead>Acciones</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {equipos.map((equipo, index) => (
-          <TableRow key={index}>
-            <TableCell className="font-medium">{equipo.marca}</TableCell>
-            <TableCell>{equipo.modelo}</TableCell>
-            <TableCell>{equipo.nombre_cliente}</TableCell>
-            <TableCell className="text-right">{equipo.estado}</TableCell>
-            <TableCell>{equipo.prioridad}</TableCell>
-            <TableCell>{equipo.fecha_ingreso}</TableCell>
-            <TableCell>
-              {equipo.ver_cotizacion === 1 && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="secondary" size="sm">
-                      Ver Cotización
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
+    <div className="p-4">
+      <ViewTitle></ViewTitle>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[120px]">Marca</TableHead>
+            <TableHead>Modelo</TableHead>
+            <TableHead>Cliente</TableHead>
+            <TableHead className="text-right">Estado</TableHead>
+            <TableHead>Prioridad</TableHead>
+            <TableHead>Fecha de Ingreso</TableHead>
+            <TableHead>Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {equipos.map((equipo, index) => (
+            <TableRow key={index}>
+              <TableCell className="font-medium">{equipo.marca}</TableCell>
+              <TableCell>{equipo.modelo}</TableCell>
+              <TableCell>{equipo.nombre_cliente}</TableCell>
+              <TableCell className="text-right">{equipo.estado}</TableCell>
+              <TableCell>{equipo.prioridad}</TableCell>
+              <TableCell>{equipo.fecha_ingreso}</TableCell>
+              <TableCell>
+                {equipo.ver_cotizacion === 1 && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="secondary" size="sm">
+                        Ver Cotización
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl">
                     <DialogHeader>
                       <DialogTitle>Cotización del equipo</DialogTitle>
                       <DialogDescription>
@@ -155,18 +159,28 @@ export function ListaDeEquipos() {
                         Fecha de ingreso: {equipo.fecha_ingreso}
                       </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter>
+
+                    <div className="mt-4 h-[500px]">
+                      <iframe
+                        src="/cotizacion.pdf"
+                        className="w-full h-full rounded border"
+                        title="Cotización PDF"
+                      />
+                    </div>
+
+                    <DialogFooter className="mt-4">
                       <DialogClose asChild>
                         <Button variant="secondary">Cerrar</Button>
                       </DialogClose>
                     </DialogFooter>
                   </DialogContent>
-                </Dialog>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+                  </Dialog>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

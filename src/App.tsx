@@ -19,7 +19,7 @@ function ViewRenderer() {
       return <DashboardView />;
     case "lifecycle":
       return <LifecycleView />;
-    case "analytics":
+    case "lista de equipos":
       return <ListaDeEquipos />;
     case "projects":
       return <ProjectsView />;
