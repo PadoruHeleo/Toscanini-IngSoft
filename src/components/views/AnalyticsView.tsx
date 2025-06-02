@@ -6,9 +6,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
+import { useState } from "react";
 import { ViewTitle } from "@/components/ViewTitle";
-
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +21,33 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+const piezas = [
+  {
+    pieza_id: 1,
+    pieza_nombre: "Pantalla OLED 6.5",
+    pieza_marca: "Samsung",
+    pieza_desc: "Pantalla de repuesto para modelos Galaxy A52",
+    pieza_precio: 150,
+    created_at: "2025-05-30T10:00:00Z",
+  },
+  {
+    pieza_id: 2,
+    pieza_nombre: "Batería 4000mAh",
+    pieza_marca: "Motorola",
+    pieza_desc: "Batería de larga duración compatible con Motorola G9",
+    pieza_precio: 50,
+    created_at: "2025-05-30T11:00:00Z",
+  },
+  {
+    pieza_id: 3,
+    pieza_nombre: "Módulo de cámara trasera",
+    pieza_marca: "Xiaomi",
+    pieza_desc: "Cámara principal de 64MP para Redmi Note 11",
+    pieza_precio: 80,
+    created_at: "2025-05-30T12:00:00Z",
+  },
+];
 
 const equipos = [
   {
@@ -115,9 +143,47 @@ const equipos = [
 ];
 
 export function ListaDeEquipos() {
+  const [formData, setFormData] = useState({
+    manoObra: "",
+    repuestos: "",
+    otrosCargos: "",
+    otrasObs: "",
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleGuardar = () => {
+  const horaActual = new Date().toISOString();
+
+  const updatedFormData = {
+    ...formData,
+    pieza: piezas.find((p) => p.pieza_id === piezaSeleccionada),
+    horaRegistro: horaActual,
+  };
+  setFormData(updatedFormData);
+  console.log("Datos del formulario:", updatedFormData);
+};
+
+  const isFormValid =
+  formData.manoObra.trim() !== "" &&
+  formData.repuestos.trim() !== "" &&
+  formData.otrosCargos.trim() !== "" &&
+  formData.otrasObs.trim() !== "";
+
+  const [piezaSeleccionada, setPiezaSeleccionada] = useState<number | null>(null);
+
+const handleSeleccionPieza = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  setPiezaSeleccionada(parseInt(e.target.value));
+};
+
   return (
     <div className="p-4">
-      <ViewTitle></ViewTitle>
+      <ViewTitle />
       <Table>
         <TableHeader>
           <TableRow>
@@ -140,7 +206,7 @@ export function ListaDeEquipos() {
               <TableCell>{equipo.prioridad}</TableCell>
               <TableCell>{equipo.fecha_ingreso}</TableCell>
               <TableCell>
-                {equipo.ver_cotizacion === 1 && (
+                {equipo.ver_cotizacion === 1 ? (
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="secondary" size="sm">
@@ -148,32 +214,116 @@ export function ListaDeEquipos() {
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl">
-                    <DialogHeader>
-                      <DialogTitle>Cotización del equipo</DialogTitle>
-                      <DialogDescription>
-                        Marca: {equipo.marca}<br />
-                        Modelo: {equipo.modelo}<br />
-                        Cliente: {equipo.nombre_cliente}<br />
-                        Estado: {equipo.estado}<br />
-                        Prioridad: {equipo.prioridad}<br />
-                        Fecha de ingreso: {equipo.fecha_ingreso}
-                      </DialogDescription>
-                    </DialogHeader>
+                      <DialogHeader>
+                        <DialogTitle>Cotización del equipo</DialogTitle>
+                        <DialogDescription>
+                          Marca: {equipo.marca}
+                          <br />
+                          Modelo: {equipo.modelo}
+                          <br />
+                          Cliente: {equipo.nombre_cliente}
+                          <br />
+                          Estado: {equipo.estado}
+                          <br />
+                          Prioridad: {equipo.prioridad}
+                          <br />
+                          Fecha de ingreso: {equipo.fecha_ingreso}
+                        </DialogDescription>
+                      </DialogHeader>
 
-                    <div className="mt-4 h-[500px]">
-                      <iframe
-                        src="/cotizacion.pdf"
-                        className="w-full h-full rounded border"
-                        title="Cotización PDF"
-                      />
-                    </div>
+                      <div className="mt-4 h-[500px]">
+                        <iframe
+                          src="/cotizacion.pdf"
+                          className="w-full h-full rounded border"
+                          title="Cotización PDF"
+                        />
+                      </div>
 
-                    <DialogFooter className="mt-4">
-                      <DialogClose asChild>
-                        <Button variant="secondary">Cerrar</Button>
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
+                      <DialogFooter className="mt-4">
+                        <DialogClose asChild>
+                          <Button variant="secondary">Cerrar</Button>
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                ) : (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Crear Cotización
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Generar Nueva Cotización</DialogTitle>
+                      </DialogHeader>
+                      <div className="grid gap-4">
+                        <div className="grid gap-3">
+                          <Label htmlFor="pieza">Seleccionar pieza</Label>
+                          <select
+                            id="pieza"
+                            className="border rounded px-3 py-2"
+                            value={piezaSeleccionada ?? ""}
+                            onChange={handleSeleccionPieza}
+                          >
+                            <option value="">-- Seleccionar pieza --</option>
+                            {piezas.map((pieza) => (
+                              <option key={pieza.pieza_id} value={pieza.pieza_id}>
+                                {pieza.pieza_nombre} ({pieza.pieza_marca})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="grid gap-3">
+                          <Label htmlFor="mano-obra">Mano de obra *</Label>
+                          <Input
+                            id="mano-obra"
+                            name="manoObra"
+                            value={formData.manoObra}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                        <div className="grid gap-3">
+                          <Label htmlFor="repuestos">Repuestos *</Label>
+                          <Input
+                            id="repuestos"
+                            name="repuestos"
+                            value={formData.repuestos}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                        <div className="grid gap-3">
+                          <Label htmlFor="otros-cargos">Otros cargos *</Label>
+                          <Input
+                            id="otros-cargos"
+                            name="otrosCargos"
+                            value={formData.otrosCargos}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                        <div className="grid gap-3">
+                          <Label htmlFor="otras-obs">Otras Observaciones *</Label>
+                          <Input
+                            id="otras-obs"
+                            name="otrasObs"
+                            value={formData.otrasObs}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button variant="outline">Cancelar</Button>
+                        </DialogClose>
+                        <Button type="button" onClick={handleGuardar} disabled={!isFormValid}>
+                          Guardar Cambios
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
                   </Dialog>
                 )}
               </TableCell>
