@@ -2,7 +2,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import {
   DashboardView,
   LifecycleView,
-  AnalyticsView,
+  ListaDeEquipos,
   ProjectsView,
   TeamView,
   SettingsView,
@@ -19,8 +19,8 @@ function ViewRenderer() {
       return <DashboardView />;
     case "lifecycle":
       return <LifecycleView />;
-    case "analytics":
-      return <AnalyticsView />;
+    case "lista de equipos":
+      return <ListaDeEquipos />;
     case "projects":
       return <ProjectsView />;
     case "team":

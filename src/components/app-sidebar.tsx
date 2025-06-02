@@ -41,7 +41,7 @@ const data = {
       icon: IconListDetails,
     },
     {
-      title: "Analytics",
+      title: "Lista de equipos",
       url: "#",
       icon: IconChartBar,
     },
