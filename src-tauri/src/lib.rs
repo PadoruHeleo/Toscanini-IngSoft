@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod database;
+pub mod utils;
 
 use database::init_database;
 

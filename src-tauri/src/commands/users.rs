@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use crate::database::get_db_pool_unchecked;
+use crate::utils::{hash_password, verify_password};
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Usuario {
@@ -81,13 +82,16 @@ pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, 
 pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, String> {
     let pool = get_db_pool_unchecked();
     
+    // Encriptar la contraseña antes de guardarla
+    let hashed_password = hash_password(&request.usuario_contrasena)?;
+    
     let result = sqlx::query(
         "INSERT INTO USUARIO (usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol) VALUES (?, ?, ?, ?, ?, ?)"
     )
     .bind(&request.usuario_rut)
     .bind(&request.usuario_nombre)
     .bind(&request.usuario_correo)
-    .bind(&request.usuario_contrasena)
+    .bind(&hashed_password) // Usar la contraseña encriptada
     .bind(&request.usuario_telefono)
     .bind(&request.usuario_rol)
     .execute(pool)
@@ -106,6 +110,13 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
 pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_unchecked();
     
+    // Encriptar la contraseña si se proporciona
+    let hashed_password = if let Some(ref password) = request.usuario_contrasena {
+        Some(hash_password(password)?)
+    } else {
+        None
+    };
+    
     let result = sqlx::query(
         "UPDATE USUARIO SET 
          usuario_rut = COALESCE(?, usuario_rut),
@@ -119,7 +130,7 @@ pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> R
     .bind(&request.usuario_rut)
     .bind(&request.usuario_nombre)
     .bind(&request.usuario_correo)
-    .bind(&request.usuario_contrasena)
+    .bind(&hashed_password) // Usar la contraseña encriptada
     .bind(&request.usuario_telefono)
     .bind(&request.usuario_rol)
     .bind(usuario_id)
@@ -148,19 +159,40 @@ pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub async fn authenticate_usuario(usuario_rut: String, usuario_contrasena: String) -> Result<Option<Usuario>, String> {
+pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: String) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_unchecked();
     
+    // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
          FROM USUARIO 
-         WHERE usuario_rut = ? AND usuario_contrasena = ?"
+         WHERE usuario_correo = ?"
     )
-    .bind(usuario_rut)
-    .bind(usuario_contrasena)
+    .bind(&usuario_correo)
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
-    Ok(usuario)
+    // Si encontramos el usuario, verificar la contraseña
+    if let Some(user) = usuario {
+        if let Some(ref stored_password) = user.usuario_contrasena {
+            // Verificar la contraseña usando bcrypt
+            if verify_password(&usuario_contrasena, stored_password)? {
+                // Crear una copia del usuario sin la contraseña para enviar al frontend
+                let safe_user = Usuario {
+                    usuario_id: user.usuario_id,
+                    usuario_rut: user.usuario_rut,
+                    usuario_nombre: user.usuario_nombre,
+                    usuario_correo: user.usuario_correo,
+                    usuario_contrasena: None, // No enviar la contraseña al frontend
+                    usuario_telefono: user.usuario_telefono,
+                    usuario_rol: user.usuario_rol,
+                };
+                return Ok(Some(safe_user));
+            }
+        }
+    }
+    
+    // Credenciales inválidas
+    Ok(None)
 }
