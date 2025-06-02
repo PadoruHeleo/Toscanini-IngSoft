@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS EQUIPO (
     numero_serie VARCHAR(32) UNIQUE,
     equipo_marca VARCHAR(32),
     equipo_modelo VARCHAR(64),
-    equipo_tipo SET('notebook', 'desktop', 'impresora', 'monitor', 'otro'),
+    equipo_tipo SET('radio', 'antena', 'repetidor', 'otro'),
     equipo_precio INT,
     equipo_ubicacion VARCHAR(256),
     cliente_id INT,

@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS USUARIO (
     usuario_correo VARCHAR(256),
     usuario_contrasena VARCHAR(64),
     usuario_telefono VARCHAR(16),
-    usuario_rol ENUM('admin', 'tecnico', 'cliente')
+    usuario_rol ENUM('admin', 'tecnico', 'recepcion')
 );
