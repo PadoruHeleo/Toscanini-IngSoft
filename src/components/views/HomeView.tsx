@@ -111,7 +111,7 @@ export function HomeView() {
         "Gestión de garantías y contratos",
         "Reportes de actividad por cliente",
       ],
-      status: "completed",
+      status: "in-progress",
     },
     {
       icon: <IconTools className="h-6 w-6 text-orange-600" />,
@@ -125,7 +125,7 @@ export function HomeView() {
         "Integración con cotizaciones e informes",
         "Códigos únicos de identificación",
       ],
-      status: "completed",
+      status: "in-progress",
     },
     {
       icon: <IconFileText className="h-6 w-6 text-purple-600" />,

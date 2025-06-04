@@ -8,8 +8,10 @@ import {
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ToastProvider } from "@/contexts/ToastContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SessionExpirationWarning } from "@/components/SessionExpirationWarning";
+import { Toaster } from "@/components/ui/toaster";
 
 // Componente para renderizar la vista activa
 function ViewRenderer() {
@@ -34,21 +36,24 @@ function ViewRenderer() {
 export default function App() {
   return (
     <AuthProvider>
-      <ViewProvider>
-        <ProtectedRoute>
-          <SidebarProvider>
-            <AppSidebar variant="inset" />
-            <SidebarInset>
-              <div className="flex flex-1 flex-col">
-                <div className="@container/main flex flex-1 flex-col gap-2">
-                  <ViewRenderer />
+      <ToastProvider>
+        <ViewProvider>
+          <ProtectedRoute>
+            <SidebarProvider>
+              <AppSidebar variant="inset" />
+              <SidebarInset>
+                <div className="flex flex-1 flex-col">
+                  <div className="@container/main flex flex-1 flex-col gap-2">
+                    <ViewRenderer />
+                  </div>
                 </div>
-              </div>
-            </SidebarInset>
-          </SidebarProvider>
-          <SessionExpirationWarning />
-        </ProtectedRoute>
-      </ViewProvider>
+              </SidebarInset>
+            </SidebarProvider>
+            <SessionExpirationWarning />
+            <Toaster />
+          </ProtectedRoute>
+        </ViewProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }

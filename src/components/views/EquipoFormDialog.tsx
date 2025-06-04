@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToastContext } from "@/contexts/ToastContext";
 
 interface Cliente {
   cliente_id: number;
@@ -82,6 +83,7 @@ export function EquipoFormDialog({
   onEquipoAdded,
 }: EquipoFormDialogProps) {
   const { user } = useAuth();
+  const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [marcas, setMarcas] = useState<string[]>([]);
@@ -195,6 +197,8 @@ export function EquipoFormDialog({
         request: equipoData,
       });
 
+      let ordenCodigo: string | null = null;
+
       // Si es para mantenimiento, crear orden de trabajo
       if (tipoIngreso === "mantenimiento") {
         const fechaActual = new Date();
@@ -220,7 +224,26 @@ export function EquipoFormDialog({
         };
 
         await invoke("create_orden_trabajo", { request: ordenData });
-      } // Limpiar formulario
+        ordenCodigo = codigoOrden;
+      }
+
+      // Mostrar notificación de éxito
+      if (tipoIngreso === "mantenimiento" && ordenCodigo) {
+        success(
+          "¡Equipo creado y orden de trabajo generada!",
+          `Equipo: ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})\nOrden de trabajo: ${ordenCodigo}`
+        );
+      } else {
+        success(
+          "¡Equipo creado exitosamente!",
+          `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido registrado correctamente.`
+        );
+      }
+
+      // Cerrar diálogo
+      onOpenChange(false);
+
+      // Limpiar formulario
       setFormData({
         numero_serie: "",
         equipo_marca: "",
@@ -238,10 +261,18 @@ export function EquipoFormDialog({
       setShowNewModeloInput(false);
       setNewMarcaValue("");
       setNewModeloValue("");
-
       onEquipoAdded();
     } catch (error) {
       console.error("Error creando equipo:", error);
+
+      // Mostrar notificación de error
+      showError(
+        "Error al crear el equipo",
+        typeof error === "string"
+          ? error
+          : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
+      );
+
       setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
     } finally {
       setLoading(false);
@@ -305,7 +336,6 @@ export function EquipoFormDialog({
               </Select>
             </CardContent>
           </Card>
-
           {/* Campo de pre-informe - solo visible si es mantenimiento */}
           {tipoIngreso === "mantenimiento" && (
             <div className="space-y-2">
@@ -416,7 +446,6 @@ export function EquipoFormDialog({
               )}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             {" "}
             <div className="space-y-2">
@@ -527,7 +556,6 @@ export function EquipoFormDialog({
               )}
             </div>
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="cliente_id">Cliente *</Label>
             <Select
@@ -556,7 +584,6 @@ export function EquipoFormDialog({
               <p className="text-sm text-red-500">{errors.cliente_id}</p>
             )}
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="equipo_precio">Precio</Label>
@@ -587,13 +614,11 @@ export function EquipoFormDialog({
               />
             </div>
           </div>
-
           {errors.submit && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               {errors.submit}
             </div>
-          )}
-
+          )}{" "}
           <DialogFooter className="gap-2">
             <Button
               type="button"
