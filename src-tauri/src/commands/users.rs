@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use crate::database::get_db_pool_unchecked;
 use crate::utils::{hash_password, verify_password};
+use crate::commands::logs::log_action;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Usuario {
@@ -100,6 +101,16 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
     
     let usuario_id = result.last_insert_id() as i32;
     
+    // Registrar la acción en el log de auditoría
+    let _ = log_action(
+        "CREATE_USER",
+        None, // No hay usuario autenticado en la creación
+        "USUARIO",
+        Some(usuario_id),
+        None,
+        Some(&format!("Usuario creado: {} ({})", request.usuario_nombre, request.usuario_correo))
+    ).await;
+    
     // Obtener el usuario recién creado
     get_usuario_by_id(usuario_id)
         .await?
@@ -109,6 +120,9 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
 #[tauri::command]
 pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_unchecked();
+    
+    // Obtener el usuario actual para logging
+    let current_user = get_usuario_by_id(usuario_id).await?;
     
     // Encriptar la contraseña si se proporciona
     let hashed_password = if let Some(ref password) = request.usuario_contrasena {
@@ -142,6 +156,29 @@ pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> R
         return Ok(None);
     }
     
+    // Registrar la acción en el log de auditoría
+    if let Some(ref user) = current_user {
+        let prev_data = format!("{}|{}|{}", 
+            user.usuario_nombre.as_deref().unwrap_or(""), 
+            user.usuario_correo.as_deref().unwrap_or(""),
+            user.usuario_rol.as_deref().unwrap_or("")
+        );
+        let new_data = format!("{}|{}|{}", 
+            request.usuario_nombre.as_deref().unwrap_or(user.usuario_nombre.as_deref().unwrap_or("")),
+            request.usuario_correo.as_deref().unwrap_or(user.usuario_correo.as_deref().unwrap_or("")),
+            request.usuario_rol.as_deref().unwrap_or(user.usuario_rol.as_deref().unwrap_or(""))
+        );
+        
+        let _ = log_action(
+            "UPDATE_USER",
+            None,
+            "USUARIO",
+            Some(usuario_id),
+            Some(&prev_data),
+            Some(&new_data)
+        ).await;
+    }
+    
     get_usuario_by_id(usuario_id).await
 }
 
@@ -149,13 +186,35 @@ pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> R
 pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_unchecked();
     
+    // Obtener el usuario antes de eliminarlo para logging
+    let user_to_delete = get_usuario_by_id(usuario_id).await?;
+    
     let result = sqlx::query("DELETE FROM USUARIO WHERE usuario_id = ?")
         .bind(usuario_id)
         .execute(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
-    Ok(result.rows_affected() > 0)
+    let was_deleted = result.rows_affected() > 0;
+    
+    // Registrar la acción en el log de auditoría
+    if was_deleted {
+        if let Some(ref user) = user_to_delete {
+            let _ = log_action(
+                "DELETE_USER",
+                None,
+                "USUARIO",
+                Some(usuario_id),
+                Some(&format!("Usuario eliminado: {} ({})", 
+                    user.usuario_nombre.as_deref().unwrap_or("N/A"),
+                    user.usuario_correo.as_deref().unwrap_or("N/A")
+                )),
+                None
+            ).await;
+        }
+    }
+    
+    Ok(was_deleted)
 }
 
 #[tauri::command]
@@ -178,6 +237,16 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
         if let Some(ref stored_password) = user.usuario_contrasena {
             // Verificar la contraseña usando bcrypt
             if verify_password(&usuario_contrasena, stored_password)? {
+                // Registrar login exitoso en el log de auditoría
+                let _ = log_action(
+                    "LOGIN_SUCCESS",
+                    Some(user.usuario_id),
+                    "USUARIO",
+                    Some(user.usuario_id),
+                    None,
+                    Some(&format!("Login exitoso para {}", usuario_correo))
+                ).await;
+                
                 // Crear una copia del usuario sin la contraseña para enviar al frontend
                 let safe_user = Usuario {
                     usuario_id: user.usuario_id,
@@ -189,8 +258,28 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     usuario_rol: user.usuario_rol,
                 };
                 return Ok(Some(safe_user));
+            } else {
+                // Registrar intento de login fallido
+                let _ = log_action(
+                    "LOGIN_FAILED",
+                    None,
+                    "USUARIO",
+                    Some(user.usuario_id),
+                    None,
+                    Some(&format!("Intento de login fallido para {}", usuario_correo))
+                ).await;
             }
         }
+    } else {
+        // Registrar intento de login con usuario inexistente
+        let _ = log_action(
+            "LOGIN_FAILED",
+            None,
+            "USUARIO",
+            None,
+            None,
+            Some(&format!("Intento de login con usuario inexistente: {}", usuario_correo))
+        ).await;
     }
     
     // Credenciales inválidas
@@ -214,6 +303,18 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     if let Some(admin) = existing_admin {
+        // Registrar que se encontró un admin existente
+        let _ = log_action(
+            "ADMIN_FOUND",
+            None,
+            "USUARIO",
+            Some(admin.usuario_id),
+            None,
+            Some(&format!("Usuario administrador existente encontrado: {}", 
+                admin.usuario_correo.as_deref().unwrap_or("N/A")
+            ))
+        ).await;
+        
         // Retornar el usuario administrador existente sin la contraseña
         return Ok(Usuario {
             usuario_id: admin.usuario_id,
@@ -243,6 +344,16 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     let usuario_id = result.last_insert_id() as i32;
+    
+    // Registrar la creación del admin en el log de auditoría
+    let _ = log_action(
+        "ADMIN_CREATED",
+        None,
+        "USUARIO",
+        Some(usuario_id),
+        None,
+        Some("Usuario administrador creado durante la configuración inicial")
+    ).await;
     
     // Obtener el usuario recién creado y retornarlo sin la contraseña
     let created_user = get_usuario_by_id(usuario_id)
