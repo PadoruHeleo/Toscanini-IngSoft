@@ -60,11 +60,29 @@ pub fn run() {
             commands::equipos::update_equipo,
             commands::equipos::delete_equipo,
             commands::equipos::count_equipos,
-            commands::equipos::get_equipos_with_pagination,
-            commands::equipos::get_equipos_stats_by_tipo,
+            commands::equipos::get_equipos_with_pagination,            commands::equipos::get_equipos_stats_by_tipo,
             commands::equipos::get_equipos_by_price_range,
             commands::equipos::get_equipos_with_cliente,
-            commands::equipos::transfer_equipo_to_cliente
+            commands::equipos::get_equipos_marcas,
+            commands::equipos::get_equipos_modelos_by_marca,
+            commands::equipos::transfer_equipo_to_cliente,
+            commands::ordenes_trabajo::get_ordenes_trabajo,
+            commands::ordenes_trabajo::get_orden_trabajo_by_id,
+            commands::ordenes_trabajo::get_orden_trabajo_by_codigo,
+            commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo,
+            commands::ordenes_trabajo::get_ordenes_trabajo_by_estado,
+            commands::ordenes_trabajo::get_ordenes_trabajo_by_prioridad,
+            commands::ordenes_trabajo::get_ordenes_trabajo_by_usuario,
+            commands::ordenes_trabajo::get_ordenes_trabajo_detalladas,
+            commands::ordenes_trabajo::get_orden_trabajo_detallada_by_id,
+            commands::ordenes_trabajo::create_orden_trabajo,
+            commands::ordenes_trabajo::update_orden_trabajo,
+            commands::ordenes_trabajo::cambiar_estado_orden_trabajo,
+            commands::ordenes_trabajo::asignar_cotizacion_orden_trabajo,
+            commands::ordenes_trabajo::asignar_informe_orden_trabajo,
+            commands::ordenes_trabajo::delete_orden_trabajo,
+            commands::ordenes_trabajo::get_ordenes_trabajo_stats,
+            commands::ordenes_trabajo::search_ordenes_trabajo
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

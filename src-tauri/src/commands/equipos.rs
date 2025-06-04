@@ -543,3 +543,38 @@ pub async fn transfer_equipo_to_cliente(equipo_id: i32, new_cliente_id: i32, upd
     
     Ok(was_updated)
 }
+
+/// Obtener marcas únicas de equipos
+#[tauri::command]
+pub async fn get_equipos_marcas() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_unchecked();
+    let marcas = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT equipo_marca 
+         FROM EQUIPO 
+         WHERE equipo_marca IS NOT NULL AND equipo_marca != ''
+         ORDER BY equipo_marca"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(marcas)
+}
+
+/// Obtener modelos únicos por marca
+#[tauri::command]
+pub async fn get_equipos_modelos_by_marca(marca: String) -> Result<Vec<String>, String> {
+    let pool = get_db_pool_unchecked();
+    let modelos = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT equipo_modelo 
+         FROM EQUIPO 
+         WHERE equipo_marca = ? AND equipo_modelo IS NOT NULL AND equipo_modelo != ''
+         ORDER BY equipo_modelo"
+    )
+    .bind(marca)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(modelos)
+}

@@ -4,6 +4,7 @@ import {
   IconHelp,
   IconInnerShadowTop,
   IconSettings,
+  IconHome,
 } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -21,6 +22,11 @@ import {
 
 const data = {
   navMain: [
+    {
+      title: "Inicio",
+      url: "#",
+      icon: IconHome,
+    },
     {
       title: "Lista de equipos",
       url: "#",
