@@ -6,6 +6,7 @@ import {
 } from "@tabler/icons-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,12 +96,27 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="text-red-600 focus:text-red-700 focus:bg-red-50"
+            >
               <IconLogout />
               Cerrar Sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </SidebarMenuItem>
+      {/* Botón directo de cerrar sesión más visible */}
+      <SidebarMenuItem>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLogout}
+          className="w-full justify-start gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700"
+        >
+          <IconLogout className="size-4" />
+          Cerrar Sesión
+        </Button>
       </SidebarMenuItem>
     </SidebarMenu>
   );
