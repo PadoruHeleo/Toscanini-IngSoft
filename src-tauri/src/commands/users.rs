@@ -5,6 +5,7 @@ use crate::utils::{hash_password, verify_password};
 use crate::commands::logs::log_action;
 use crate::email::EmailService;
 use chrono::{DateTime, Utc, Duration};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Usuario {
@@ -15,6 +16,9 @@ pub struct Usuario {
     pub usuario_contrasena: Option<String>,
     pub usuario_telefono: Option<String>,
     pub usuario_rol: Option<String>,
+    pub last_login_at: Option<DateTime<Utc>>,
+    pub session_expires_at: Option<DateTime<Utc>>,
+    pub session_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,9 +65,8 @@ pub struct ResetPasswordRequest {
 #[tauri::command]
 pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
     let pool = get_db_pool_unchecked();
-    
-    let usuarios = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol FROM USUARIO"
+      let usuarios = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO"
     )
     .fetch_all(pool)
     .await
@@ -75,9 +78,8 @@ pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
 #[tauri::command]
 pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_unchecked();
-    
-    let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol FROM USUARIO WHERE usuario_id = ?"
+      let usuario = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_id = ?"
     )
     .bind(usuario_id)
     .fetch_optional(pool)
@@ -90,9 +92,8 @@ pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, Strin
 #[tauri::command]
 pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_unchecked();
-    
-    let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol FROM USUARIO WHERE usuario_rut = ?"
+      let usuario = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_rut = ?"
     )
     .bind(usuario_rut)
     .fetch_optional(pool)
@@ -246,7 +247,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     
     // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
          FROM USUARIO 
          WHERE usuario_correo = ?"
     )
@@ -257,9 +258,24 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     
     // Si encontramos el usuario, verificar la contraseña
     if let Some(user) = usuario {
-        if let Some(ref stored_password) = user.usuario_contrasena {
-            // Verificar la contraseña usando bcrypt
+        if let Some(ref stored_password) = user.usuario_contrasena {            // Verificar la contraseña usando bcrypt
             if verify_password(&usuario_contrasena, stored_password)? {
+                // Generar token de sesión
+                let session_token = Uuid::new_v4().to_string();
+                let login_time = Utc::now();
+                let session_expires = login_time + Duration::hours(16);
+                
+                // Actualizar campos de sesión en la base de datos
+                let _ = sqlx::query(
+                    "UPDATE USUARIO SET last_login_at = ?, session_expires_at = ?, session_token = ? WHERE usuario_id = ?"
+                )
+                .bind(login_time)
+                .bind(session_expires)
+                .bind(&session_token)
+                .bind(user.usuario_id)
+                .execute(pool)
+                .await;
+                
                 // Registrar login exitoso en el log de auditoría
                 let _ = log_action(
                     "LOGIN_SUCCESS",
@@ -279,6 +295,9 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     usuario_contrasena: None, // No enviar la contraseña al frontend
                     usuario_telefono: user.usuario_telefono,
                     usuario_rol: user.usuario_rol,
+                    last_login_at: Some(login_time),
+                    session_expires_at: Some(session_expires),
+                    session_token: Some(session_token),
                 };
                 return Ok(Some(safe_user));
             } else {
@@ -312,10 +331,9 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
 #[tauri::command]
 pub async fn create_admin_user() -> Result<Usuario, String> {
     let pool = get_db_pool_unchecked();
-    
-    // Verificar si ya existe un usuario admin
+      // Verificar si ya existe un usuario admin
     let existing_admin = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
          FROM USUARIO 
          WHERE usuario_rol = 'admin' OR usuario_correo = ? OR usuario_rut = ?"
     )
@@ -337,8 +355,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
                 admin.usuario_correo.as_deref().unwrap_or("N/A")
             ))
         ).await;
-        
-        // Retornar el usuario administrador existente sin la contraseña
+          // Retornar el usuario administrador existente sin la contraseña
         return Ok(Usuario {
             usuario_id: admin.usuario_id,
             usuario_rut: admin.usuario_rut,
@@ -347,6 +364,9 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
             usuario_contrasena: None, // No retornar la contraseña por seguridad
             usuario_telefono: admin.usuario_telefono,
             usuario_rol: admin.usuario_rol,
+            last_login_at: admin.last_login_at,
+            session_expires_at: admin.session_expires_at,
+            session_token: None, // No retornar el token de sesión por seguridad
         });
     }
     
@@ -382,8 +402,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     let created_user = get_usuario_by_id(usuario_id)
         .await?
         .ok_or_else(|| "Failed to retrieve created admin user".to_string())?;
-    
-    Ok(Usuario {
+      Ok(Usuario {
         usuario_id: created_user.usuario_id,
         usuario_rut: created_user.usuario_rut,
         usuario_nombre: created_user.usuario_nombre,
@@ -391,16 +410,18 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
         usuario_contrasena: None, // No retornar la contraseña por seguridad
         usuario_telefono: created_user.usuario_telefono,
         usuario_rol: created_user.usuario_rol,
+        last_login_at: created_user.last_login_at,
+        session_expires_at: created_user.session_expires_at,
+        session_token: None, // No retornar el token de sesión por seguridad
     })
 }
 
 #[tauri::command]
 pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Result<String, String> {
     let pool = get_db_pool_unchecked();
-    
-    // Buscar el usuario por email
+      // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
          FROM USUARIO 
          WHERE usuario_correo = ?"
     )
@@ -597,4 +618,116 @@ pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
     ).await;
     
     Ok(deleted_count)
+}
+
+#[tauri::command]
+pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, String> {
+    let pool = get_db_pool_unchecked();
+    
+    // Buscar usuario por token de sesión válido y no expirado
+    let usuario = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token
+         FROM USUARIO 
+         WHERE session_token = ? AND session_expires_at > UTC_TIMESTAMP()"
+    )
+    .bind(&session_token)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    match usuario {
+        Some(user) => {
+            // Registrar validación exitosa
+            let _ = log_action(
+                "SESSION_VALIDATED",
+                Some(user.usuario_id),
+                "USUARIO",
+                Some(user.usuario_id),
+                None,
+                Some(&format!("Sesión validada para usuario {}", user.usuario_correo.as_deref().unwrap_or("N/A")))
+            ).await;
+            
+            // Retornar usuario sin datos sensibles
+            Ok(Some(Usuario {
+                usuario_id: user.usuario_id,
+                usuario_rut: user.usuario_rut,
+                usuario_nombre: user.usuario_nombre,
+                usuario_correo: user.usuario_correo,
+                usuario_contrasena: None,
+                usuario_telefono: user.usuario_telefono,
+                usuario_rol: user.usuario_rol,
+                last_login_at: user.last_login_at,
+                session_expires_at: user.session_expires_at,
+                session_token: Some(session_token),
+            }))
+        }
+        None => {
+            // Registrar validación fallida
+            let _ = log_action(
+                "SESSION_VALIDATION_FAILED",
+                None,
+                "USUARIO",
+                None,
+                None,
+                Some(&format!("Token de sesión inválido o expirado: {}", session_token))
+            ).await;
+            Ok(None)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn logout_user(session_token: String) -> Result<bool, String> {
+    let pool = get_db_pool_unchecked();
+    
+    // Limpiar token de sesión del usuario
+    let result = sqlx::query(
+        "UPDATE USUARIO SET session_token = NULL, session_expires_at = NULL WHERE session_token = ?"
+    )
+    .bind(&session_token)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let was_logged_out = result.rows_affected() > 0;
+    
+    if was_logged_out {
+        let _ = log_action(
+            "LOGOUT_SUCCESS",
+            None,
+            "USUARIO",
+            None,
+            None,
+            Some("Usuario cerró sesión exitosamente")
+        ).await;
+    }
+    
+    Ok(was_logged_out)
+}
+
+#[tauri::command]
+pub async fn cleanup_expired_sessions() -> Result<u64, String> {
+    let pool = get_db_pool_unchecked();
+    
+    let result = sqlx::query(
+        "UPDATE USUARIO SET session_token = NULL, session_expires_at = NULL, last_login_at = NULL 
+         WHERE session_expires_at < UTC_TIMESTAMP() AND session_token IS NOT NULL"
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let cleaned_count = result.rows_affected();
+    
+    // Registrar limpieza
+    let _ = log_action(
+        "CLEANUP_EXPIRED_SESSIONS",
+        None,
+        "USUARIO",
+        None,
+        None,
+        Some(&format!("Sesiones expiradas limpiadas: {}", cleaned_count))
+    ).await;
+    
+    Ok(cleaned_count)
 }

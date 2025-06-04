@@ -25,6 +25,8 @@ pub fn run() {
             commands::users::update_usuario,
             commands::users::delete_usuario,
             commands::users::authenticate_usuario,
+            commands::users::validate_session,            commands::users::logout_user,
+            commands::users::cleanup_expired_sessions,
             commands::users::create_admin_user,
             commands::users::request_password_reset,
             commands::users::verify_reset_code,
