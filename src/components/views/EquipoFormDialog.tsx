@@ -84,6 +84,12 @@ export function EquipoFormDialog({
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [marcas, setMarcas] = useState<string[]>([]);
+  const [modelos, setModelos] = useState<string[]>([]);
+  const [showNewMarcaInput, setShowNewMarcaInput] = useState(false);
+  const [showNewModeloInput, setShowNewModeloInput] = useState(false);
+  const [newMarcaValue, setNewMarcaValue] = useState("");
+  const [newModeloValue, setNewModeloValue] = useState("");
   const [tipoIngreso, setTipoIngreso] = useState<
     "almacenamiento" | "mantenimiento"
   >("almacenamiento");
@@ -99,11 +105,11 @@ export function EquipoFormDialog({
     created_by: user?.usuario_id || 0,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   // Cargar clientes al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadClientes();
+      loadMarcas();
     }
   }, [open]);
 
@@ -113,6 +119,28 @@ export function EquipoFormDialog({
       setClientes(clientesData);
     } catch (error) {
       console.error("Error cargando clientes:", error);
+    }
+  };
+
+  const loadMarcas = async () => {
+    try {
+      const marcasData = await invoke<string[]>("get_equipos_marcas");
+      setMarcas(marcasData);
+    } catch (error) {
+      console.error("Error cargando marcas:", error);
+    }
+  };
+
+  const loadModelosByMarca = async (marca: string) => {
+    try {
+      const modelosData = await invoke<string[]>(
+        "get_equipos_modelos_by_marca",
+        { marca }
+      );
+      setModelos(modelosData);
+    } catch (error) {
+      console.error("Error cargando modelos:", error);
+      setModelos([]);
     }
   };
   const validateForm = (): boolean => {
@@ -192,9 +220,7 @@ export function EquipoFormDialog({
         };
 
         await invoke("create_orden_trabajo", { request: ordenData });
-      }
-
-      // Limpiar formulario
+      } // Limpiar formulario
       setFormData({
         numero_serie: "",
         equipo_marca: "",
@@ -208,6 +234,10 @@ export function EquipoFormDialog({
       setTipoIngreso("almacenamiento");
       setPreInforme("");
       setErrors({});
+      setShowNewMarcaInput(false);
+      setShowNewModeloInput(false);
+      setNewMarcaValue("");
+      setNewModeloValue("");
 
       onEquipoAdded();
     } catch (error) {
@@ -217,9 +247,17 @@ export function EquipoFormDialog({
       setLoading(false);
     }
   };
-
   const handleInputChange = (field: keyof CreateEquipoRequest, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+
+    // Si cambia la marca, cargar modelos y limpiar el modelo actual
+    if (field === "equipo_marca" && value) {
+      loadModelosByMarca(value);
+      setFormData((prev) => ({ ...prev, equipo_modelo: "" }));
+      setShowNewModeloInput(false);
+      setNewModeloValue("");
+    }
+
     // Limpiar error del campo cuando el usuario empiece a escribir
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -308,19 +346,71 @@ export function EquipoFormDialog({
               {errors.numero_serie && (
                 <p className="text-sm text-red-500">{errors.numero_serie}</p>
               )}
-            </div>
-
+            </div>{" "}
             <div className="space-y-2">
               <Label htmlFor="equipo_marca">Marca *</Label>
-              <Input
-                id="equipo_marca"
-                value={formData.equipo_marca || ""}
-                onChange={(e) =>
-                  handleInputChange("equipo_marca", e.target.value)
-                }
-                placeholder="Ej: Motorola"
-                className={errors.equipo_marca ? "border-red-500" : ""}
-              />
+              {showNewMarcaInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newMarcaValue}
+                    onChange={(e) => setNewMarcaValue(e.target.value)}
+                    placeholder="Ingrese nueva marca"
+                    className={errors.equipo_marca ? "border-red-500" : ""}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (newMarcaValue.trim()) {
+                        handleInputChange("equipo_marca", newMarcaValue.trim());
+                        setShowNewMarcaInput(false);
+                        setNewMarcaValue("");
+                      }
+                    }}
+                  >
+                    ✓
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowNewMarcaInput(false);
+                      setNewMarcaValue("");
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.equipo_marca || ""}
+                  onValueChange={(value) => {
+                    if (value === "nueva_marca") {
+                      setShowNewMarcaInput(true);
+                    } else {
+                      handleInputChange("equipo_marca", value);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    className={errors.equipo_marca ? "border-red-500" : ""}
+                  >
+                    <SelectValue placeholder="Seleccionar marca" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {marcas.map((marca) => (
+                      <SelectItem key={marca} value={marca}>
+                        {marca}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="nueva_marca">
+                      ➕ Agregar nueva marca
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               {errors.equipo_marca && (
                 <p className="text-sm text-red-500">{errors.equipo_marca}</p>
               )}
@@ -328,22 +418,90 @@ export function EquipoFormDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {" "}
             <div className="space-y-2">
               <Label htmlFor="equipo_modelo">Modelo *</Label>
-              <Input
-                id="equipo_modelo"
-                value={formData.equipo_modelo || ""}
-                onChange={(e) =>
-                  handleInputChange("equipo_modelo", e.target.value)
-                }
-                placeholder="Ej: DGP5050"
-                className={errors.equipo_modelo ? "border-red-500" : ""}
-              />
+              {showNewModeloInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newModeloValue}
+                    onChange={(e) => setNewModeloValue(e.target.value)}
+                    placeholder="Ingrese nuevo modelo"
+                    className={errors.equipo_modelo ? "border-red-500" : ""}
+                    disabled={!formData.equipo_marca}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (newModeloValue.trim()) {
+                        handleInputChange(
+                          "equipo_modelo",
+                          newModeloValue.trim()
+                        );
+                        setShowNewModeloInput(false);
+                        setNewModeloValue("");
+                      }
+                    }}
+                    disabled={!formData.equipo_marca}
+                  >
+                    ✓
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowNewModeloInput(false);
+                      setNewModeloValue("");
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.equipo_modelo || ""}
+                  onValueChange={(value) => {
+                    if (value === "nuevo_modelo") {
+                      setShowNewModeloInput(true);
+                    } else {
+                      handleInputChange("equipo_modelo", value);
+                    }
+                  }}
+                  disabled={!formData.equipo_marca}
+                >
+                  <SelectTrigger
+                    className={errors.equipo_modelo ? "border-red-500" : ""}
+                    disabled={!formData.equipo_marca}
+                  >
+                    <SelectValue
+                      placeholder={
+                        !formData.equipo_marca
+                          ? "Seleccione una marca primero"
+                          : "Seleccionar modelo"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelos.map((modelo) => (
+                      <SelectItem key={modelo} value={modelo}>
+                        {modelo}
+                      </SelectItem>
+                    ))}
+                    {formData.equipo_marca && (
+                      <SelectItem value="nuevo_modelo">
+                        ➕ Agregar nuevo modelo
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
               {errors.equipo_modelo && (
                 <p className="text-sm text-red-500">{errors.equipo_modelo}</p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="equipo_tipo">Tipo *</Label>
               <Select
