@@ -205,7 +205,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     let existing_admin = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
          FROM USUARIO 
-         WHERE usuario_correo = ? OR usuario_rut = ?"
+         WHERE usuario_rol = 'admin' OR usuario_correo = ? OR usuario_rut = ?"
     )
     .bind("admin@toscanini.com")
     .bind("12345678-9")
@@ -214,13 +214,13 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     if let Some(admin) = existing_admin {
-        // Retornar el usuario existente sin la contraseña
+        // Retornar el usuario administrador existente sin la contraseña
         return Ok(Usuario {
             usuario_id: admin.usuario_id,
             usuario_rut: admin.usuario_rut,
             usuario_nombre: admin.usuario_nombre,
             usuario_correo: admin.usuario_correo,
-            usuario_contrasena: None,
+            usuario_contrasena: None, // No retornar la contraseña por seguridad
             usuario_telefono: admin.usuario_telefono,
             usuario_rol: admin.usuario_rol,
         });
@@ -244,8 +244,18 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     
     let usuario_id = result.last_insert_id() as i32;
     
-    // Obtener el usuario recién creado
-    get_usuario_by_id(usuario_id)
+    // Obtener el usuario recién creado y retornarlo sin la contraseña
+    let created_user = get_usuario_by_id(usuario_id)
         .await?
-        .ok_or_else(|| "Failed to retrieve created admin user".to_string())
+        .ok_or_else(|| "Failed to retrieve created admin user".to_string())?;
+    
+    Ok(Usuario {
+        usuario_id: created_user.usuario_id,
+        usuario_rut: created_user.usuario_rut,
+        usuario_nombre: created_user.usuario_nombre,
+        usuario_correo: created_user.usuario_correo,
+        usuario_contrasena: None, // No retornar la contraseña por seguridad
+        usuario_telefono: created_user.usuario_telefono,
+        usuario_rol: created_user.usuario_rol,
+    })
 }
