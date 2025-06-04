@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useView } from "@/contexts/ViewContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ export function LoginView() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const { login, isLoading } = useAuth();
+  const { setCurrentView } = useView();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,10 +79,19 @@ export function LoginView() {
                 <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
                   {error}
                 </div>
-              )}
+              )}{" "}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
-              </Button>{" "}
+              </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setCurrentView("password-reset")}
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline focus:outline-none focus:underline"
+                >
+                  ¿Olvidaste la contraseña?
+                </button>
+              </div>
             </form>
           </CardContent>
         </Card>
