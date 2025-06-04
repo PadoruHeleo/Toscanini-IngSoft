@@ -4,6 +4,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SessionExpirationWarning } from "@/components/SessionExpirationWarning";
 
 // Componente para renderizar la vista activa
 function ViewRenderer() {
@@ -36,6 +37,7 @@ export default function App() {
               </div>
             </SidebarInset>
           </SidebarProvider>
+          <SessionExpirationWarning />
         </ProtectedRoute>
       </ViewProvider>
     </AuthProvider>

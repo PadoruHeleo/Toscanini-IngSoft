@@ -23,6 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { SessionInfo } from "@/components/SessionInfo";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
@@ -47,7 +48,7 @@ export function NavUser() {
                 <AvatarImage src="" alt={user.usuario_nombre || "Usuario"} />
                 <AvatarFallback className="rounded-lg">
                   {user.usuario_nombre?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
+                </AvatarFallback>{" "}
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">
@@ -56,6 +57,7 @@ export function NavUser() {
                 <span className="text-muted-foreground truncate text-xs">
                   {user.usuario_correo || "Sin email"}
                 </span>
+                <SessionInfo />
               </div>
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -66,6 +68,7 @@ export function NavUser() {
             align="end"
             sideOffset={4}
           >
+            {" "}
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
@@ -81,6 +84,12 @@ export function NavUser() {
                   <span className="text-muted-foreground truncate text-xs">
                     {user.usuario_correo || "Sin email"}
                   </span>
+                  {user.last_login_at && (
+                    <span className="text-muted-foreground truncate text-xs">
+                      Último acceso:{" "}
+                      {new Date(user.last_login_at).toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
             </DropdownMenuLabel>
