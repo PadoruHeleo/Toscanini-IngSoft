@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Dialog,
@@ -18,12 +18,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Cliente {
   cliente_id: number;
   cliente_nombre: string;
   cliente_correo?: string;
+}
+
+interface Equipo {
+  equipo_id: number;
+  numero_serie?: string;
+  equipo_marca?: string;
+  equipo_modelo?: string;
+  equipo_tipo?: string;
+  equipo_precio?: number;
+  equipo_ubicacion?: string;
+  cliente_id?: number;
+  created_by?: number;
+  created_at?: string;
 }
 
 interface EquipoFormDialogProps {
@@ -43,6 +63,19 @@ interface CreateEquipoRequest {
   created_by: number;
 }
 
+interface CreateOrdenTrabajoRequest {
+  orden_codigo: string;
+  orden_desc: string;
+  prioridad: string;
+  estado: string;
+  has_garantia: boolean;
+  equipo_id: number;
+  created_by: number;
+  pre_informe: string;
+  cotizacion_id?: number;
+  informe_id?: number;
+}
+
 export function EquipoFormDialog({
   open,
   onOpenChange,
@@ -51,6 +84,10 @@ export function EquipoFormDialog({
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [tipoIngreso, setTipoIngreso] = useState<
+    "almacenamiento" | "mantenimiento"
+  >("almacenamiento");
+  const [preInforme, setPreInforme] = useState("");
   const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
     numero_serie: "",
     equipo_marca: "",
@@ -78,7 +115,6 @@ export function EquipoFormDialog({
       console.error("Error cargando clientes:", error);
     }
   };
-
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -98,10 +134,15 @@ export function EquipoFormDialog({
       newErrors.cliente_id = "Debe seleccionar un cliente";
     }
 
+    // Validar pre-informe si es para mantenimiento
+    if (tipoIngreso === "mantenimiento" && !preInforme.trim()) {
+      newErrors.preInforme =
+        "El pre-informe es obligatorio para equipos de mantenimiento";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -121,9 +162,37 @@ export function EquipoFormDialog({
         equipo_ubicacion: formData.equipo_ubicacion || undefined,
         cliente_id: formData.cliente_id!,
         created_by: user?.usuario_id || 0,
-      };
+      }; // Crear el equipo primero
+      const equipoCreado = await invoke<Equipo>("create_equipo", {
+        request: equipoData,
+      });
 
-      await invoke("create_equipo", { request: equipoData });
+      // Si es para mantenimiento, crear orden de trabajo
+      if (tipoIngreso === "mantenimiento") {
+        const fechaActual = new Date();
+        const codigoOrden = `OT-${fechaActual.getFullYear()}${(
+          fechaActual.getMonth() + 1
+        )
+          .toString()
+          .padStart(2, "0")}${fechaActual
+          .getDate()
+          .toString()
+          .padStart(2, "0")}-${equipoCreado.equipo_id}`;
+        const ordenData: CreateOrdenTrabajoRequest = {
+          orden_codigo: codigoOrden,
+          orden_desc: `Orden de trabajo para ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})`,
+          prioridad: "media",
+          estado: "recibido",
+          has_garantia: false,
+          equipo_id: equipoCreado.equipo_id,
+          created_by: user?.usuario_id || 0,
+          pre_informe: preInforme,
+          cotizacion_id: undefined,
+          informe_id: undefined,
+        };
+
+        await invoke("create_orden_trabajo", { request: ordenData });
+      }
 
       // Limpiar formulario
       setFormData({
@@ -136,6 +205,8 @@ export function EquipoFormDialog({
         cliente_id: undefined,
         created_by: user?.usuario_id || 0,
       });
+      setTipoIngreso("almacenamiento");
+      setPreInforme("");
       setErrors({});
 
       onEquipoAdded();
@@ -166,6 +237,62 @@ export function EquipoFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Selector de tipo de ingreso */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Tipo de Ingreso</CardTitle>
+              <CardDescription className="text-xs">
+                Seleccione si el equipo es para almacenamiento o ingresa
+                directamente a mantenimiento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select
+                value={tipoIngreso}
+                onValueChange={(value: "almacenamiento" | "mantenimiento") =>
+                  setTipoIngreso(value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="almacenamiento">
+                    📦 Almacenamiento - Solo registrar equipo
+                  </SelectItem>
+                  <SelectItem value="mantenimiento">
+                    🔧 Mantenimiento - Crear orden de trabajo
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {/* Campo de pre-informe - solo visible si es mantenimiento */}
+          {tipoIngreso === "mantenimiento" && (
+            <div className="space-y-2">
+              <Label htmlFor="preInforme">
+                Pre-informe / Observaciones del Cliente *
+              </Label>
+              <textarea
+                id="preInforme"
+                value={preInforme}
+                onChange={(e) => {
+                  setPreInforme(e.target.value);
+                  if (errors.preInforme) {
+                    setErrors((prev) => ({ ...prev, preInforme: "" }));
+                  }
+                }}
+                placeholder="Ingrese las observaciones del cliente sobre el estado del equipo, problemas reportados, etc."
+                className={`min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
+                  errors.preInforme ? "border-red-500" : ""
+                }`}
+              />
+              {errors.preInforme && (
+                <p className="text-sm text-red-500">{errors.preInforme}</p>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="numero_serie">Número de Serie *</Label>
