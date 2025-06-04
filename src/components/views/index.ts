@@ -1,3 +1,4 @@
+export * from "./HomeView";
 export * from "./EquiposView";
 export * from "./EquipoFormDialog";
 export * from "./SettingsView";

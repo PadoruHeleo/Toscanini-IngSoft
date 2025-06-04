@@ -1,5 +1,10 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { EquiposView, SettingsView, HelpView } from "@/components/views";
+import {
+  HomeView,
+  EquiposView,
+  SettingsView,
+  HelpView,
+} from "@/components/views";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -10,6 +15,10 @@ import { SessionExpirationWarning } from "@/components/SessionExpirationWarning"
 function ViewRenderer() {
   const { currentView } = useView();
   switch (currentView) {
+    case "dashboard":
+    case "inicio":
+    case "home":
+      return <HomeView />;
     case "lista de equipos":
       return <EquiposView />;
     case "projects":
@@ -18,7 +27,7 @@ function ViewRenderer() {
     case "gethelp":
       return <HelpView />;
     default:
-      return <EquiposView />;
+      return <HomeView />;
   }
 }
 
