@@ -8,6 +8,9 @@ export interface User {
   usuario_correo: string | null;
   usuario_telefono: string | null;
   usuario_rol: string | null;
+  last_login_at: string | null;
+  session_expires_at: string | null;
+  session_token: string | null;
 }
 
 interface AuthContextType {
@@ -16,6 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  validateSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -26,19 +30,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = user !== null;
 
+  // Función para verificar si la sesión ha expirado
+  const isSessionExpired = (sessionExpiresAt: string | null): boolean => {
+    if (!sessionExpiresAt) return true;
+    return new Date(sessionExpiresAt) <= new Date();
+  };
+
+  // Función para validar la sesión actual
+  const validateSession = async (): Promise<boolean> => {
+    const savedUser = localStorage.getItem("user");
+    if (!savedUser) return false;
+
+    try {
+      const userData = JSON.parse(savedUser) as User;
+
+      // Verificar si la sesión ha expirado localmente
+      if (isSessionExpired(userData.session_expires_at)) {
+        localStorage.removeItem("user");
+        setUser(null);
+        return false;
+      }
+
+      // Validar con el backend si el token sigue siendo válido
+      if (userData.session_token) {
+        const result = await invoke<User | null>("validate_session", {
+          sessionToken: userData.session_token,
+        });
+
+        if (result) {
+          setUser(result);
+          localStorage.setItem("user", JSON.stringify(result));
+          return true;
+        } else {
+          localStorage.removeItem("user");
+          setUser(null);
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error("Error validating session:", error);
+      localStorage.removeItem("user");
+      setUser(null);
+    }
+
+    return false;
+  };
+
   useEffect(() => {
     // Verificar si hay una sesión guardada al cargar la app
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error("Error parsing saved user:", error);
-        localStorage.removeItem("user");
-      }
-    }
-    setIsLoading(false);
+    const initializeAuth = async () => {
+      await validateSession();
+      setIsLoading(false);
+    };
+
+    initializeAuth();
   }, []);
+
+  // Configurar un intervalo para verificar la expiración de sesión cada minuto
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      if (
+        user.session_expires_at &&
+        isSessionExpired(user.session_expires_at)
+      ) {
+        console.log("Sesión expirada, cerrando sesión automáticamente");
+        logout();
+      }
+    }, 60000); // Verificar cada minuto
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -62,7 +125,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Si hay un token de sesión, notificar al backend
+    if (user?.session_token) {
+      try {
+        await invoke("logout_user", {
+          sessionToken: user.session_token,
+        });
+      } catch (error) {
+        console.error("Error during logout:", error);
+      }
+    }
+
     setUser(null);
     localStorage.removeItem("user");
   };
@@ -75,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         logout,
+        validateSession,
       }}
     >
       {children}
