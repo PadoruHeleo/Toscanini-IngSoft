@@ -39,7 +39,17 @@ pub fn run() {
             commands::logs::get_audit_logs_by_entity,
             commands::logs::cleanup_old_audit_logs,
             commands::logs::count_audit_logs,
-            commands::logs::get_audit_stats
+            commands::logs::get_audit_stats,
+            commands::clientes::get_clientes,
+            commands::clientes::get_cliente_by_id,
+            commands::clientes::get_cliente_by_rut,
+            commands::clientes::get_clientes_by_created_by,
+            commands::clientes::search_clientes,
+            commands::clientes::create_cliente,
+            commands::clientes::update_cliente,
+            commands::clientes::delete_cliente,
+            commands::clientes::count_clientes,
+            commands::clientes::get_clientes_with_pagination
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
