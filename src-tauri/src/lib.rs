@@ -39,8 +39,7 @@ pub fn run() {
             commands::logs::get_audit_logs_by_entity,
             commands::logs::cleanup_old_audit_logs,
             commands::logs::count_audit_logs,
-            commands::logs::get_audit_stats,
-            commands::clientes::get_clientes,
+            commands::logs::get_audit_stats,            commands::clientes::get_clientes,
             commands::clientes::get_cliente_by_id,
             commands::clientes::get_cliente_by_rut,
             commands::clientes::get_clientes_by_created_by,
@@ -49,7 +48,23 @@ pub fn run() {
             commands::clientes::update_cliente,
             commands::clientes::delete_cliente,
             commands::clientes::count_clientes,
-            commands::clientes::get_clientes_with_pagination
+            commands::clientes::get_clientes_with_pagination,
+            commands::equipos::get_equipos,
+            commands::equipos::get_equipo_by_id,
+            commands::equipos::get_equipo_by_numero_serie,
+            commands::equipos::get_equipos_by_cliente,
+            commands::equipos::get_equipos_by_tipo,
+            commands::equipos::get_equipos_by_created_by,
+            commands::equipos::search_equipos,
+            commands::equipos::create_equipo,
+            commands::equipos::update_equipo,
+            commands::equipos::delete_equipo,
+            commands::equipos::count_equipos,
+            commands::equipos::get_equipos_with_pagination,
+            commands::equipos::get_equipos_stats_by_tipo,
+            commands::equipos::get_equipos_by_price_range,
+            commands::equipos::get_equipos_with_cliente,
+            commands::equipos::transfer_equipo_to_cliente
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
