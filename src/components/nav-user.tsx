@@ -1,16 +1,12 @@
 import {
-  IconCreditCard,
   IconDotsVertical,
   IconLogout,
   IconNotification,
   IconUserCircle,
-} from "@tabler/icons-react"
+} from "@tabler/icons-react";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,24 +15,24 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/AuthContext";
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}) {
-  const { isMobile } = useSidebar()
+export function NavUser() {
+  const { isMobile } = useSidebar();
+  const { user, logout } = useAuth();
+
+  if (!user) return null;
+
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <SidebarMenu>
@@ -48,13 +44,17 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarImage src="" alt={user.usuario_nombre || "Usuario"} />
+                <AvatarFallback className="rounded-lg">
+                  {user.usuario_nombre?.charAt(0).toUpperCase() || "U"}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
+                <span className="truncate font-medium">
+                  {user.usuario_nombre || "Sin nombre"}
+                </span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
+                  {user.usuario_correo || "Sin email"}
                 </span>
               </div>
               <IconDotsVertical className="ml-auto size-4" />
@@ -69,13 +69,17 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage src="" alt={user.usuario_nombre || "Usuario"} />
+                  <AvatarFallback className="rounded-lg">
+                    {user.usuario_nombre?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="truncate font-medium">
+                    {user.usuario_nombre || "Sin nombre"}
+                  </span>
                   <span className="text-muted-foreground truncate text-xs">
-                    {user.email}
+                    {user.usuario_correo || "Sin email"}
                   </span>
                 </div>
               </div>
@@ -84,25 +88,36 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <IconUserCircle />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Billing
+                Mi Perfil
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <IconNotification />
-                Notifications
+                Configuración
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="text-red-600 focus:text-red-700 focus:bg-red-50"
+            >
               <IconLogout />
-              Log out
+              Cerrar Sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+      {/* Botón directo de cerrar sesión más visible */}
+      <SidebarMenuItem>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLogout}
+          className="w-full justify-start gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700"
+        >
+          <IconLogout className="size-4" />
+          Cerrar Sesión
+        </Button>
+      </SidebarMenuItem>
     </SidebarMenu>
-  )
+  );
 }

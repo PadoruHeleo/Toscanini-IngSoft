@@ -24,7 +24,16 @@ pub fn run() {
             commands::users::create_usuario,
             commands::users::update_usuario,
             commands::users::delete_usuario,
-            commands::users::authenticate_usuario
+            commands::users::authenticate_usuario,
+            commands::users::create_admin_user,
+            commands::logs::create_audit_log,
+            commands::logs::get_audit_log_by_id,
+            commands::logs::get_audit_logs,
+            commands::logs::get_audit_logs_by_user,
+            commands::logs::get_audit_logs_by_entity,
+            commands::logs::cleanup_old_audit_logs,
+            commands::logs::count_audit_logs,
+            commands::logs::get_audit_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
