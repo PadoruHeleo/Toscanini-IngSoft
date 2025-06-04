@@ -27,4 +27,7 @@ tokio = { version = "1.0", features = ["full"] }
 dotenv = "0.15"
 chrono = { version = "0.4", features = ["serde"] }
 bcrypt = "0.15"
+resend-rs = "0.15.0"
+uuid = { version = "1.0", features = ["v4"] }
+rand = "0.8"
 

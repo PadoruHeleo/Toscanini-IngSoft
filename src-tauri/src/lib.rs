@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod database;
 pub mod utils;
+pub mod email;
 
 use database::init_database;
 
@@ -16,8 +17,7 @@ pub fn run() {
             std::process::exit(1);
         }
     });    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![
+        .plugin(tauri_plugin_opener::init())        .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
             commands::users::get_usuario_by_id,
             commands::users::get_usuario_by_rut,
@@ -26,6 +26,10 @@ pub fn run() {
             commands::users::delete_usuario,
             commands::users::authenticate_usuario,
             commands::users::create_admin_user,
+            commands::users::request_password_reset,
+            commands::users::verify_reset_code,
+            commands::users::reset_password_with_code,
+            commands::users::cleanup_expired_reset_codes,
             commands::logs::create_audit_log,
             commands::logs::get_audit_log_by_id,
             commands::logs::get_audit_logs,

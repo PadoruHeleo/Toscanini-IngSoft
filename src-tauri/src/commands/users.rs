@@ -3,6 +3,8 @@ use sqlx::FromRow;
 use crate::database::get_db_pool_unchecked;
 use crate::utils::{hash_password, verify_password};
 use crate::commands::logs::log_action;
+use crate::email::EmailService;
+use chrono::{DateTime, Utc, Duration};
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Usuario {
@@ -33,6 +35,27 @@ pub struct UpdateUsuarioRequest {
     pub usuario_contrasena: Option<String>,
     pub usuario_telefono: Option<String>,
     pub usuario_rol: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct PasswordReset {
+    pub reset_id: i32,
+    pub usuario_id: i32,
+    pub reset_code: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub used: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestPasswordResetRequest {
+    pub usuario_correo: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResetPasswordRequest {
+    pub reset_code: String,
+    pub nueva_contrasena: String,
 }
 
 #[tauri::command]
@@ -369,4 +392,209 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
         usuario_telefono: created_user.usuario_telefono,
         usuario_rol: created_user.usuario_rol,
     })
+}
+
+#[tauri::command]
+pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Result<String, String> {
+    let pool = get_db_pool_unchecked();
+    
+    // Buscar el usuario por email
+    let usuario = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
+         FROM USUARIO 
+         WHERE usuario_correo = ?"
+    )
+    .bind(&request.usuario_correo)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let user = match usuario {
+        Some(u) => u,
+        None => {
+            // Registrar intento de recuperación con correo inexistente
+            let _ = log_action(
+                "PASSWORD_RESET_FAILED",
+                None,
+                "USUARIO",
+                None,
+                None,
+                Some(&format!("Intento de recuperación con correo inexistente: {}", request.usuario_correo))
+            ).await;
+            return Err("Correo electrónico no encontrado".to_string());
+        }
+    };
+      // Generar código de 6 dígitos
+    let reset_code: String = {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        (0..6).map(|_| rng.gen_range(0..10).to_string()).collect()
+    };
+    
+    // Calcular tiempo de expiración (15 minutos desde ahora)
+    let expires_at = Utc::now() + Duration::minutes(15);
+    
+    // Limpiar códigos anteriores no usados de este usuario
+    let _ = sqlx::query(
+        "UPDATE PASSWORD_RESET SET used = TRUE WHERE usuario_id = ? AND used = FALSE"
+    )
+    .bind(user.usuario_id)
+    .execute(pool)
+    .await;
+    
+    // Insertar nuevo código de recuperación
+    sqlx::query(
+        "INSERT INTO PASSWORD_RESET (usuario_id, reset_code, expires_at) VALUES (?, ?, ?)"
+    )
+    .bind(user.usuario_id)
+    .bind(&reset_code)
+    .bind(expires_at)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    // Enviar correo electrónico
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Email service error: {}", e))?;
+    
+    let user_name = user.usuario_nombre.as_deref().unwrap_or("Usuario");
+    email_service.send_password_reset_email(&request.usuario_correo, &reset_code, user_name)
+        .await
+        .map_err(|e| format!("Error sending email: {}", e))?;
+    
+    // Registrar solicitud exitosa
+    let _ = log_action(
+        "PASSWORD_RESET_REQUESTED",
+        Some(user.usuario_id),
+        "USUARIO",
+        Some(user.usuario_id),
+        None,
+        Some(&format!("Código de recuperación enviado a {}", request.usuario_correo))
+    ).await;
+    
+    Ok("Código de recuperación enviado a tu correo electrónico".to_string())
+}
+
+#[tauri::command]
+pub async fn verify_reset_code(reset_code: String) -> Result<bool, String> {
+    let pool = get_db_pool_unchecked();
+    
+    // Buscar código válido y no expirado
+    let reset_entry = sqlx::query_as::<_, PasswordReset>(
+        "SELECT reset_id, usuario_id, reset_code, created_at, expires_at, used 
+         FROM PASSWORD_RESET 
+         WHERE reset_code = ? AND used = FALSE AND expires_at > UTC_TIMESTAMP()"
+    )
+    .bind(&reset_code)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    match reset_entry {
+        Some(_) => Ok(true),
+        None => {
+            // Registrar intento de verificación fallido
+            let _ = log_action(
+                "PASSWORD_RESET_VERIFY_FAILED",
+                None,
+                "PASSWORD_RESET",
+                None,
+                None,
+                Some(&format!("Código de verificación inválido o expirado: {}", reset_code))
+            ).await;
+            Ok(false)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<String, String> {
+    let pool = get_db_pool_unchecked();
+    
+    // Buscar código válido y no expirado
+    let reset_entry = sqlx::query_as::<_, PasswordReset>(
+        "SELECT reset_id, usuario_id, reset_code, created_at, expires_at, used 
+         FROM PASSWORD_RESET 
+         WHERE reset_code = ? AND used = FALSE AND expires_at > UTC_TIMESTAMP()"
+    )
+    .bind(&request.reset_code)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let reset = match reset_entry {
+        Some(r) => r,
+        None => {
+            let _ = log_action(
+                "PASSWORD_RESET_FAILED",
+                None,
+                "PASSWORD_RESET",
+                None,
+                None,
+                Some(&format!("Intento de cambio con código inválido: {}", request.reset_code))
+            ).await;
+            return Err("Código de recuperación inválido o expirado".to_string());
+        }
+    };
+    
+    // Encriptar la nueva contraseña
+    let hashed_password = hash_password(&request.nueva_contrasena)?;
+    
+    // Actualizar la contraseña del usuario
+    let result = sqlx::query(
+        "UPDATE USUARIO SET usuario_contrasena = ? WHERE usuario_id = ?"
+    )
+    .bind(&hashed_password)
+    .bind(reset.usuario_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Usuario no encontrado".to_string());
+    }
+    
+    // Marcar el código como usado
+    sqlx::query("UPDATE PASSWORD_RESET SET used = TRUE WHERE reset_id = ?")
+        .bind(reset.reset_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    // Registrar cambio exitoso
+    let _ = log_action(
+        "PASSWORD_RESET_SUCCESS",
+        Some(reset.usuario_id),
+        "USUARIO",
+        Some(reset.usuario_id),
+        None,
+        Some("Contraseña cambiada exitosamente usando código de recuperación")
+    ).await;
+    
+    Ok("Contraseña cambiada exitosamente".to_string())
+}
+
+#[tauri::command]
+pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
+    let pool = get_db_pool_unchecked();
+      let result = sqlx::query(
+        "DELETE FROM PASSWORD_RESET WHERE expires_at < UTC_TIMESTAMP() OR used = TRUE"
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let deleted_count = result.rows_affected();
+    
+    // Registrar limpieza
+    let _ = log_action(
+        "CLEANUP_RESET_CODES",
+        None,
+        "PASSWORD_RESET",
+        None,
+        None,
+        Some(&format!("Códigos de recuperación eliminados: {}", deleted_count))
+    ).await;
+    
+    Ok(deleted_count)
 }
