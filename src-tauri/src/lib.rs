@@ -24,7 +24,8 @@ pub fn run() {
             commands::users::create_usuario,
             commands::users::update_usuario,
             commands::users::delete_usuario,
-            commands::users::authenticate_usuario
+            commands::users::authenticate_usuario,
+            commands::users::create_admin_user
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

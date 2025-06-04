@@ -196,3 +196,56 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     // Credenciales inválidas
     Ok(None)
 }
+
+#[tauri::command]
+pub async fn create_admin_user() -> Result<Usuario, String> {
+    let pool = get_db_pool_unchecked();
+    
+    // Verificar si ya existe un usuario admin
+    let existing_admin = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol 
+         FROM USUARIO 
+         WHERE usuario_correo = ? OR usuario_rut = ?"
+    )
+    .bind("admin@toscanini.com")
+    .bind("12345678-9")
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if let Some(admin) = existing_admin {
+        // Retornar el usuario existente sin la contraseña
+        return Ok(Usuario {
+            usuario_id: admin.usuario_id,
+            usuario_rut: admin.usuario_rut,
+            usuario_nombre: admin.usuario_nombre,
+            usuario_correo: admin.usuario_correo,
+            usuario_contrasena: None,
+            usuario_telefono: admin.usuario_telefono,
+            usuario_rol: admin.usuario_rol,
+        });
+    }
+    
+    // Crear el usuario admin
+    let hashed_password = hash_password("admin123")?;
+    
+    let result = sqlx::query(
+        "INSERT INTO USUARIO (usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    .bind("12345678-9")
+    .bind("Administrador")
+    .bind("admin@toscanini.com")
+    .bind(&hashed_password)
+    .bind("+56912345678")
+    .bind("admin")
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let usuario_id = result.last_insert_id() as i32;
+    
+    // Obtener el usuario recién creado
+    get_usuario_by_id(usuario_id)
+        .await?
+        .ok_or_else(|| "Failed to retrieve created admin user".to_string())
+}
