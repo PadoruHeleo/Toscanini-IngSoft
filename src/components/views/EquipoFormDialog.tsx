@@ -77,6 +77,15 @@ interface CreateOrdenTrabajoRequest {
   informe_id?: number;
 }
 
+interface CreateClienteRequest {
+  cliente_rut: string;
+  cliente_nombre: string;
+  cliente_correo: string;
+  cliente_telefono?: string;
+  cliente_direccion?: string;
+  created_by: number;
+}
+
 export function EquipoFormDialog({
   open,
   onOpenChange,
@@ -91,11 +100,25 @@ export function EquipoFormDialog({
   const [showNewMarcaInput, setShowNewMarcaInput] = useState(false);
   const [showNewModeloInput, setShowNewModeloInput] = useState(false);
   const [newMarcaValue, setNewMarcaValue] = useState("");
-  const [newModeloValue, setNewModeloValue] = useState("");
-  const [tipoIngreso, setTipoIngreso] = useState<
+  const [newModeloValue, setNewModeloValue] = useState("");  const [tipoIngreso, setTipoIngreso] = useState<
     "almacenamiento" | "mantenimiento"
   >("almacenamiento");
   const [preInforme, setPreInforme] = useState("");
+  const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
+  const [newClienteData, setNewClienteData] = useState<{
+    cliente_rut: string;
+    cliente_nombre: string;
+    cliente_correo: string;
+    cliente_telefono: string;
+    cliente_direccion: string;
+  }>({
+    cliente_rut: "",
+    cliente_nombre: "",
+    cliente_correo: "",
+    cliente_telefono: "",
+    cliente_direccion: "",
+  });
+  const [newClienteErrors, setNewClienteErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
     numero_serie: "",
     equipo_marca: "",
@@ -132,7 +155,6 @@ export function EquipoFormDialog({
       console.error("Error cargando marcas:", error);
     }
   };
-
   const loadModelosByMarca = async (marca: string) => {
     try {
       const modelosData = await invoke<string[]>(
@@ -143,6 +165,70 @@ export function EquipoFormDialog({
     } catch (error) {
       console.error("Error cargando modelos:", error);
       setModelos([]);
+    }
+  };
+
+  const validateClienteForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!newClienteData.cliente_rut.trim()) {
+      errors.cliente_rut = "El RUT es obligatorio";
+    }
+    if (!newClienteData.cliente_nombre.trim()) {
+      errors.cliente_nombre = "El nombre es obligatorio";
+    }
+    if (!newClienteData.cliente_correo.trim()) {
+      errors.cliente_correo = "El correo es obligatorio";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClienteData.cliente_correo)) {
+      errors.cliente_correo = "El formato del correo no es válido";
+    }
+
+    setNewClienteErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateCliente = async () => {
+    if (!validateClienteForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const clienteRequest: CreateClienteRequest = {
+        ...newClienteData,
+        created_by: user?.usuario_id || 0,
+      };
+
+      const nuevoCliente = await invoke<Cliente>("create_cliente", {
+        request: clienteRequest,
+      });
+
+      // Actualizar la lista de clientes
+      await loadClientes();
+
+      // Seleccionar el nuevo cliente en el formulario
+      handleInputChange("cliente_id", nuevoCliente.cliente_id);
+
+      // Cerrar el modal y limpiar datos
+      setShowNewClienteDialog(false);
+      setNewClienteData({
+        cliente_rut: "",
+        cliente_nombre: "",
+        cliente_correo: "",
+        cliente_telefono: "",
+        cliente_direccion: "",
+      });
+      setNewClienteErrors({});
+
+      success("¡Cliente creado exitosamente!", `${nuevoCliente.cliente_nombre} ha sido registrado.`);
+    } catch (error) {
+      console.error("Error creando cliente:", error);
+      showError(
+        "Error al crear cliente",
+        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+      );
+    } finally {
+      setLoading(false);
     }
   };
   const validateForm = (): boolean => {
@@ -241,9 +327,7 @@ export function EquipoFormDialog({
       }
 
       // Cerrar diálogo
-      onOpenChange(false);
-
-      // Limpiar formulario
+      onOpenChange(false);      // Limpiar formulario
       setFormData({
         numero_serie: "",
         equipo_marca: "",
@@ -261,6 +345,15 @@ export function EquipoFormDialog({
       setShowNewModeloInput(false);
       setNewMarcaValue("");
       setNewModeloValue("");
+      setShowNewClienteDialog(false);
+      setNewClienteData({
+        cliente_rut: "",
+        cliente_nombre: "",
+        cliente_correo: "",
+        cliente_telefono: "",
+        cliente_direccion: "",
+      });
+      setNewClienteErrors({});
       onEquipoAdded();
     } catch (error) {
       console.error("Error creando equipo:", error);
@@ -555,14 +648,17 @@ export function EquipoFormDialog({
                 <p className="text-sm text-red-500">{errors.equipo_tipo}</p>
               )}
             </div>
-          </div>
-          <div className="space-y-2">
+          </div>          <div className="space-y-2">
             <Label htmlFor="cliente_id">Cliente *</Label>
             <Select
               value={formData.cliente_id?.toString() || ""}
-              onValueChange={(value) =>
-                handleInputChange("cliente_id", parseInt(value))
-              }
+              onValueChange={(value) => {
+                if (value === "nuevo_cliente") {
+                  setShowNewClienteDialog(true);
+                } else {
+                  handleInputChange("cliente_id", parseInt(value));
+                }
+              }}
             >
               <SelectTrigger
                 className={errors.cliente_id ? "border-red-500" : ""}
@@ -578,6 +674,9 @@ export function EquipoFormDialog({
                     {cliente.cliente_nombre}
                   </SelectItem>
                 ))}
+                <SelectItem value="nuevo_cliente">
+                  ➕ Agregar nuevo cliente
+                </SelectItem>
               </SelectContent>
             </Select>
             {errors.cliente_id && (
@@ -630,10 +729,129 @@ export function EquipoFormDialog({
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : "Guardar Equipo"}
-            </Button>
-          </DialogFooter>
+            </Button>          </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* Modal para agregar nuevo cliente */}
+      <Dialog open={showNewClienteDialog} onOpenChange={setShowNewClienteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agregar Nuevo Cliente</DialogTitle>
+            <DialogDescription>
+              Complete la información del nuevo cliente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="nuevo_cliente_rut">RUT *</Label>
+              <Input
+                id="nuevo_cliente_rut"
+                value={newClienteData.cliente_rut}
+                onChange={(e) => {
+                  setNewClienteData(prev => ({...prev, cliente_rut: e.target.value}));
+                  if (newClienteErrors.cliente_rut) {
+                    setNewClienteErrors(prev => ({...prev, cliente_rut: ""}));
+                  }
+                }}
+                placeholder="Ej: 12.345.678-9"
+                className={newClienteErrors.cliente_rut ? "border-red-500" : ""}
+              />
+              {newClienteErrors.cliente_rut && (
+                <p className="text-sm text-red-500">{newClienteErrors.cliente_rut}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nuevo_cliente_nombre">Nombre *</Label>
+              <Input
+                id="nuevo_cliente_nombre"
+                value={newClienteData.cliente_nombre}
+                onChange={(e) => {
+                  setNewClienteData(prev => ({...prev, cliente_nombre: e.target.value}));
+                  if (newClienteErrors.cliente_nombre) {
+                    setNewClienteErrors(prev => ({...prev, cliente_nombre: ""}));
+                  }
+                }}
+                placeholder="Nombre completo del cliente"
+                className={newClienteErrors.cliente_nombre ? "border-red-500" : ""}
+              />
+              {newClienteErrors.cliente_nombre && (
+                <p className="text-sm text-red-500">{newClienteErrors.cliente_nombre}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nuevo_cliente_correo">Correo Electrónico *</Label>
+              <Input
+                id="nuevo_cliente_correo"
+                type="email"
+                value={newClienteData.cliente_correo}
+                onChange={(e) => {
+                  setNewClienteData(prev => ({...prev, cliente_correo: e.target.value}));
+                  if (newClienteErrors.cliente_correo) {
+                    setNewClienteErrors(prev => ({...prev, cliente_correo: ""}));
+                  }
+                }}
+                placeholder="cliente@ejemplo.com"
+                className={newClienteErrors.cliente_correo ? "border-red-500" : ""}
+              />
+              {newClienteErrors.cliente_correo && (
+                <p className="text-sm text-red-500">{newClienteErrors.cliente_correo}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nuevo_cliente_telefono">Teléfono</Label>
+              <Input
+                id="nuevo_cliente_telefono"
+                value={newClienteData.cliente_telefono}
+                onChange={(e) => setNewClienteData(prev => ({...prev, cliente_telefono: e.target.value}))}
+                placeholder="Ej: +56 9 1234 5678"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nuevo_cliente_direccion">Dirección</Label>
+              <Input
+                id="nuevo_cliente_direccion"
+                value={newClienteData.cliente_direccion}
+                onChange={(e) => setNewClienteData(prev => ({...prev, cliente_direccion: e.target.value}))}
+                placeholder="Dirección completa del cliente"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowNewClienteDialog(false);
+                setNewClienteData({
+                  cliente_rut: "",
+                  cliente_nombre: "",
+                  cliente_correo: "",
+                  cliente_telefono: "",
+                  cliente_direccion: "",
+                });
+                setNewClienteErrors({});
+              }}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateCliente}
+              disabled={loading}
+            >
+              {loading ? "Creando..." : "Crear Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
