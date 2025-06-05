@@ -11,6 +11,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SessionExpirationWarning } from "@/components/SessionExpirationWarning";
+import { DatabaseConnectionBanner } from "@/components/DatabaseConnectionBanner";
 import { Toaster } from "@/components/ui/toaster";
 
 // Componente para renderizar la vista activa
@@ -40,9 +41,10 @@ export default function App() {
         <ViewProvider>
           <ProtectedRoute>
             <SidebarProvider>
-              <AppSidebar variant="inset" />
+              <AppSidebar variant="inset" />{" "}
               <SidebarInset>
                 <div className="flex flex-1 flex-col">
+                  <DatabaseConnectionBanner />
                   <div className="@container/main flex flex-1 flex-col gap-2">
                     <ViewRenderer />
                   </div>

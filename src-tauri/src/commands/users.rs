@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use crate::database::get_db_pool_unchecked;
+use crate::database::get_db_pool_safe;
 use crate::utils::{hash_password, verify_password};
 use crate::commands::logs::log_action;
 use crate::email::EmailService;
@@ -64,7 +64,7 @@ pub struct ResetPasswordRequest {
 
 #[tauri::command]
 pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
       let usuarios = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO"
     )
@@ -77,7 +77,7 @@ pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
 
 #[tauri::command]
 pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
       let usuario = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_id = ?"
     )
@@ -91,7 +91,7 @@ pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, Strin
 
 #[tauri::command]
 pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
       let usuario = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_rut = ?"
     )
@@ -105,7 +105,7 @@ pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, 
 
 #[tauri::command]
 pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Encriptar la contraseña antes de guardarla
     let hashed_password = hash_password(&request.usuario_contrasena)?;
@@ -143,7 +143,7 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
 
 #[tauri::command]
 pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> Result<Option<Usuario>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Obtener el usuario actual para logging
     let current_user = get_usuario_by_id(usuario_id).await?;
@@ -208,7 +208,7 @@ pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> R
 
 #[tauri::command]
 pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Obtener el usuario antes de eliminarlo para logging
     let user_to_delete = get_usuario_by_id(usuario_id).await?;
@@ -243,7 +243,7 @@ pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: String) -> Result<Option<Usuario>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
@@ -330,7 +330,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
 
 #[tauri::command]
 pub async fn create_admin_user() -> Result<Usuario, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
       // Verificar si ya existe un usuario admin
     let existing_admin = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
@@ -418,7 +418,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
 
 #[tauri::command]
 pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Result<String, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
       // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
@@ -498,7 +498,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
 
 #[tauri::command]
 pub async fn verify_reset_code(reset_code: String) -> Result<bool, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Buscar código válido y no expirado
     let reset_entry = sqlx::query_as::<_, PasswordReset>(
@@ -530,7 +530,7 @@ pub async fn verify_reset_code(reset_code: String) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<String, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Buscar código válido y no expirado
     let reset_entry = sqlx::query_as::<_, PasswordReset>(
@@ -597,7 +597,7 @@ pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<S
 
 #[tauri::command]
 pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
       let result = sqlx::query(
         "DELETE FROM PASSWORD_RESET WHERE expires_at < UTC_TIMESTAMP() OR used = TRUE"
     )
@@ -622,7 +622,7 @@ pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
 
 #[tauri::command]
 pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Buscar usuario por token de sesión válido y no expirado
     let usuario = sqlx::query_as::<_, Usuario>(
@@ -678,7 +678,7 @@ pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, 
 
 #[tauri::command]
 pub async fn logout_user(session_token: String) -> Result<bool, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Limpiar token de sesión del usuario
     let result = sqlx::query(
@@ -707,7 +707,7 @@ pub async fn logout_user(session_token: String) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn cleanup_expired_sessions() -> Result<u64, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let result = sqlx::query(
         "UPDATE USUARIO SET session_token = NULL, session_expires_at = NULL, last_login_at = NULL 
