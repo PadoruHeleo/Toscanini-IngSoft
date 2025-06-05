@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use crate::database::get_db_pool_unchecked;
+use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
 use chrono::{DateTime, Utc};
 
@@ -37,7 +37,7 @@ pub struct UpdateClienteRequest {
 
 #[tauri::command]
 pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
         "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE ORDER BY cliente_nombre"
     )
@@ -50,7 +50,7 @@ pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
 
 #[tauri::command]
 pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let cliente = sqlx::query_as::<_, Cliente>(
         "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE WHERE cliente_id = ?"
     )
@@ -64,7 +64,7 @@ pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, Strin
 
 #[tauri::command]
 pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let cliente = sqlx::query_as::<_, Cliente>(
         "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE WHERE cliente_rut = ?"
     )
@@ -78,7 +78,7 @@ pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, 
 
 #[tauri::command]
 pub async fn get_clientes_by_created_by(created_by: i32) -> Result<Vec<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
         "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE WHERE created_by = ? ORDER BY cliente_nombre"
     )
@@ -92,7 +92,7 @@ pub async fn get_clientes_by_created_by(created_by: i32) -> Result<Vec<Cliente>,
 
 #[tauri::command]
 pub async fn search_clientes(search_term: String) -> Result<Vec<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let search_pattern = format!("%{}%", search_term);
     
     let clientes = sqlx::query_as::<_, Cliente>(
@@ -113,7 +113,7 @@ pub async fn search_clientes(search_term: String) -> Result<Vec<Cliente>, String
 
 #[tauri::command]
 pub async fn create_cliente(request: CreateClienteRequest) -> Result<Cliente, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Verificar que el RUT no existe ya
     if let Some(_) = get_cliente_by_rut(request.cliente_rut.clone()).await? {
@@ -153,7 +153,7 @@ pub async fn create_cliente(request: CreateClienteRequest) -> Result<Cliente, St
 
 #[tauri::command]
 pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, updated_by: i32) -> Result<Option<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Obtener el cliente actual para logging
     let current_cliente = get_cliente_by_id(cliente_id).await?;
@@ -220,7 +220,7 @@ pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, upda
 
 #[tauri::command]
 pub async fn delete_cliente(cliente_id: i32, deleted_by: i32) -> Result<bool, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Obtener el cliente antes de eliminarlo para logging
     let cliente_to_delete = get_cliente_by_id(cliente_id).await?;
@@ -276,7 +276,7 @@ pub async fn delete_cliente(cliente_id: i32, deleted_by: i32) -> Result<bool, St
 
 #[tauri::command]
 pub async fn count_clientes() -> Result<i64, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM CLIENTE")
         .fetch_one(pool)
         .await
@@ -287,7 +287,7 @@ pub async fn count_clientes() -> Result<i64, String> {
 
 #[tauri::command]
 pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec<Cliente>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
         "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at 
          FROM CLIENTE 

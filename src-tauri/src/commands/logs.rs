@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use crate::database::get_db_pool_unchecked;
+use crate::database::get_db_pool_safe;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct AuditLog {
@@ -52,7 +52,7 @@ pub struct LogFilters {
 /// Crear un nuevo registro de auditoría
 #[tauri::command]
 pub async fn create_audit_log(request: CreateAuditLogRequest) -> Result<AuditLog, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let result = sqlx::query(
         "INSERT INTO AUDIT_LOG (log_accion, log_usuario_id, log_entidad_tabla, log_entidad_id, log_prev_v, log_new_v) 
@@ -79,7 +79,7 @@ pub async fn create_audit_log(request: CreateAuditLogRequest) -> Result<AuditLog
 /// Obtener un registro de auditoría por ID
 #[tauri::command]
 pub async fn get_audit_log_by_id(log_id: i32) -> Result<Option<AuditLog>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let log = sqlx::query_as::<_, AuditLog>(
         "SELECT log_id, log_accion, log_usuario_id, log_entidad_tabla, log_entidad_id, log_prev_v, log_new_v, created_at 
@@ -97,7 +97,7 @@ pub async fn get_audit_log_by_id(log_id: i32) -> Result<Option<AuditLog>, String
 /// Obtener todos los registros de auditoría con filtros opcionales
 #[tauri::command]
 pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogWithUser>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let mut query = String::from(
         "SELECT a.log_id, a.log_accion, a.log_usuario_id, a.log_entidad_tabla, a.log_entidad_id, 
@@ -170,7 +170,7 @@ pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogW
 /// Obtener registros de auditoría por usuario
 #[tauri::command]
 pub async fn get_audit_logs_by_user(usuario_id: i32, limit: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let limit_clause = limit.map(|l| format!(" LIMIT {}", l)).unwrap_or_else(|| " LIMIT 50".to_string());
     
@@ -196,7 +196,7 @@ pub async fn get_audit_logs_by_user(usuario_id: i32, limit: Option<i32>) -> Resu
 /// Obtener registros de auditoría por entidad
 #[tauri::command]
 pub async fn get_audit_logs_by_entity(entidad_tabla: String, entidad_id: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let mut query = String::from(
         "SELECT a.log_id, a.log_accion, a.log_usuario_id, a.log_entidad_tabla, a.log_entidad_id, 
@@ -229,7 +229,7 @@ pub async fn get_audit_logs_by_entity(entidad_tabla: String, entidad_id: Option<
 /// Eliminar registros de auditoría antiguos (cleanup)
 #[tauri::command]
 pub async fn cleanup_old_audit_logs(days_old: i32) -> Result<u64, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let result = sqlx::query(
         "DELETE FROM AUDIT_LOG WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)"
@@ -245,7 +245,7 @@ pub async fn cleanup_old_audit_logs(days_old: i32) -> Result<u64, String> {
 /// Contar total de registros de auditoría
 #[tauri::command]
 pub async fn count_audit_logs() -> Result<i64, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM AUDIT_LOG")
         .fetch_one(pool)
@@ -280,7 +280,7 @@ pub async fn log_action(
 /// Obtener estadísticas de actividad
 #[tauri::command]
 pub async fn get_audit_stats() -> Result<serde_json::Value, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
     
     // Contar acciones por tipo
     let actions_count: Vec<(String, i64)> = sqlx::query_as(
