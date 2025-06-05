@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use crate::database::get_db_pool_unchecked;
+use crate::database::{get_db_pool_unchecked, get_db_pool_safe};
 use crate::commands::logs::log_action;
 use chrono::{DateTime, Utc};
 
@@ -84,7 +84,9 @@ pub struct OrdenTrabajoDetallada {
 /// Obtener todas las órdenes de trabajo
 #[tauri::command]
 pub async fn get_ordenes_trabajo() -> Result<Vec<OrdenTrabajo>, String> {
-    let pool = get_db_pool_unchecked();    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+    let pool = get_db_pool_safe()?;
+
+    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
                 equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at 
          FROM ORDEN_TRABAJO 
@@ -210,7 +212,9 @@ pub async fn get_ordenes_trabajo_by_usuario(usuario_id: i32) -> Result<Vec<Orden
 /// Obtener órdenes de trabajo con información detallada (con JOINs)
 #[tauri::command]
 pub async fn get_ordenes_trabajo_detalladas() -> Result<Vec<OrdenTrabajoDetallada>, String> {
-    let pool = get_db_pool_unchecked();    let ordenes = sqlx::query_as::<_, OrdenTrabajoDetallada>(
+    let pool = get_db_pool_safe()?;
+
+    let ordenes = sqlx::query_as::<_, OrdenTrabajoDetallada>(
         "SELECT 
             ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
             ot.has_garantia, ot.equipo_id, ot.created_by, ot.cotizacion_id, ot.informe_id, 
@@ -538,37 +542,49 @@ pub async fn delete_orden_trabajo(orden_id: i32, deleted_by: i32) -> Result<bool
 /// Obtener estadísticas de órdenes de trabajo
 #[tauri::command]
 pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
-    let pool = get_db_pool_unchecked();
+    let pool = get_db_pool_safe()?;
+    
+    // Estructura para mapear resultados
+    #[derive(Debug, sqlx::FromRow)]
+    struct CountByField {
+        estado: Option<String>,
+        prioridad: Option<String>,
+        count: i64,
+    }
+    
+    #[derive(Debug, sqlx::FromRow)]
+    struct CountResult {
+        count: i64,
+    }
     
     // Contar órdenes por estado
-    let stats_estado = sqlx::query!(
-        "SELECT estado, COUNT(*) as count FROM ORDEN_TRABAJO GROUP BY estado"
+    let stats_estado: Vec<CountByField> = sqlx::query_as(
+        "SELECT estado, NULL as prioridad, COUNT(*) as count FROM ORDEN_TRABAJO GROUP BY estado"
     )
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
     // Contar órdenes por prioridad
-    let stats_prioridad = sqlx::query!(
-        "SELECT prioridad, COUNT(*) as count FROM ORDEN_TRABAJO GROUP BY prioridad"
+    let stats_prioridad: Vec<CountByField> = sqlx::query_as(
+        "SELECT NULL as estado, prioridad, COUNT(*) as count FROM ORDEN_TRABAJO GROUP BY prioridad"
     )
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
     // Total de órdenes
-    let total = sqlx::query!("SELECT COUNT(*) as count FROM ORDEN_TRABAJO")
+    let total: CountResult = sqlx::query_as("SELECT COUNT(*) as count FROM ORDEN_TRABAJO")
         .fetch_one(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
     // Órdenes con garantía
-    let con_garantia = sqlx::query!("SELECT COUNT(*) as count FROM ORDEN_TRABAJO WHERE has_garantia = TRUE")
+    let con_garantia: CountResult = sqlx::query_as("SELECT COUNT(*) as count FROM ORDEN_TRABAJO WHERE has_garantia = TRUE")
         .fetch_one(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
-    
-    let stats = serde_json::json!({
+      let stats = serde_json::json!({
         "total": total.count,
         "con_garantia": con_garantia.count,
         "por_estado": stats_estado.into_iter().map(|r| serde_json::json!({

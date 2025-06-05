@@ -3,5 +3,6 @@ pub mod logs;
 pub mod clientes;
 pub mod equipos;
 pub mod ordenes_trabajo;
+pub mod database;
 
 

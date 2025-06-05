@@ -9,14 +9,13 @@ use database::init_database;
 pub fn run() {
     // Inicializar runtime de Tokio para operaciones async
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    
-    // Inicializar la base de datos
+      // Inicializar la base de datos
     rt.block_on(async {
         if let Err(e) = init_database().await {
-            eprintln!("Failed to initialize database: {}", e);
-            std::process::exit(1);
+            eprintln!("Warning: Failed to initialize database: {}", e);
+            // No terminar la aplicación, solo mostrar advertencia
         }
-    });    tauri::Builder::default()
+    });tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())        .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
             commands::users::get_usuario_by_id,
@@ -79,10 +78,12 @@ pub fn run() {
             commands::ordenes_trabajo::update_orden_trabajo,
             commands::ordenes_trabajo::cambiar_estado_orden_trabajo,
             commands::ordenes_trabajo::asignar_cotizacion_orden_trabajo,
-            commands::ordenes_trabajo::asignar_informe_orden_trabajo,
-            commands::ordenes_trabajo::delete_orden_trabajo,
+            commands::ordenes_trabajo::asignar_informe_orden_trabajo,            commands::ordenes_trabajo::delete_orden_trabajo,
             commands::ordenes_trabajo::get_ordenes_trabajo_stats,
-            commands::ordenes_trabajo::search_ordenes_trabajo
+            commands::ordenes_trabajo::search_ordenes_trabajo,
+            commands::database::get_database_status,
+            commands::database::check_database_connection,
+            commands::database::retry_database_connection
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
