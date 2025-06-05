@@ -2,6 +2,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import {
   HomeView,
   EquiposView,
+  ClientesView,
   SettingsView,
   HelpView,
 } from "@/components/views";
@@ -24,6 +25,8 @@ function ViewRenderer() {
       return <HomeView />;
     case "lista de equipos":
       return <EquiposView />;
+    case "clientes":
+      return <ClientesView />;
     case "projects":
     case "settings":
       return <SettingsView />;
