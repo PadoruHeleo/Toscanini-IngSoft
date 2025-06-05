@@ -5,6 +5,7 @@ import {
   IconInnerShadowTop,
   IconSettings,
   IconHome,
+  IconUsers,
 } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -31,6 +32,11 @@ const data = {
       title: "Lista de equipos",
       url: "#",
       icon: IconChartBar,
+    },
+    {
+      title: "Clientes",
+      url: "#",
+      icon: IconUsers,
     },
   ],
   navSecondary: [
