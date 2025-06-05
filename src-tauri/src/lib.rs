@@ -2,6 +2,7 @@ pub mod commands;
 pub mod database;
 pub mod utils;
 pub mod email;
+pub mod config;
 
 use database::init_database;
 
@@ -80,10 +81,15 @@ pub fn run() {
             commands::ordenes_trabajo::asignar_cotizacion_orden_trabajo,
             commands::ordenes_trabajo::asignar_informe_orden_trabajo,            commands::ordenes_trabajo::delete_orden_trabajo,
             commands::ordenes_trabajo::get_ordenes_trabajo_stats,
-            commands::ordenes_trabajo::search_ordenes_trabajo,
-            commands::database::get_database_status,
+            commands::ordenes_trabajo::search_ordenes_trabajo,            commands::database::get_database_status,
             commands::database::check_database_connection,
-            commands::database::retry_database_connection
+            commands::database::retry_database_connection,
+            commands::config::check_database_config,
+            commands::config::save_database_config,
+            commands::config::load_database_config,
+            commands::config::test_database_connection,
+            commands::config::delete_database_config,
+            commands::config::get_default_database_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

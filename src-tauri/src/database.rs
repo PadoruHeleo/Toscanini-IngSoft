@@ -1,6 +1,7 @@
 use sqlx::{MySql, Pool};
 use std::sync::{OnceLock, Arc, Mutex};
 use std::path::Path;
+use crate::config::load_database_config;
 
 pub type DbPool = Pool<MySql>;
 
@@ -36,14 +37,24 @@ impl Default for DatabaseStatus {
 }
 
 pub async fn init_database() -> Result<(), sqlx::Error> {
-    // Intentar cargar variables de entorno desde .env en múltiples ubicaciones
-    load_env_file();
-    
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| {
-            println!("Warning: DATABASE_URL not found in environment variables. Using default.");
-            "mysql://root:@localhost:3306/toscanini_db".to_string()
-        });
+    // Intentar cargar configuración segura primero
+    let database_url = match load_database_config() {
+        Ok(config) => {
+            println!("Loaded secure database configuration");
+            config.to_connection_string()
+        }
+        Err(e) => {
+            println!("Warning: Could not load secure config ({}), trying .env fallback", e);
+            // Fallback a la carga tradicional de .env
+            load_env_file();
+            
+            std::env::var("DATABASE_URL")
+                .unwrap_or_else(|_| {
+                    println!("Warning: DATABASE_URL not found. Using default configuration.");
+                    "mysql://root:@localhost:3306/toscanini_db".to_string()
+                })
+        }
+    };
     
     println!("Attempting to connect to database with URL: {}", 
         database_url.split('@').next().unwrap_or("***").to_string() + "@***");
@@ -132,14 +143,24 @@ pub async fn check_database_connection() -> bool {
 pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
     println!("Attempting to retry database connection...");
     
-    // Recargar variables de entorno
-    load_env_file();
-    
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| {
-            println!("Warning: DATABASE_URL not found in environment variables. Using default.");
-            "mysql://root:@localhost:3306/toscanini_db".to_string()
-        });
+    // Intentar cargar configuración segura primero
+    let database_url = match load_database_config() {
+        Ok(config) => {
+            println!("Using secure database configuration for retry");
+            config.to_connection_string()
+        }
+        Err(e) => {
+            println!("Warning: Could not load secure config for retry ({}), trying .env fallback", e);
+            // Fallback a la recarga de variables de entorno
+            load_env_file();
+            
+            std::env::var("DATABASE_URL")
+                .unwrap_or_else(|_| {
+                    println!("Warning: DATABASE_URL not found. Using default configuration.");
+                    "mysql://root:@localhost:3306/toscanini_db".to_string()
+                })
+        }
+    };
     
     println!("Retrying connection to database with URL: {}", 
         database_url.split('@').next().unwrap_or("***").to_string() + "@***");
