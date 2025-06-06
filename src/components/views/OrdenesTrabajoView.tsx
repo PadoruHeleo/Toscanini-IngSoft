@@ -11,7 +11,6 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
@@ -33,40 +32,63 @@ interface OrdenTrabajo {
   finished_at?: string;
 }
 
-const getEstadoBadgeVariant = (estado?: string) => {
+const getEstadoStyles = (estado?: string) => {
   switch (estado) {
     case "recibido":
-      return "default";
+      return "bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200";
     case "cotizacion_enviada":
-      return "secondary";
+      return "bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200";
     case "aprobacion_pendiente":
-      return "destructive";
+      return "bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200";
     case "en_reparacion":
-      return "default";
+      return "bg-indigo-100 text-indigo-800 border border-indigo-200 hover:bg-indigo-200";
     case "espera_de_retiro":
-      return "secondary";
+      return "bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-200";
     case "entregado":
-      return "default";
+      return "bg-green-100 text-green-800 border border-green-200 hover:bg-green-200";
     case "abandonado":
-      return "destructive";
+      return "bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200";
     case "equipo_no_reparable":
-      return "destructive";
+      return "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200";
     default:
-      return "outline";
+      return "bg-gray-100 text-gray-600 border border-gray-200";
   }
 };
 
-const getPrioridadBadgeVariant = (prioridad?: string) => {
+const getPrioridadStyles = (prioridad?: string) => {
   switch (prioridad) {
     case "alta":
-      return "destructive";
+      return "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200 font-semibold";
     case "media":
-      return "default";
+      return "bg-yellow-100 text-yellow-800 border border-yellow-200 hover:bg-yellow-200";
     case "baja":
-      return "secondary";
+      return "bg-green-100 text-green-800 border border-green-200 hover:bg-green-200";
     default:
-      return "outline";
+      return "bg-gray-100 text-gray-600 border border-gray-200";
   }
+};
+
+const formatEstadoText = (estado?: string) => {
+  const estadoMap: { [key: string]: string } = {
+    recibido: "Recibido",
+    cotizacion_enviada: "Cotización Enviada",
+    aprobacion_pendiente: "Aprobación Pendiente",
+    en_reparacion: "En Reparación",
+    espera_de_retiro: "Espera de Retiro",
+    entregado: "Entregado",
+    abandonado: "Abandonado",
+    equipo_no_reparable: "Equipo No Reparable",
+  };
+  return estadoMap[estado || ""] || "N/A";
+};
+
+const formatPrioridadText = (prioridad?: string) => {
+  const prioridadMap: { [key: string]: string } = {
+    alta: "🔴 Alta",
+    media: "🟡 Media",
+    baja: "🟢 Baja",
+  };
+  return prioridadMap[prioridad || ""] || "N/A";
 };
 
 export function OrdenesTrabajoView() {
@@ -308,23 +330,35 @@ export function OrdenesTrabajoView() {
                   </TableCell>
                   <TableCell className="max-w-xs truncate">
                     {orden.orden_desc || "N/A"}
-                  </TableCell>
+                  </TableCell>{" "}
                   <TableCell>
-                    <Badge variant={getEstadoBadgeVariant(orden.estado)}>
-                      {orden.estado?.replace(/_/g, " ") || "N/A"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getPrioridadBadgeVariant(orden.prioridad)}>
-                      {orden.prioridad || "N/A"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={orden.has_garantia ? "default" : "secondary"}
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${getEstadoStyles(
+                        orden.estado
+                      )}`}
                     >
-                      {orden.has_garantia ? "Sí" : "No"}
-                    </Badge>
+                      {formatEstadoText(orden.estado)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs transition-colors ${getPrioridadStyles(
+                        orden.prioridad
+                      )}`}
+                    >
+                      {formatPrioridadText(orden.prioridad)}
+                    </span>
+                  </TableCell>{" "}
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                        orden.has_garantia
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200"
+                          : "bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200"
+                      }`}
+                    >
+                      {orden.has_garantia ? "✅ Sí" : "❌ No"}
+                    </span>
                   </TableCell>
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
                   <TableCell className="text-right">
