@@ -6,6 +6,7 @@ import {
   IconSettings,
   IconHome,
   IconUsers,
+  IconClipboardList,
 } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -37,6 +38,11 @@ const data = {
       title: "Clientes",
       url: "#",
       icon: IconUsers,
+    },
+    {
+      title: "Órdenes de Trabajo",
+      url: "#",
+      icon: IconClipboardList,
     },
   ],
   navSecondary: [
