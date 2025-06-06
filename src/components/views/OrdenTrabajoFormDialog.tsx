@@ -116,17 +116,15 @@ export default function OrdenTrabajoFormDialog({
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
-
   // Cargar equipos al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadEquipos();
     }
   }, [open]);
-
   // Inicializar formulario cuando se pasa una orden para editar
   useEffect(() => {
-    if (isEditing && orden) {
+    if (isEditing && orden && open) {
       setFormData({
         orden_codigo: orden.orden_codigo || "",
         orden_desc: orden.orden_desc || "",
@@ -136,7 +134,7 @@ export default function OrdenTrabajoFormDialog({
         equipo_id: orden.equipo_id?.toString() || "",
         pre_informe: orden.pre_informe || "",
       });
-    } else {
+    } else if (!isEditing && open) {
       // Resetear formulario para crear nueva orden
       setFormData({
         orden_codigo: "",
@@ -251,10 +249,9 @@ export default function OrdenTrabajoFormDialog({
               ? formData.pre_informe
               : undefined,
         };
-
         const result = await invoke<boolean>("update_orden_trabajo", {
           ordenId: orden.orden_id,
-          updateData,
+          request: updateData,
           updatedBy: user.usuario_id,
         });
 
@@ -281,9 +278,8 @@ export default function OrdenTrabajoFormDialog({
           cotizacion_id: null,
           informe_id: null,
         };
-
         const result = await invoke<number>("create_orden_trabajo", {
-          createData,
+          request: createData,
         });
 
         if (result) {
