@@ -104,7 +104,6 @@ export default function OrdenTrabajoFormDialog({
   const [loading, setLoading] = useState(false);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
-
   const [formData, setFormData] = useState<FormData>({
     orden_codigo: "",
     orden_desc: "",
@@ -115,14 +114,39 @@ export default function OrdenTrabajoFormDialog({
     pre_informe: "",
   });
 
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [errors, setErrors] = useState<FormErrors>({}); // Función para generar la descripción automáticamente
+  const generateDescription = (equipoId: string, preInforme: string) => {
+    if (!equipoId || !preInforme.trim() || equipos.length === 0) return "";
+
+    const equipo = equipos.find((e) => e.equipo_id.toString() === equipoId);
+    if (!equipo) return "";
+
+    const marca = equipo.equipo_marca || "Marca desconocida";
+    const modelo = equipo.equipo_modelo || "Modelo desconocido";
+
+    return `El equipo ${marca} ${modelo} presenta ${preInforme.trim()}`;
+  }; // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
+  useEffect(() => {
+    if (
+      formData.equipo_id &&
+      formData.pre_informe.trim() &&
+      equipos.length > 0
+    ) {
+      const newDescription = generateDescription(
+        formData.equipo_id,
+        formData.pre_informe
+      );
+      if (newDescription) {
+        setFormData((prev) => ({ ...prev, orden_desc: newDescription }));
+      }
+    }
+  }, [formData.equipo_id, formData.pre_informe, equipos]);
   // Cargar equipos al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadEquipos();
     }
-  }, [open]);
-  // Inicializar formulario cuando se pasa una orden para editar
+  }, [open]); // Inicializar formulario cuando se pasa una orden para editar
   useEffect(() => {
     if (isEditing && orden && open) {
       setFormData({
@@ -148,6 +172,23 @@ export default function OrdenTrabajoFormDialog({
     }
     setErrors({});
   }, [isEditing, orden, open]);
+  // Regenerar descripción para órdenes existentes una vez que se cargan los equipos
+  useEffect(() => {
+    if (
+      isEditing &&
+      formData.equipo_id &&
+      formData.pre_informe &&
+      equipos.length > 0
+    ) {
+      const newDescription = generateDescription(
+        formData.equipo_id,
+        formData.pre_informe
+      );
+      if (newDescription) {
+        setFormData((prev) => ({ ...prev, orden_desc: newDescription }));
+      }
+    }
+  }, [equipos.length, isEditing]);
 
   const loadEquipos = async () => {
     try {
@@ -161,7 +202,6 @@ export default function OrdenTrabajoFormDialog({
       setLoadingEquipos(false);
     }
   };
-
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
@@ -169,8 +209,10 @@ export default function OrdenTrabajoFormDialog({
       newErrors.orden_codigo = "El código es requerido";
     }
 
+    // La descripción se genera automáticamente, pero verificamos que exista
     if (!formData.orden_desc.trim()) {
-      newErrors.orden_desc = "La descripción es requerida";
+      newErrors.orden_desc =
+        "Seleccione un equipo y complete el pre-informe para generar la descripción";
     }
 
     if (!formData.prioridad) {
@@ -192,12 +234,39 @@ export default function OrdenTrabajoFormDialog({
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleInputChange = (
     field: keyof FormData,
     value: string | boolean
   ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const newData = { ...prev, [field]: value };
+
+      // Si se cambia el equipo o pre-informe, regenerar descripción inmediatamente
+      if (
+        (field === "equipo_id" || field === "pre_informe") &&
+        equipos.length > 0
+      ) {
+        const equipoId =
+          field === "equipo_id" ? (value as string) : prev.equipo_id;
+        const preInforme =
+          field === "pre_informe" ? (value as string) : prev.pre_informe;
+
+        if (
+          equipoId &&
+          preInforme &&
+          typeof preInforme === "string" &&
+          preInforme.trim()
+        ) {
+          const newDescription = generateDescription(equipoId, preInforme);
+          if (newDescription) {
+            newData.orden_desc = newDescription;
+          }
+        }
+      }
+
+      return newData;
+    });
+
     // Limpiar error del campo cuando el usuario empiece a escribir
     if (errors[field as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -382,26 +451,29 @@ export default function OrdenTrabajoFormDialog({
                 <p className="text-sm text-red-500">{errors.equipo_id}</p>
               )}
             </div>
-          </div>
-
+          </div>{" "}
           {/* Descripción */}
           <div className="space-y-2">
-            <Label htmlFor="orden_desc">Descripción *</Label>
+            <Label htmlFor="orden_desc">
+              Descripción *
+              <span className="text-sm text-gray-500 font-normal ml-1">
+                (Se genera automáticamente)
+              </span>
+            </Label>
             <Textarea
               id="orden_desc"
               value={formData.orden_desc}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                handleInputChange("orden_desc", e.target.value)
-              }
-              placeholder="Descripción detallada del trabajo a realizar"
-              className={errors.orden_desc ? "border-red-500" : ""}
+              readOnly
+              placeholder="La descripción se generará automáticamente al seleccionar un equipo y escribir el pre-informe"
+              className={`bg-gray-50 ${
+                errors.orden_desc ? "border-red-500" : ""
+              }`}
               rows={3}
             />
             {errors.orden_desc && (
               <p className="text-sm text-red-500">{errors.orden_desc}</p>
             )}
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             {/* Prioridad */}
             <div className="space-y-2">
@@ -453,7 +525,6 @@ export default function OrdenTrabajoFormDialog({
               )}
             </div>
           </div>
-
           {/* Garantía */}
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -465,7 +536,6 @@ export default function OrdenTrabajoFormDialog({
             />
             <Label htmlFor="has_garantia">Equipo tiene garantía</Label>
           </div>
-
           {/* Pre-informe */}
           <div className="space-y-2">
             <Label htmlFor="pre_informe">Pre-informe *</Label>
@@ -483,13 +553,11 @@ export default function OrdenTrabajoFormDialog({
               <p className="text-sm text-red-500">{errors.pre_informe}</p>
             )}
           </div>
-
           {Object.keys(errors).length > 0 && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
           )}
-
           <DialogFooter className="gap-2">
             <Button
               type="button"
