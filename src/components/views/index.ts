@@ -3,6 +3,8 @@ export * from "./EquiposView";
 export * from "./EquipoFormDialog";
 export * from "./ClientesView";
 export * from "./ClienteFormDialog";
+export * from "./OrdenesTrabajoView";
+export * from "./OrdenTrabajoFormDialog";
 export * from "./SettingsView";
 export * from "./HelpView";
 export * from "./LoginView";

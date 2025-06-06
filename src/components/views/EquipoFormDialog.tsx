@@ -100,7 +100,8 @@ export function EquipoFormDialog({
   const [showNewMarcaInput, setShowNewMarcaInput] = useState(false);
   const [showNewModeloInput, setShowNewModeloInput] = useState(false);
   const [newMarcaValue, setNewMarcaValue] = useState("");
-  const [newModeloValue, setNewModeloValue] = useState("");  const [tipoIngreso, setTipoIngreso] = useState<
+  const [newModeloValue, setNewModeloValue] = useState("");
+  const [tipoIngreso, setTipoIngreso] = useState<
     "almacenamiento" | "mantenimiento"
   >("almacenamiento");
   const [preInforme, setPreInforme] = useState("");
@@ -118,7 +119,9 @@ export function EquipoFormDialog({
     cliente_telefono: "",
     cliente_direccion: "",
   });
-  const [newClienteErrors, setNewClienteErrors] = useState<Record<string, string>>({});
+  const [newClienteErrors, setNewClienteErrors] = useState<
+    Record<string, string>
+  >({});
   const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
     numero_serie: "",
     equipo_marca: "",
@@ -179,7 +182,9 @@ export function EquipoFormDialog({
     }
     if (!newClienteData.cliente_correo.trim()) {
       errors.cliente_correo = "El correo es obligatorio";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClienteData.cliente_correo)) {
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClienteData.cliente_correo)
+    ) {
       errors.cliente_correo = "El formato del correo no es válido";
     }
 
@@ -220,7 +225,10 @@ export function EquipoFormDialog({
       });
       setNewClienteErrors({});
 
-      success("¡Cliente creado exitosamente!", `${nuevoCliente.cliente_nombre} ha sido registrado.`);
+      success(
+        "¡Cliente creado exitosamente!",
+        `${nuevoCliente.cliente_nombre} ha sido registrado.`
+      );
     } catch (error) {
       console.error("Error creando cliente:", error);
       showError(
@@ -298,7 +306,11 @@ export function EquipoFormDialog({
           .padStart(2, "0")}-${equipoCreado.equipo_id}`;
         const ordenData: CreateOrdenTrabajoRequest = {
           orden_codigo: codigoOrden,
-          orden_desc: `Orden de trabajo para ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})`,
+          orden_desc: `El equipo ${
+            formData.equipo_marca || "Marca desconocida"
+          } ${
+            formData.equipo_modelo || "Modelo desconocido"
+          } presenta ${preInforme.trim()}`,
           prioridad: "media",
           estado: "recibido",
           has_garantia: false,
@@ -327,7 +339,7 @@ export function EquipoFormDialog({
       }
 
       // Cerrar diálogo
-      onOpenChange(false);      // Limpiar formulario
+      onOpenChange(false); // Limpiar formulario
       setFormData({
         numero_serie: "",
         equipo_marca: "",
@@ -648,7 +660,8 @@ export function EquipoFormDialog({
                 <p className="text-sm text-red-500">{errors.equipo_tipo}</p>
               )}
             </div>
-          </div>          <div className="space-y-2">
+          </div>{" "}
+          <div className="space-y-2">
             <Label htmlFor="cliente_id">Cliente *</Label>
             <Select
               value={formData.cliente_id?.toString() || ""}
@@ -729,12 +742,16 @@ export function EquipoFormDialog({
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : "Guardar Equipo"}
-            </Button>          </DialogFooter>
+            </Button>{" "}
+          </DialogFooter>
         </form>
       </DialogContent>
 
       {/* Modal para agregar nuevo cliente */}
-      <Dialog open={showNewClienteDialog} onOpenChange={setShowNewClienteDialog}>
+      <Dialog
+        open={showNewClienteDialog}
+        onOpenChange={setShowNewClienteDialog}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Agregar Nuevo Cliente</DialogTitle>
@@ -750,16 +767,24 @@ export function EquipoFormDialog({
                 id="nuevo_cliente_rut"
                 value={newClienteData.cliente_rut}
                 onChange={(e) => {
-                  setNewClienteData(prev => ({...prev, cliente_rut: e.target.value}));
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_rut: e.target.value,
+                  }));
                   if (newClienteErrors.cliente_rut) {
-                    setNewClienteErrors(prev => ({...prev, cliente_rut: ""}));
+                    setNewClienteErrors((prev) => ({
+                      ...prev,
+                      cliente_rut: "",
+                    }));
                   }
                 }}
                 placeholder="Ej: 12.345.678-9"
                 className={newClienteErrors.cliente_rut ? "border-red-500" : ""}
               />
               {newClienteErrors.cliente_rut && (
-                <p className="text-sm text-red-500">{newClienteErrors.cliente_rut}</p>
+                <p className="text-sm text-red-500">
+                  {newClienteErrors.cliente_rut}
+                </p>
               )}
             </div>
 
@@ -769,16 +794,26 @@ export function EquipoFormDialog({
                 id="nuevo_cliente_nombre"
                 value={newClienteData.cliente_nombre}
                 onChange={(e) => {
-                  setNewClienteData(prev => ({...prev, cliente_nombre: e.target.value}));
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_nombre: e.target.value,
+                  }));
                   if (newClienteErrors.cliente_nombre) {
-                    setNewClienteErrors(prev => ({...prev, cliente_nombre: ""}));
+                    setNewClienteErrors((prev) => ({
+                      ...prev,
+                      cliente_nombre: "",
+                    }));
                   }
                 }}
                 placeholder="Nombre completo del cliente"
-                className={newClienteErrors.cliente_nombre ? "border-red-500" : ""}
+                className={
+                  newClienteErrors.cliente_nombre ? "border-red-500" : ""
+                }
               />
               {newClienteErrors.cliente_nombre && (
-                <p className="text-sm text-red-500">{newClienteErrors.cliente_nombre}</p>
+                <p className="text-sm text-red-500">
+                  {newClienteErrors.cliente_nombre}
+                </p>
               )}
             </div>
 
@@ -789,16 +824,26 @@ export function EquipoFormDialog({
                 type="email"
                 value={newClienteData.cliente_correo}
                 onChange={(e) => {
-                  setNewClienteData(prev => ({...prev, cliente_correo: e.target.value}));
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_correo: e.target.value,
+                  }));
                   if (newClienteErrors.cliente_correo) {
-                    setNewClienteErrors(prev => ({...prev, cliente_correo: ""}));
+                    setNewClienteErrors((prev) => ({
+                      ...prev,
+                      cliente_correo: "",
+                    }));
                   }
                 }}
                 placeholder="cliente@ejemplo.com"
-                className={newClienteErrors.cliente_correo ? "border-red-500" : ""}
+                className={
+                  newClienteErrors.cliente_correo ? "border-red-500" : ""
+                }
               />
               {newClienteErrors.cliente_correo && (
-                <p className="text-sm text-red-500">{newClienteErrors.cliente_correo}</p>
+                <p className="text-sm text-red-500">
+                  {newClienteErrors.cliente_correo}
+                </p>
               )}
             </div>
 
@@ -807,7 +852,12 @@ export function EquipoFormDialog({
               <Input
                 id="nuevo_cliente_telefono"
                 value={newClienteData.cliente_telefono}
-                onChange={(e) => setNewClienteData(prev => ({...prev, cliente_telefono: e.target.value}))}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_telefono: e.target.value,
+                  }))
+                }
                 placeholder="Ej: +56 9 1234 5678"
               />
             </div>
@@ -817,7 +867,12 @@ export function EquipoFormDialog({
               <Input
                 id="nuevo_cliente_direccion"
                 value={newClienteData.cliente_direccion}
-                onChange={(e) => setNewClienteData(prev => ({...prev, cliente_direccion: e.target.value}))}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_direccion: e.target.value,
+                  }))
+                }
                 placeholder="Dirección completa del cliente"
               />
             </div>

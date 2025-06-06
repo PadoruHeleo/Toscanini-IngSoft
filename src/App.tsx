@@ -3,6 +3,7 @@ import {
   HomeView,
   EquiposView,
   ClientesView,
+  OrdenesTrabajoView,
   SettingsView,
   HelpView,
 } from "@/components/views";
@@ -27,6 +28,8 @@ function ViewRenderer() {
       return <EquiposView />;
     case "clientes":
       return <ClientesView />;
+    case "órdenes de trabajo":
+      return <OrdenesTrabajoView />;
     case "projects":
     case "settings":
       return <SettingsView />;
