@@ -106,10 +106,9 @@ export default function CotizacionFormDialog({
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
   const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
   const [cantidad, setCantidad] = useState<string>("1");
-
   const [formData, setFormData] = useState<FormData>({
     cotizacion_codigo: "",
-    costo_revision: "0",
+    costo_revision: "25000",
     costo_reparacion: "0",
     is_aprobada: false,
     is_borrador: true,
@@ -147,12 +146,11 @@ export default function CotizacionFormDialog({
         costo_reparacion: cotizacion.costo_reparacion?.toString() || "0",
         is_aprobada: cotizacion.is_aprobada || false,
         is_borrador: cotizacion.is_borrador ?? true,
-      });
-    } else if (!isEditing && open) {
+      });    } else if (!isEditing && open) {
       // Resetear formulario para crear nueva cotización
       setFormData({
         cotizacion_codigo: "",
-        costo_revision: "0",
+        costo_revision: "25000",
         costo_reparacion: "0",
         is_aprobada: false,
         is_borrador: true,
@@ -488,8 +486,7 @@ export default function CotizacionFormDialog({
                 value={formData.costo_revision}
                 onChange={(e) =>
                   handleInputChange("costo_revision", e.target.value)
-                }
-                placeholder="0"
+                }                placeholder="25000"
                 className={errors.costo_revision ? "border-red-500" : ""}
               />
               {errors.costo_revision && (
