@@ -264,17 +264,10 @@ export function OrdenesTrabajoView() {
       return;
     }
 
-    // Confirmar la creación de cotización
-    const confirmCreate = window.confirm(
-      `¿Desea crear una cotización para la orden "${orden.orden_codigo}"?\n\nEsto abrirá el formulario de cotización.`
-    );
-
-    if (!confirmCreate) return;
-
+    // Abrir el formulario para crear nueva cotización directamente, sin confirmación
     try {
       setLoadingCotizacion(orden.orden_id);
 
-      // Abrir el formulario para crear nueva cotización
       setSelectedOrdenForCotizacion(orden);
       setEditingCotizacion(null);
       setShowCotizacionForm(true);

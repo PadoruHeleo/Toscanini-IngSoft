@@ -32,6 +32,7 @@ interface Cotizacion {
   costo_total?: number;
   is_aprobada?: boolean;
   is_borrador?: boolean;
+  informe: string;
   created_by?: number;
   created_at?: string;
 }
@@ -356,7 +357,7 @@ export function CotizacionesView() {
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onCotizacionAdded={handleCotizacionAdded}
-      />{" "}
+      />
       {/* Dialog para editar cotización */}
       {editingCotizacion && (
         <CotizacionFormDialog

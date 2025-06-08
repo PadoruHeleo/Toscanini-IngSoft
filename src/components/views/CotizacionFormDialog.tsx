@@ -30,6 +30,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { Plus, Trash2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Cotizacion {
   cotizacion_id: number;
@@ -39,6 +40,7 @@ interface Cotizacion {
   costo_total?: number;
   is_aprobada?: boolean;
   is_borrador?: boolean;
+  informe: string;
   created_by?: number;
   created_at?: string;
 }
@@ -76,12 +78,14 @@ interface FormData {
   costo_revision: string;
   costo_reparacion: string;
   is_aprobada: boolean;
+  informe: string;
 }
 
 interface FormErrors {
   cotizacion_codigo?: string;
   costo_revision?: string;
   costo_reparacion?: string;
+  informe?: string;
 }
 
 interface SelectedPieza extends PiezaCotizacion {
@@ -112,6 +116,7 @@ export default function CotizacionFormDialog({
     costo_revision: "25000",
     costo_reparacion: "0",
     is_aprobada: false,
+    informe: "",
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -145,6 +150,7 @@ export default function CotizacionFormDialog({
         costo_revision: cotizacion.costo_revision?.toString() || "0",
         costo_reparacion: cotizacion.costo_reparacion?.toString() || "0",
         is_aprobada: cotizacion.is_aprobada || false,
+        informe: cotizacion.informe || "",
       });
     } else if (!isEditing && open) {
       // Resetear formulario para crear nueva cotización
@@ -153,6 +159,7 @@ export default function CotizacionFormDialog({
         costo_revision: "25000",
         costo_reparacion: "0",
         is_aprobada: false,
+        informe: "",
       });
       setSelectedPiezas([]);
     }
@@ -218,6 +225,10 @@ export default function CotizacionFormDialog({
     if (isNaN(costoReparacion) || costoReparacion < 0) {
       newErrors.costo_reparacion =
         "El costo de reparación debe ser un número válido mayor o igual a 0";
+    }
+
+    if (!formData.informe.trim()) {
+      newErrors.informe = "El informe es requerido";
     }
 
     setErrors(newErrors);
@@ -328,6 +339,10 @@ export default function CotizacionFormDialog({
             formData.is_aprobada !== cotizacion.is_aprobada
               ? formData.is_aprobada
               : undefined,
+          informe:
+            formData.informe !== cotizacion.informe
+              ? formData.informe
+              : undefined,
         };
 
         const result = await invoke<boolean>("update_cotizacion", {
@@ -357,6 +372,7 @@ export default function CotizacionFormDialog({
           is_aprobada: formData.is_aprobada,
           is_borrador: true, // Siempre crear como borrador
           created_by: user.usuario_id,
+          informe: formData.informe,
         };
 
         const cotizacionResult = await invoke<any>("create_cotizacion", {
@@ -527,7 +543,7 @@ export default function CotizacionFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        style={{ maxWidth: "60vw", width: "60vw", minWidth: "600px" }}
+        style={{ maxWidth: "38vw", width: "38vw", minWidth: "340px" }}
         className="max-h-[90vh] overflow-y-auto"
       >
         <DialogHeader>
@@ -629,6 +645,22 @@ export default function CotizacionFormDialog({
               />
               <Label htmlFor="is_aprobada">Está aprobada</Label>
             </div>
+          </div>
+          {/* Informe */}
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="informe">Informe *</Label>
+            <Textarea
+              id="informe"
+              value={formData.informe}
+              onChange={(e) => handleInputChange("informe", e.target.value)}
+              placeholder="Redacte aquí el informe técnico de la cotización"
+              className={errors.informe ? "border-red-500" : ""}
+              rows={5}
+              required
+            />
+            {errors.informe && (
+              <p className="text-sm text-red-500">{errors.informe}</p>
+            )}
           </div>
           {/* Gestión de piezas */}
           <div className="space-y-4">

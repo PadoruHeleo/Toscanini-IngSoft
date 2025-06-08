@@ -13,6 +13,7 @@ pub struct Cotizacion {
     pub costo_total: Option<i32>,
     pub is_aprobada: Option<bool>,
     pub is_borrador: Option<bool>,
+    pub informe: String,
     pub created_by: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
 }
@@ -48,6 +49,7 @@ pub struct CotizacionDetallada {
     pub costo_total: Option<i32>,
     pub is_aprobada: Option<bool>,
     pub is_borrador: Option<bool>,
+    pub informe: String,
     pub created_by: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
     pub created_by_nombre: Option<String>,
@@ -61,6 +63,7 @@ pub struct CreateCotizacionRequest {
     pub costo_total: Option<i32>,
     pub is_aprobada: Option<bool>,
     pub is_borrador: Option<bool>,
+    pub informe: String,
     pub created_by: i32,
     pub piezas: Option<Vec<PiezaCotizacionRequest>>,
 }
@@ -73,6 +76,7 @@ pub struct UpdateCotizacionRequest {
     pub costo_total: Option<i32>,
     pub is_aprobada: Option<bool>,
     pub is_borrador: Option<bool>,
+    pub informe: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,9 +99,9 @@ pub async fn get_cotizaciones() -> Result<Vec<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
     let cotizaciones = sqlx::query_as::<_, Cotizacion>(
-        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion, 
-                costo_total, is_aprobada, is_borrador, created_by, created_at 
-         FROM COTIZACION 
+        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion, \
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at \
+         FROM COTIZACION \
          ORDER BY created_at DESC"
     )
     .fetch_all(pool)
@@ -133,9 +137,9 @@ pub async fn get_cotizacion_by_id(cotizacion_id: i32) -> Result<Option<Cotizacio
     let pool = get_db_pool_safe()?;
     
     let cotizacion = sqlx::query_as::<_, Cotizacion>(
-        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,
-                costo_total, is_aprobada, is_borrador, created_by, created_at 
-         FROM COTIZACION 
+        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,\
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at \
+         FROM COTIZACION \
          WHERE cotizacion_id = ?"
     )
     .bind(cotizacion_id)
@@ -152,9 +156,9 @@ pub async fn get_cotizacion_by_codigo(cotizacion_codigo: String) -> Result<Optio
     let pool = get_db_pool_safe()?;
     
     let cotizacion = sqlx::query_as::<_, Cotizacion>(
-        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,
-                costo_total, is_aprobada, is_borrador, created_by, created_at 
-         FROM COTIZACION 
+        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,\
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at \
+         FROM COTIZACION \
          WHERE cotizacion_codigo = ?"
     )
     .bind(&cotizacion_codigo)
@@ -180,9 +184,9 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     
     // Crear la cotización
     let result = sqlx::query(
-        "INSERT INTO COTIZACION (cotizacion_codigo, costo_revision, costo_reparacion, 
-                                costo_total, is_aprobada, is_borrador, created_by) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO COTIZACION (cotizacion_codigo, costo_revision, costo_reparacion, \
+                                costo_total, is_aprobada, is_borrador, informe, created_by) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&request.cotizacion_codigo)
     .bind(request.costo_revision)
@@ -190,6 +194,7 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     .bind(request.costo_total)
     .bind(request.is_aprobada.unwrap_or(false))
     .bind(request.is_borrador.unwrap_or(true))
+    .bind(&request.informe)
     .bind(request.created_by)
     .execute(&mut *tx)
     .await
@@ -249,13 +254,14 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
     }
     
     let result = sqlx::query(
-        "UPDATE COTIZACION SET 
-         cotizacion_codigo = COALESCE(?, cotizacion_codigo),
-         costo_revision = COALESCE(?, costo_revision),
-         costo_reparacion = COALESCE(?, costo_reparacion),
-         costo_total = COALESCE(?, costo_total),
-         is_aprobada = COALESCE(?, is_aprobada),
-         is_borrador = COALESCE(?, is_borrador)
+        "UPDATE COTIZACION SET \
+         cotizacion_codigo = COALESCE(?, cotizacion_codigo),\
+         costo_revision = COALESCE(?, costo_revision),\
+         costo_reparacion = COALESCE(?, costo_reparacion),\
+         costo_total = COALESCE(?, costo_total),\
+         is_aprobada = COALESCE(?, is_aprobada),\
+         is_borrador = COALESCE(?, is_borrador),\
+         informe = COALESCE(?, informe)\
          WHERE cotizacion_id = ?"
     )
     .bind(&request.cotizacion_codigo)
@@ -264,6 +270,7 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
     .bind(request.costo_total)
     .bind(request.is_aprobada)
     .bind(request.is_borrador)
+    .bind(&request.informe)
     .bind(cotizacion_id)
     .execute(pool)
     .await
@@ -539,13 +546,12 @@ pub async fn search_cotizaciones(search_term: String) -> Result<Vec<CotizacionDe
     let search_pattern = format!("%{}%", search_term);
     
     let cotizaciones = sqlx::query_as::<_, CotizacionDetallada>(
-        "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion,
-                c.costo_total, c.is_aprobada, c.is_borrador, c.created_by, c.created_at,
-                u.usuario_nombre as created_by_nombre
-         FROM COTIZACION c
-         LEFT JOIN USUARIO u ON c.created_by = u.usuario_id
-         WHERE c.cotizacion_codigo LIKE ? 
-         ORDER BY c.created_at DESC"
+        "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion,\
+                c.costo_total, c.is_aprobada, c.is_borrador, c.informe, c.created_by, c.created_at,\
+                u.usuario_nombre as created_by_nombre\
+         FROM COTIZACION c\
+         LEFT JOIN USUARIO u ON c.created_by = u.usuario_id\
+         WHERE c.cotizacion_codigo LIKE ? \n         ORDER BY c.created_at DESC"
     )
     .bind(&search_pattern)
     .fetch_all(pool)
@@ -574,13 +580,12 @@ pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result
     let pool = get_db_pool_safe()?;
     
     let cotizaciones = sqlx::query_as::<_, CotizacionDetallada>(
-        "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion,
-                c.costo_total, c.is_aprobada, c.is_borrador, c.created_by, c.created_at,
-                u.usuario_nombre as created_by_nombre
-         FROM COTIZACION c
-         LEFT JOIN USUARIO u ON c.created_by = u.usuario_id
-         ORDER BY c.created_at DESC
-         LIMIT ? OFFSET ?"
+        "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion,\
+                c.costo_total, c.is_aprobada, c.is_borrador, c.informe, c.created_by, c.created_at,\
+                u.usuario_nombre as created_by_nombre\
+         FROM COTIZACION c\
+         LEFT JOIN USUARIO u ON c.created_by = u.usuario_id\
+         ORDER BY c.created_at DESC\n         LIMIT ? OFFSET ?"
     )
     .bind(limit)
     .bind(offset)
