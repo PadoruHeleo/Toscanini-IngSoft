@@ -388,27 +388,35 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
 #[tauri::command]
 pub async fn get_piezas() -> Result<Vec<Pieza>, String> {
     let pool = get_db_pool_safe()?;
-    
     let piezas = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at 
-         FROM PIEZA 
-         ORDER BY pieza_nombre ASC"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA ORDER BY pieza_nombre ASC"
     )
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
     Ok(piezas)
+}
+
+/// Obtener una pieza por ID
+#[tauri::command]
+pub async fn get_pieza_by_id(pieza_id: i32) -> Result<Option<Pieza>, String> {
+    let pool = get_db_pool_safe()?;
+    let pieza = sqlx::query_as::<_, Pieza>(
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+    )
+    .bind(pieza_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    Ok(pieza)
 }
 
 /// Crear una nueva pieza
 #[tauri::command]
 pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> {
     let pool = get_db_pool_safe()?;
-    
     let result = sqlx::query(
-        "INSERT INTO PIEZA (pieza_nombre, pieza_marca, pieza_desc, pieza_precio) 
-         VALUES (?, ?, ?, ?)"
+        "INSERT INTO PIEZA (pieza_nombre, pieza_marca, pieza_desc, pieza_precio) VALUES (?, ?, ?, ?)"
     )
     .bind(&request.pieza_nombre)
     .bind(&request.pieza_marca)
@@ -417,125 +425,68 @@ pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> 
     .execute(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
     let pieza_id = result.last_insert_id() as i32;
-    
-    // Obtener la pieza recién creada
     let pieza = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at 
-         FROM PIEZA 
-         WHERE pieza_id = ?"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
     Ok(pieza)
 }
 
-/// Obtener piezas de una cotización
-#[tauri::command]
-pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotizacion>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    let piezas = sqlx::query_as::<_, PiezaCotizacion>(
-        "SELECT pc.pieza_id, pc.cotizacion_id, pc.cantidad,
-                p.pieza_nombre, p.pieza_marca, p.pieza_desc, p.pieza_precio
-         FROM PIEZAS_COTIZACION pc
-         JOIN PIEZA p ON pc.pieza_id = p.pieza_id
-         WHERE pc.cotizacion_id = ?
-         ORDER BY p.pieza_nombre ASC"
-    )
-    .bind(cotizacion_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    Ok(piezas)
+#[derive(Debug, Deserialize)]
+pub struct UpdatePiezaRequest {
+    pub pieza_nombre: Option<String>,
+    pub pieza_marca: Option<String>,
+    pub pieza_desc: Option<String>,
+    pub pieza_precio: Option<i32>,
 }
 
-/// Agregar pieza a cotización
+/// Actualizar una pieza existente
 #[tauri::command]
-pub async fn add_pieza_to_cotizacion(cotizacion_id: i32, pieza_id: i32, cantidad: i32, updated_by: i32) -> Result<bool, String> {
+pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<Option<Pieza>, String> {
     let pool = get_db_pool_safe()?;
-    
-    // Verificar si la relación ya existe
-    let existing = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM PIEZAS_COTIZACION WHERE cotizacion_id = ? AND pieza_id = ?"
-    )
-    .bind(cotizacion_id)
-    .bind(pieza_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    if existing > 0 {
-        // Actualizar cantidad existente
-        sqlx::query(
-            "UPDATE PIEZAS_COTIZACION SET cantidad = ? WHERE cotizacion_id = ? AND pieza_id = ?"
-        )
-        .bind(cantidad)
-        .bind(cotizacion_id)
-        .bind(pieza_id)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    } else {
-        // Insertar nueva relación
-        sqlx::query(
-            "INSERT INTO PIEZAS_COTIZACION (cotizacion_id, pieza_id, cantidad) VALUES (?, ?, ?)"
-        )
-        .bind(cotizacion_id)
-        .bind(pieza_id)
-        .bind(cantidad)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    }
-    
-    // Registrar la acción en el log de auditoría
-    let _ = log_action(
-        "ADD_PIEZA_COTIZACION",
-        Some(updated_by),
-        "PIEZAS_COTIZACION",
-        Some(cotizacion_id),
-        None,
-        Some(&format!("Pieza {} agregada a cotización {} con cantidad {}", pieza_id, cotizacion_id, cantidad))
-    ).await;
-    
-    Ok(true)
-}
-
-/// Remover pieza de cotización
-#[tauri::command]
-pub async fn remove_pieza_from_cotizacion(cotizacion_id: i32, pieza_id: i32, updated_by: i32) -> Result<bool, String> {
-    let pool = get_db_pool_safe()?;
-    
     let result = sqlx::query(
-        "DELETE FROM PIEZAS_COTIZACION WHERE cotizacion_id = ? AND pieza_id = ?"
+        "UPDATE PIEZA SET \
+            pieza_nombre = COALESCE(?, pieza_nombre),\
+            pieza_marca = COALESCE(?, pieza_marca),\
+            pieza_desc = COALESCE(?, pieza_desc),\
+            pieza_precio = COALESCE(?, pieza_precio)\
+         WHERE pieza_id = ?"
     )
-    .bind(cotizacion_id)
+    .bind(&request.pieza_nombre)
+    .bind(&request.pieza_marca)
+    .bind(&request.pieza_desc)
+    .bind(request.pieza_precio)
     .bind(pieza_id)
     .execute(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
-    let was_removed = result.rows_affected() > 0;
-    
-    // Registrar la acción en el log de auditoría
-    if was_removed {
-        let _ = log_action(
-            "REMOVE_PIEZA_COTIZACION",
-            Some(updated_by),
-            "PIEZAS_COTIZACION",
-            Some(cotizacion_id),
-            None,
-            Some(&format!("Pieza {} removida de cotización {}", pieza_id, cotizacion_id))
-        ).await;
+    if result.rows_affected() == 0 {
+        return Ok(None);
     }
-    
-    Ok(was_removed)
+    let pieza = sqlx::query_as::<_, Pieza>(
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+    )
+    .bind(pieza_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    Ok(Some(pieza))
+}
+
+/// Eliminar una pieza
+#[tauri::command]
+pub async fn delete_pieza(pieza_id: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    let result = sqlx::query("DELETE FROM PIEZA WHERE pieza_id = ?")
+        .bind(pieza_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    Ok(result.rows_affected() > 0)
 }
 
 /// Buscar cotizaciones por texto

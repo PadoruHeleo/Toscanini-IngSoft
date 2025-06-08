@@ -17,7 +17,8 @@ pub fn run() {
             // No terminar la aplicación, solo mostrar advertencia
         }
     });tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())        .invoke_handler(tauri::generate_handler![
+        .plugin(tauri_plugin_opener::init())        
+        .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
             commands::users::get_usuario_by_id,
             commands::users::get_usuario_by_rut,
@@ -25,7 +26,8 @@ pub fn run() {
             commands::users::update_usuario,
             commands::users::delete_usuario,
             commands::users::authenticate_usuario,
-            commands::users::validate_session,            commands::users::logout_user,
+            commands::users::validate_session,            
+            commands::users::logout_user,
             commands::users::cleanup_expired_sessions,
             commands::users::create_admin_user,
             commands::users::request_password_reset,
@@ -39,7 +41,8 @@ pub fn run() {
             commands::logs::get_audit_logs_by_entity,
             commands::logs::cleanup_old_audit_logs,
             commands::logs::count_audit_logs,
-            commands::logs::get_audit_stats,            commands::clientes::get_clientes,
+            commands::logs::get_audit_stats,            
+            commands::clientes::get_clientes,
             commands::clientes::get_cliente_by_id,
             commands::clientes::get_cliente_by_rut,
             commands::clientes::get_clientes_by_created_by,
@@ -60,7 +63,8 @@ pub fn run() {
             commands::equipos::update_equipo,
             commands::equipos::delete_equipo,
             commands::equipos::count_equipos,
-            commands::equipos::get_equipos_with_pagination,            commands::equipos::get_equipos_stats_by_tipo,
+            commands::equipos::get_equipos_with_pagination,            
+            commands::equipos::get_equipos_stats_by_tipo,
             commands::equipos::get_equipos_by_price_range,
             commands::equipos::get_equipos_with_cliente,
             commands::equipos::get_equipos_marcas,
@@ -79,7 +83,8 @@ pub fn run() {
             commands::ordenes_trabajo::update_orden_trabajo,
             commands::ordenes_trabajo::cambiar_estado_orden_trabajo,
             commands::ordenes_trabajo::asignar_cotizacion_orden_trabajo,
-            commands::ordenes_trabajo::asignar_informe_orden_trabajo,            commands::ordenes_trabajo::delete_orden_trabajo,
+            commands::ordenes_trabajo::asignar_informe_orden_trabajo,            
+            commands::ordenes_trabajo::delete_orden_trabajo,
             commands::ordenes_trabajo::get_ordenes_trabajo_stats,
             commands::ordenes_trabajo::search_ordenes_trabajo,
             commands::cotizacion::get_cotizaciones,
@@ -93,10 +98,10 @@ pub fn run() {
             commands::cotizacion::count_cotizaciones,
             commands::cotizacion::get_cotizaciones_with_pagination,
             commands::cotizacion::get_piezas,
+            commands::cotizacion::get_pieza_by_id,
             commands::cotizacion::create_pieza,
-            commands::cotizacion::get_piezas_cotizacion,
-            commands::cotizacion::add_pieza_to_cotizacion,
-            commands::cotizacion::remove_pieza_from_cotizacion,
+            commands::cotizacion::update_pieza,
+            commands::cotizacion::delete_pieza,
             commands::database::get_database_status,
             commands::database::check_database_connection,
             commands::database::retry_database_connection,
