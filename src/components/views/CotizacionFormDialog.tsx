@@ -359,49 +359,74 @@ export default function CotizacionFormDialog({
           created_by: user.usuario_id,
         };
 
-        const cotizacionId = await invoke<number>("create_cotizacion", {
+        const cotizacionResult = await invoke<any>("create_cotizacion", {
           request: createData,
         });
+        const cotizacionId =
+          cotizacionResult?.cotizacion_id ?? cotizacionResult;
+        console.log(
+          "Valor retornado por create_cotizacion:",
+          cotizacionResult,
+          "cotizacionId extraído:",
+          cotizacionId
+        );
 
-        if (cotizacionId) {
-          // Agregar piezas a la cotización
-          await updateCotizacionPiezas(cotizacionId);
+        if (!cotizacionId || isNaN(Number(cotizacionId)) || cotizacionId <= 0) {
+          showError(
+            "Error",
+            `No se pudo crear la cotización. ID inválido: ${cotizacionId}`
+          );
+          setLoading(false);
+          return;
+        }
 
-          // Si se proporciona ordenTrabajoId, asociar la cotización a la orden
-          if (ordenTrabajoId) {
-            try {
-              await invoke<boolean>("update_orden_trabajo", {
-                ordenId: ordenTrabajoId,
-                request: { cotizacion_id: cotizacionId },
-                updatedBy: user.usuario_id,
-              });
-            } catch (error) {
-              console.error(
-                "Error asociando cotización a orden de trabajo:",
-                error
-              );
-              // No fallar completamente, solo mostrar advertencia
+        // Agregar piezas a la cotización
+        await updateCotizacionPiezas(cotizacionId);
+
+        let asociadaAOrden = false;
+        // Si se proporciona ordenTrabajoId, asociar la cotización a la orden
+        if (ordenTrabajoId) {
+          try {
+            const asociada = await invoke<boolean>("update_orden_trabajo", {
+              ordenId: ordenTrabajoId,
+              request: { cotizacion_id: cotizacionId },
+              updatedBy: user.usuario_id,
+            });
+            asociadaAOrden = !!asociada;
+            if (!asociadaAOrden) {
               showError(
                 "Advertencia",
                 "La cotización se creó pero no se pudo asociar a la orden de trabajo."
               );
             }
+          } catch (error) {
+            console.error(
+              "Error asociando cotización a orden de trabajo:",
+              error
+            );
+            showError(
+              "Advertencia",
+              "La cotización se creó pero no se pudo asociar a la orden de trabajo."
+            );
           }
-
-          success(
-            "Cotización creada",
-            `La cotización ${formData.cotizacion_codigo} ha sido creada exitosamente.`
-          );
-          onCotizacionAdded();
-        } else {
-          showError("Error", "No se pudo crear la cotización.");
         }
+
+        success(
+          "Cotización creada",
+          `La cotización ${formData.cotizacion_codigo} ha sido creada exitosamente.` +
+            (ordenTrabajoId
+              ? asociadaAOrden
+                ? " (Asociada a la orden de trabajo)"
+                : " (No se pudo asociar a la orden de trabajo)"
+              : "")
+        );
+        onCotizacionAdded();
       }
     } catch (error) {
       console.error("Error al guardar cotización:", error);
       showError(
         `Error al ${isEditing ? "actualizar" : "crear"} cotización`,
-        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+        error instanceof Error ? error.message : JSON.stringify(error)
       );
     } finally {
       setLoading(false);
@@ -409,6 +434,11 @@ export default function CotizacionFormDialog({
   };
 
   const updateCotizacionPiezas = async (cotizacionId: number) => {
+    if (!cotizacionId || isNaN(Number(cotizacionId))) {
+      throw new Error(
+        "cotizacionId inválido al agregar piezas a la cotización"
+      );
+    }
     // Para simplificar, eliminamos todas las piezas existentes y agregamos las nuevas
     // En una implementación más sofisticada, podrías hacer un diff y solo actualizar los cambios
     try {
@@ -433,11 +463,10 @@ export default function CotizacionFormDialog({
       // Agregar piezas seleccionadas
       for (const pieza of selectedPiezas) {
         await invoke<boolean>("add_pieza_to_cotizacion", {
-          request: {
-            cotizacion_id: cotizacionId,
-            pieza_id: pieza.pieza_id,
-            cantidad: pieza.cantidad,
-          },
+          cotizacionId: Number(cotizacionId),
+          piezaId: Number(pieza.pieza_id),
+          cantidad: Number(pieza.cantidad),
+          updatedBy: user?.usuario_id,
         });
       }
     } catch (error) {
