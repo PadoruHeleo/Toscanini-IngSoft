@@ -44,6 +44,11 @@ const data = {
       url: "#",
       icon: IconClipboardList,
     },
+    {
+      title: "Piezas",
+      url: "#",
+      icon: IconChartBar, // Puedes cambiar el icono si lo deseas
+    },
   ],
   navSecondary: [
     {

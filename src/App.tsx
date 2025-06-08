@@ -6,6 +6,7 @@ import {
   OrdenesTrabajoView,
   SettingsView,
   HelpView,
+  PiezasView,
 } from "@/components/views";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
@@ -30,6 +31,8 @@ function ViewRenderer() {
       return <ClientesView />;
     case "órdenes de trabajo":
       return <OrdenesTrabajoView />;
+    case "piezas":
+      return <PiezasView />;
     case "projects":
     case "settings":
       return <SettingsView />;

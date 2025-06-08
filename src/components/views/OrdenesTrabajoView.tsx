@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
+import CotizacionFormDialog from "./CotizacionFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -91,6 +92,31 @@ const formatPrioridadText = (prioridad?: string) => {
   return prioridadMap[prioridad || ""] || "N/A";
 };
 
+const getCotizacionButtonInfo = (orden: OrdenTrabajo) => {
+  if (!orden.cotizacion_id) {
+    return {
+      hasQuote: false,
+      text: "Crear Cotización",
+      icon: "plus",
+      className: "text-green-600 hover:text-green-700",
+      title: "Crear nueva cotización para esta orden",
+    };
+  }
+
+  const isSent = orden.estado === "cotizacion_enviada";
+  return {
+    hasQuote: true,
+    text: isSent ? "Ver Cotización ✓" : "Ver Cotización",
+    icon: "eye",
+    className: isSent
+      ? "text-purple-600 hover:text-purple-700"
+      : "text-blue-600 hover:text-blue-700",
+    title: isSent
+      ? "Ver cotización enviada al cliente"
+      : "Ver cotización (borrador)",
+  };
+};
+
 export function OrdenesTrabajoView() {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
@@ -99,6 +125,13 @@ export function OrdenesTrabajoView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenTrabajo | null>(null);
+  const [showCotizacionForm, setShowCotizacionForm] = useState(false);
+  const [selectedOrdenForCotizacion, setSelectedOrdenForCotizacion] =
+    useState<OrdenTrabajo | null>(null);
+  const [editingCotizacion, setEditingCotizacion] = useState<any>(null);
+  const [loadingCotizacion, setLoadingCotizacion] = useState<number | null>(
+    null
+  );
 
   const loadOrdenes = async () => {
     try {
@@ -140,9 +173,26 @@ export function OrdenesTrabajoView() {
     loadOrdenes();
     setEditingOrden(null);
   };
-
   const handleEditOrden = (orden: OrdenTrabajo) => {
     setEditingOrden(orden);
+  };
+  const handleCotizacionAdded = () => {
+    // Recargar las órdenes para ver los cambios
+    loadOrdenes();
+    // Cerrar el formulario
+    setShowCotizacionForm(false);
+    setSelectedOrdenForCotizacion(null);
+    setEditingCotizacion(null);
+    // Limpiar estado de loading
+    setLoadingCotizacion(null);
+
+    // Mostrar mensaje de éxito
+    success(
+      "Cotización procesada",
+      editingCotizacion
+        ? "La cotización ha sido actualizada exitosamente."
+        : "La cotización ha sido creada exitosamente."
+    );
   };
 
   const handleDeleteOrden = async (orden: OrdenTrabajo) => {
@@ -177,7 +227,6 @@ export function OrdenesTrabajoView() {
       );
     }
   };
-
   const handleVerCotizacion = async (orden: OrdenTrabajo) => {
     if (!orden.cotizacion_id) {
       showError(
@@ -188,16 +237,24 @@ export function OrdenesTrabajoView() {
     }
 
     try {
-      // TODO: Implementar vista de cotización
-      showError(
-        "Función no implementada",
-        "La vista de cotización estará disponible próximamente."
-      );
+      setLoadingCotizacion(orden.orden_id);
+
+      // Obtener los detalles de la cotización
+      const cotizacion = await invoke("get_cotizacion_by_id", {
+        cotizacionId: orden.cotizacion_id,
+      });
+
+      // Abrir el formulario de cotización en modo edición
+      setSelectedOrdenForCotizacion(orden);
+      setEditingCotizacion(cotizacion);
+      setShowCotizacionForm(true);
     } catch (error) {
-      showError("Error", "No se pudo abrir la cotización.");
+      console.error("Error obteniendo cotización:", error);
+      showError("Error", "No se pudo obtener la cotización.");
+    } finally {
+      setLoadingCotizacion(null);
     }
   };
-
   const handleCrearCotizacion = async (orden: OrdenTrabajo) => {
     if (orden.cotizacion_id) {
       showError(
@@ -207,14 +264,17 @@ export function OrdenesTrabajoView() {
       return;
     }
 
+    // Abrir el formulario para crear nueva cotización directamente, sin confirmación
     try {
-      // TODO: Implementar creación de cotización
-      showError(
-        "Función no implementada",
-        "La creación de cotización estará disponible próximamente."
-      );
+      setLoadingCotizacion(orden.orden_id);
+
+      setSelectedOrdenForCotizacion(orden);
+      setEditingCotizacion(null);
+      setShowCotizacionForm(true);
     } catch (error) {
-      showError("Error", "No se pudo crear la cotización.");
+      showError("Error", "No se pudo abrir el formulario de cotización.");
+    } finally {
+      setLoadingCotizacion(null);
     }
   };
 
@@ -278,7 +338,6 @@ export function OrdenesTrabajoView() {
           Crear Orden de Trabajo
         </Button>
       </div>
-
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1 max-w-sm">
@@ -296,7 +355,6 @@ export function OrdenesTrabajoView() {
           </Button>
         )}
       </div>
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -363,31 +421,34 @@ export function OrdenesTrabajoView() {
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end flex-wrap">
+                      {" "}
                       {/* Botones de cotización */}
-                      {orden.cotizacion_id ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleVerCotizacion(orden)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Ver cotización"
-                        >
-                          <Eye className="h-3 w-3" />
-                          Cotización
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCrearCotizacion(orden)}
-                          className="text-green-600 hover:text-green-700"
-                          title="Crear cotización"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Cotización
-                        </Button>
-                      )}
-
+                      {(() => {
+                        const buttonInfo = getCotizacionButtonInfo(orden);
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              buttonInfo.hasQuote
+                                ? handleVerCotizacion(orden)
+                                : handleCrearCotizacion(orden)
+                            }
+                            disabled={loadingCotizacion === orden.orden_id}
+                            className={`${buttonInfo.className} disabled:opacity-50`}
+                            title={buttonInfo.title}
+                          >
+                            {loadingCotizacion === orden.orden_id ? (
+                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            ) : buttonInfo.icon === "eye" ? (
+                              <Eye className="h-3 w-3" />
+                            ) : (
+                              <Plus className="h-3 w-3" />
+                            )}
+                            {buttonInfo.text}
+                          </Button>
+                        );
+                      })()}
                       {/* Botones de informe */}
                       {orden.informe_id ? (
                         <Button
@@ -412,7 +473,6 @@ export function OrdenesTrabajoView() {
                           Informe
                         </Button>
                       )}
-
                       {/* Botón editar */}
                       <Button
                         variant="outline"
@@ -423,7 +483,6 @@ export function OrdenesTrabajoView() {
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
-
                       {/* Botón eliminar */}
                       <Button
                         variant="outline"
@@ -442,21 +501,18 @@ export function OrdenesTrabajoView() {
           </TableBody>
         </Table>
       </div>
-
       {/* Total de órdenes */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {filteredOrdenes.length} orden
         {filteredOrdenes.length !== 1 ? "es" : ""} de trabajo
         {searchTerm && ` (filtrado de ${ordenes.length})`}
       </div>
-
       {/* Dialog para agregar orden */}
       <OrdenTrabajoFormDialog
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onOrdenAdded={handleOrdenAdded}
       />
-
       {/* Dialog para editar orden */}
       {editingOrden && (
         <OrdenTrabajoFormDialog
@@ -466,7 +522,51 @@ export function OrdenesTrabajoView() {
           orden={editingOrden}
           isEditing={true}
         />
-      )}
+      )}{" "}
+      {/* Dialog para crear/editar cotización */}
+      <CotizacionFormDialog
+        open={showCotizacionForm}
+        onOpenChange={(open) => {
+          setShowCotizacionForm(open);
+          if (!open) {
+            // Limpiar estados cuando se cierre el diálogo
+            setSelectedOrdenForCotizacion(null);
+            setEditingCotizacion(null);
+            setLoadingCotizacion(null);
+          }
+        }}
+        onCotizacionAdded={handleCotizacionAdded}
+        cotizacion={editingCotizacion}
+        isEditing={!!editingCotizacion}
+        ordenTrabajoId={selectedOrdenForCotizacion?.orden_id}
+        onSendToClient={async (cotizacionId) => {
+          try {
+            if (!user || !selectedOrdenForCotizacion) return;
+
+            // Actualizar el estado de la orden a "cotizacion_enviada" cuando se envíe la cotización
+            await invoke("cambiar_estado_orden_trabajo", {
+              ordenId: selectedOrdenForCotizacion.orden_id,
+              nuevoEstado: "cotizacion_enviada",
+              updatedBy: user.usuario_id,
+            });
+
+            success(
+              "Cotización enviada",
+              "La cotización ha sido enviada al cliente exitosamente."
+            );
+
+            console.log(`Cotización ${cotizacionId} enviada al cliente`);
+            loadOrdenes(); // Recargar la lista para ver el cambio de estado
+          } catch (error) {
+            console.error("Error actualizando estado de orden:", error);
+            showError(
+              "Advertencia",
+              "La cotización se envió pero no se pudo actualizar el estado de la orden."
+            );
+            loadOrdenes(); // Recargar de todas formas
+          }
+        }}
+      />
     </div>
   );
 }
