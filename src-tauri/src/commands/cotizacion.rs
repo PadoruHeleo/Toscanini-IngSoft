@@ -433,6 +433,15 @@ pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> 
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
+    // Log de creación de pieza
+    let _ = log_action(
+        "CREATE_PIEZA",
+        None,
+        "PIEZA",
+        Some(pieza_id),
+        None,
+        Some(&format!("Pieza creada: {}", request.pieza_nombre))
+    ).await;
     Ok(pieza)
 }
 
@@ -448,6 +457,14 @@ pub struct UpdatePiezaRequest {
 #[tauri::command]
 pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<Option<Pieza>, String> {
     let pool = get_db_pool_safe()?;
+    // Obtener datos previos para el log
+    let prev_pieza = sqlx::query_as::<_, Pieza>(
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+    )
+    .bind(pieza_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
     let result = sqlx::query(
         "UPDATE PIEZA SET \
             pieza_nombre = COALESCE(?, pieza_nombre),\
@@ -474,6 +491,17 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
+    // Log de actualización de pieza
+    let prev = prev_pieza.as_ref().map(|p| format!("{}|{}|{}|{}", p.pieza_nombre.as_deref().unwrap_or(""), p.pieza_marca.as_deref().unwrap_or(""), p.pieza_desc.as_deref().unwrap_or(""), p.pieza_precio.map_or("".to_string(), |v| v.to_string())));
+    let newv = format!("{}|{}|{}|{}", pieza.pieza_nombre.as_deref().unwrap_or(""), pieza.pieza_marca.as_deref().unwrap_or(""), pieza.pieza_desc.as_deref().unwrap_or(""), pieza.pieza_precio.map_or("".to_string(), |v| v.to_string()));
+    let _ = log_action(
+        "UPDATE_PIEZA",
+        None,
+        "PIEZA",
+        Some(pieza_id),
+        prev.as_deref(),
+        Some(&newv)
+    ).await;
     Ok(Some(pieza))
 }
 
@@ -481,12 +509,35 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
 #[tauri::command]
 pub async fn delete_pieza(pieza_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
+    // Obtener datos previos para el log
+    let prev_pieza = sqlx::query_as::<_, Pieza>(
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+    )
+    .bind(pieza_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
     let result = sqlx::query("DELETE FROM PIEZA WHERE pieza_id = ?")
         .bind(pieza_id)
         .execute(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
-    Ok(result.rows_affected() > 0)
+    let deleted = result.rows_affected() > 0;
+    // Log de eliminación de pieza
+    if deleted {
+        if let Some(p) = prev_pieza {
+            let prev = format!("{}|{}|{}|{}", p.pieza_nombre.as_deref().unwrap_or(""), p.pieza_marca.as_deref().unwrap_or(""), p.pieza_desc.as_deref().unwrap_or(""), p.pieza_precio.map_or("".to_string(), |v| v.to_string()));
+            let _ = log_action(
+                "DELETE_PIEZA",
+                None,
+                "PIEZA",
+                Some(pieza_id),
+                Some(&prev),
+                None
+            ).await;
+        }
+    }
+    Ok(deleted)
 }
 
 /// Buscar cotizaciones por texto
