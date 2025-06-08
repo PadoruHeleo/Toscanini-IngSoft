@@ -3,6 +3,7 @@ use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
 use chrono::{DateTime, Utc};
+use chrono::Datelike;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Cotizacion {
@@ -57,7 +58,7 @@ pub struct CotizacionDetallada {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateCotizacionRequest {
-    pub cotizacion_codigo: String,
+    // pub cotizacion_codigo: String, // Eliminar este campo
     pub costo_revision: Option<i32>,
     pub costo_reparacion: Option<i32>,
     pub costo_total: Option<i32>,
@@ -173,22 +174,37 @@ pub async fn get_cotizacion_by_codigo(cotizacion_codigo: String) -> Result<Optio
 #[tauri::command]
 pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotizacion, String> {
     let pool = get_db_pool_safe()?;
-    
-    // Verificar que el código no existe ya
-    if let Some(_) = get_cotizacion_by_codigo(request.cotizacion_codigo.clone()).await? {
-        return Err("Ya existe una cotización con este código".to_string());
-    }
-    
+    // Generar código automático: COT-YYYY-XXXX
+    let year = chrono::Utc::now().year();
+    // Buscar el mayor número correlativo existente para el año actual
+    let last_codigo: Option<String> = sqlx::query_scalar(
+        "SELECT cotizacion_codigo FROM COTIZACION WHERE cotizacion_codigo LIKE ? ORDER BY cotizacion_id DESC LIMIT 1"
+    )
+    .bind(format!("COT-{}-%", year))
+    .fetch_one(pool)
+    .await
+    .ok();
+    let next_number = if let Some(codigo) = last_codigo {
+        // Extraer el número correlativo actual y sumarle 1
+        let parts: Vec<&str> = codigo.split('-').collect();
+        if parts.len() == 3 {
+            parts[2].parse::<u32>().unwrap_or(0) + 1
+        } else {
+            1
+        }
+    } else {
+        1
+    };
+    let codigo = format!("COT-{}-{:03}", year, next_number);
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
-    
     // Crear la cotización
     let result = sqlx::query(
         "INSERT INTO COTIZACION (cotizacion_codigo, costo_revision, costo_reparacion, \
                                 costo_total, is_aprobada, is_borrador, informe, created_by) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .bind(&request.cotizacion_codigo)
+    .bind(&codigo)
     .bind(request.costo_revision)
     .bind(request.costo_reparacion)
     .bind(request.costo_total)
@@ -199,9 +215,7 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
     let cotizacion_id = result.last_insert_id() as i32;
-    
     // Agregar piezas si se proporcionaron
     if let Some(ref piezas) = request.piezas {
         for pieza in piezas {
@@ -216,10 +230,8 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
             .map_err(|e| format!("Database error adding part: {}", e))?;
         }
     }
-    
     // Confirmar transacción
     tx.commit().await.map_err(|e| format!("Database error: {}", e))?;
-    
     // Registrar la acción en el log de auditoría
     let _ = log_action(
         "CREATE_COTIZACION",
@@ -227,9 +239,8 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
         "COTIZACION",
         Some(cotizacion_id),
         None,
-        Some(&format!("Cotización creada: {}", request.cotizacion_codigo))
+        Some(&format!("Cotización creada: {}", codigo))
     ).await;
-    
     // Obtener la cotización recién creada
     get_cotizacion_by_id(cotizacion_id)
         .await?
