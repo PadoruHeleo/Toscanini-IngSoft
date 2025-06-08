@@ -608,3 +608,21 @@ pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result
     
     Ok(cotizaciones)
 }
+
+/// Obtener las piezas asociadas a una cotización
+#[tauri::command]
+pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotizacion>, String> {
+    let pool = get_db_pool_safe()?;
+    let piezas = sqlx::query_as::<_, PiezaCotizacion>(
+        "SELECT pc.pieza_id, pc.cotizacion_id, COALESCE(pc.cantidad, 1) as cantidad, \
+                p.pieza_nombre, p.pieza_marca, p.pieza_desc, p.pieza_precio \
+         FROM PIEZAS_COTIZACION pc \
+         LEFT JOIN PIEZA p ON pc.pieza_id = p.pieza_id \
+         WHERE pc.cotizacion_id = ?"
+    )
+    .bind(cotizacion_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    Ok(piezas)
+}

@@ -199,7 +199,15 @@ export default function CotizacionFormDialog({
       setSelectedPiezas(selectedPiezasWithDetails);
     } catch (error) {
       console.error("Error cargando piezas de cotización:", error);
-      showError("Error", "No se pudieron cargar las piezas de la cotización.");
+      let errorMsg = "No se pudieron cargar las piezas de la cotización.";
+      if (error instanceof Error) {
+        errorMsg += `\n${error.message}`;
+      } else if (typeof error === "string") {
+        errorMsg += `\n${error}`;
+      } else if (error && typeof error === "object" && "message" in error) {
+        errorMsg += `\n${(error as any).message}`;
+      }
+      showError("Error", errorMsg);
     }
   };
 
@@ -359,6 +367,13 @@ export default function CotizacionFormDialog({
           is_borrador: true, // Siempre crear como borrador
           created_by: user.usuario_id,
           informe: formData.informe,
+          piezas:
+            selectedPiezas.length > 0
+              ? selectedPiezas.map((pieza) => ({
+                  pieza_id: pieza.pieza_id,
+                  cantidad: pieza.cantidad,
+                }))
+              : undefined,
         };
 
         const cotizacionResult = await invoke<any>("create_cotizacion", {

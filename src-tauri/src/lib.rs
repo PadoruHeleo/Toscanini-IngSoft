@@ -102,6 +102,7 @@ pub fn run() {
             commands::cotizacion::create_pieza,
             commands::cotizacion::update_pieza,
             commands::cotizacion::delete_pieza,
+            commands::cotizacion::get_piezas_cotizacion, // <-- Registro del comando faltante
             commands::database::get_database_status,
             commands::database::check_database_connection,
             commands::database::retry_database_connection,
