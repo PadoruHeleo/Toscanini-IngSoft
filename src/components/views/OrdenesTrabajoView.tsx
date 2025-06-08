@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
+import CotizacionFormDialog from "./CotizacionFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -99,6 +100,10 @@ export function OrdenesTrabajoView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenTrabajo | null>(null);
+  const [showCotizacionForm, setShowCotizacionForm] = useState(false);
+  const [selectedOrdenForCotizacion, setSelectedOrdenForCotizacion] =
+    useState<OrdenTrabajo | null>(null);
+  const [editingCotizacion, setEditingCotizacion] = useState<any>(null);
 
   const loadOrdenes = async () => {
     try {
@@ -140,9 +145,14 @@ export function OrdenesTrabajoView() {
     loadOrdenes();
     setEditingOrden(null);
   };
-
   const handleEditOrden = (orden: OrdenTrabajo) => {
     setEditingOrden(orden);
+  };
+  const handleCotizacionAdded = () => {
+    loadOrdenes();
+    setShowCotizacionForm(false);
+    setSelectedOrdenForCotizacion(null);
+    setEditingCotizacion(null);
   };
 
   const handleDeleteOrden = async (orden: OrdenTrabajo) => {
@@ -177,7 +187,6 @@ export function OrdenesTrabajoView() {
       );
     }
   };
-
   const handleVerCotizacion = async (orden: OrdenTrabajo) => {
     if (!orden.cotizacion_id) {
       showError(
@@ -188,13 +197,18 @@ export function OrdenesTrabajoView() {
     }
 
     try {
-      // TODO: Implementar vista de cotización
-      showError(
-        "Función no implementada",
-        "La vista de cotización estará disponible próximamente."
-      );
+      // Obtener los detalles de la cotización
+      const cotizacion = await invoke("get_cotizacion_by_id", {
+        cotizacionId: orden.cotizacion_id,
+      });
+
+      // Abrir el formulario de cotización en modo edición
+      setSelectedOrdenForCotizacion(orden);
+      setEditingCotizacion(cotizacion);
+      setShowCotizacionForm(true);
     } catch (error) {
-      showError("Error", "No se pudo abrir la cotización.");
+      console.error("Error obteniendo cotización:", error);
+      showError("Error", "No se pudo obtener la cotización.");
     }
   };
 
@@ -208,13 +222,12 @@ export function OrdenesTrabajoView() {
     }
 
     try {
-      // TODO: Implementar creación de cotización
-      showError(
-        "Función no implementada",
-        "La creación de cotización estará disponible próximamente."
-      );
+      // Abrir el formulario para crear nueva cotización
+      setSelectedOrdenForCotizacion(orden);
+      setEditingCotizacion(null);
+      setShowCotizacionForm(true);
     } catch (error) {
-      showError("Error", "No se pudo crear la cotización.");
+      showError("Error", "No se pudo abrir el formulario de cotización.");
     }
   };
 
@@ -278,7 +291,6 @@ export function OrdenesTrabajoView() {
           Crear Orden de Trabajo
         </Button>
       </div>
-
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1 max-w-sm">
@@ -296,7 +308,6 @@ export function OrdenesTrabajoView() {
           </Button>
         )}
       </div>
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -442,21 +453,18 @@ export function OrdenesTrabajoView() {
           </TableBody>
         </Table>
       </div>
-
       {/* Total de órdenes */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {filteredOrdenes.length} orden
         {filteredOrdenes.length !== 1 ? "es" : ""} de trabajo
         {searchTerm && ` (filtrado de ${ordenes.length})`}
       </div>
-
       {/* Dialog para agregar orden */}
       <OrdenTrabajoFormDialog
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onOrdenAdded={handleOrdenAdded}
       />
-
       {/* Dialog para editar orden */}
       {editingOrden && (
         <OrdenTrabajoFormDialog
@@ -466,7 +474,16 @@ export function OrdenesTrabajoView() {
           orden={editingOrden}
           isEditing={true}
         />
-      )}
+      )}{" "}
+      {/* Dialog para crear/editar cotización */}
+      <CotizacionFormDialog
+        open={showCotizacionForm}
+        onOpenChange={setShowCotizacionForm}
+        onCotizacionAdded={handleCotizacionAdded}
+        cotizacion={editingCotizacion}
+        isEditing={!!editingCotizacion}
+        ordenTrabajoId={selectedOrdenForCotizacion?.orden_id}
+      />
     </div>
   );
 }
