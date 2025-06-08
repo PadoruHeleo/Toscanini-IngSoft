@@ -360,9 +360,7 @@ export function CotizacionesView() {
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onCotizacionAdded={handleCotizacionAdded}
-      />
-
-      {/* Dialog para editar cotización */}
+      />      {/* Dialog para editar cotización */}
       {editingCotizacion && (
         <CotizacionFormDialog
           open={!!editingCotizacion}
@@ -370,6 +368,10 @@ export function CotizacionesView() {
           onCotizacionAdded={handleCotizacionUpdated}
           cotizacion={editingCotizacion}
           isEditing={true}
+          onSendToClient={(cotizacionId) => {
+            console.log(`Cotización ${cotizacionId} enviada al cliente`);
+            loadCotizaciones(); // Recargar la lista para ver el cambio de estado
+          }}
         />
       )}
     </div>

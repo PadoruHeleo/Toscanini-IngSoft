@@ -68,6 +68,7 @@ interface CotizacionFormDialogProps {
   cotizacion?: Cotizacion;
   isEditing?: boolean;
   ordenTrabajoId?: number; // Para asociar la cotización a una orden de trabajo
+  onSendToClient?: (cotizacionId: number) => void; // Nueva función para enviar al cliente
 }
 
 interface FormData {
@@ -75,7 +76,6 @@ interface FormData {
   costo_revision: string;
   costo_reparacion: string;
   is_aprobada: boolean;
-  is_borrador: boolean;
 }
 
 interface FormErrors {
@@ -97,6 +97,7 @@ export default function CotizacionFormDialog({
   cotizacion,
   isEditing = false,
   ordenTrabajoId,
+  onSendToClient,
 }: CotizacionFormDialogProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
@@ -104,14 +105,12 @@ export default function CotizacionFormDialog({
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
-  const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
-  const [cantidad, setCantidad] = useState<string>("1");
+  const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");  const [cantidad, setCantidad] = useState<string>("1");
   const [formData, setFormData] = useState<FormData>({
     cotizacion_codigo: "",
     costo_revision: "25000",
     costo_reparacion: "0",
     is_aprobada: false,
-    is_borrador: true,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -138,22 +137,20 @@ export default function CotizacionFormDialog({
   }, [open]);
 
   // Inicializar formulario cuando se pasa una cotización para editar
-  useEffect(() => {
-    if (isEditing && cotizacion && open) {
+  useEffect(() => {    if (isEditing && cotizacion && open) {
       setFormData({
         cotizacion_codigo: cotizacion.cotizacion_codigo || "",
         costo_revision: cotizacion.costo_revision?.toString() || "0",
         costo_reparacion: cotizacion.costo_reparacion?.toString() || "0",
         is_aprobada: cotizacion.is_aprobada || false,
-        is_borrador: cotizacion.is_borrador ?? true,
-      });    } else if (!isEditing && open) {
+      });
+    } else if (!isEditing && open) {
       // Resetear formulario para crear nueva cotización
       setFormData({
         cotizacion_codigo: "",
         costo_revision: "25000",
         costo_reparacion: "0",
         is_aprobada: false,
-        is_borrador: true,
       });
       setSelectedPiezas([]);
     }
@@ -304,11 +301,8 @@ export default function CotizacionFormDialog({
           costo_reparacion: parseInt(formData.costo_reparacion) !== cotizacion.costo_reparacion 
             ? parseInt(formData.costo_reparacion) : undefined,
           costo_total: costoTotal !== cotizacion.costo_total 
-            ? costoTotal : undefined,
-          is_aprobada: formData.is_aprobada !== cotizacion.is_aprobada 
+            ? costoTotal : undefined,          is_aprobada: formData.is_aprobada !== cotizacion.is_aprobada 
             ? formData.is_aprobada : undefined,
-          is_borrador: formData.is_borrador !== cotizacion.is_borrador 
-            ? formData.is_borrador : undefined,
         };
 
         const result = await invoke<boolean>("update_cotizacion", {
@@ -333,10 +327,9 @@ export default function CotizacionFormDialog({
         const createData = {
           cotizacion_codigo: formData.cotizacion_codigo,
           costo_revision: parseInt(formData.costo_revision),
-          costo_reparacion: parseInt(formData.costo_reparacion),
-          costo_total: costoTotal,
+          costo_reparacion: parseInt(formData.costo_reparacion),          costo_total: costoTotal,
           is_aprobada: formData.is_aprobada,
-          is_borrador: formData.is_borrador,
+          is_borrador: true, // Siempre crear como borrador
           created_by: user.usuario_id,
         };
 
@@ -422,9 +415,48 @@ export default function CotizacionFormDialog({
     const parts = [];
     if (pieza.pieza_nombre) parts.push(pieza.pieza_nombre);
     if (pieza.pieza_marca) parts.push(`(${pieza.pieza_marca})`);
-    if (pieza.pieza_precio) parts.push(`- $${pieza.pieza_precio}`);
+    if (pieza.pieza_precio) parts.push(`- $${pieza.pieza_precio}`);    return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
+  };
 
-    return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
+  const handleSendToClient = async () => {
+    if (!cotizacion?.cotizacion_id || !user) {
+      showError("Error", "No se puede enviar la cotización al cliente.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Actualizar is_borrador a false para marcar como enviada
+      const result = await invoke<boolean>("update_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        request: { is_borrador: false },
+      });
+
+      if (result) {
+        success(
+          "Cotización enviada",
+          "La cotización ha sido enviada al cliente exitosamente."
+        );
+        
+        if (onSendToClient) {
+          onSendToClient(cotizacion.cotizacion_id);
+        }
+        
+        onCotizacionAdded(); // Refrescar la lista
+        onOpenChange(false); // Cerrar el diálogo
+      } else {
+        showError("Error", "No se pudo enviar la cotización al cliente.");
+      }
+    } catch (error) {
+      console.error("Error enviando cotización al cliente:", error);
+      showError(
+        "Error al enviar cotización",
+        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -512,21 +544,8 @@ export default function CotizacionFormDialog({
                 <p className="text-sm text-red-500">{errors.costo_reparacion}</p>
               )}
             </div>
-          </div>
-
-          {/* Checkboxes */}
+          </div>          {/* Checkboxes */}
           <div className="flex gap-6">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is_borrador"
-                checked={formData.is_borrador}
-                onCheckedChange={(checked) =>
-                  handleInputChange("is_borrador", !!checked)
-                }
-              />
-              <Label htmlFor="is_borrador">Es borrador</Label>
-            </div>
-
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="is_aprobada"
@@ -648,9 +667,7 @@ export default function CotizacionFormDialog({
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}
-
-          <DialogFooter className="gap-2">
+          )}          <DialogFooter className="gap-2">
             <Button
               type="button"
               variant="outline"
@@ -659,6 +676,19 @@ export default function CotizacionFormDialog({
             >
               Cancelar
             </Button>
+            
+            {isEditing && cotizacion?.is_borrador && (
+              <Button
+                type="button"
+                variant="default"
+                onClick={handleSendToClient}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading ? "Enviando..." : "Enviar al Cliente"}
+              </Button>
+            )}
+            
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
             </Button>

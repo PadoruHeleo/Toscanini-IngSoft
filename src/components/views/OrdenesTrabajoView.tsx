@@ -474,8 +474,7 @@ export function OrdenesTrabajoView() {
           orden={editingOrden}
           isEditing={true}
         />
-      )}{" "}
-      {/* Dialog para crear/editar cotización */}
+      )}{" "}      {/* Dialog para crear/editar cotización */}
       <CotizacionFormDialog
         open={showCotizacionForm}
         onOpenChange={setShowCotizacionForm}
@@ -483,6 +482,11 @@ export function OrdenesTrabajoView() {
         cotizacion={editingCotizacion}
         isEditing={!!editingCotizacion}
         ordenTrabajoId={selectedOrdenForCotizacion?.orden_id}
+        onSendToClient={(cotizacionId) => {
+          // Actualizar el estado de la orden a "cotizacion_enviada" cuando se envíe la cotización
+          console.log(`Cotización ${cotizacionId} enviada al cliente`);
+          loadOrdenes(); // Recargar la lista para ver el cambio de estado
+        }}
       />
     </div>
   );
