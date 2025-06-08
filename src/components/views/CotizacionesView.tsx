@@ -215,7 +215,6 @@ export function CotizacionesView() {
           Crear Cotización
         </Button>
       </div>
-
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1 max-w-sm">
@@ -228,7 +227,6 @@ export function CotizacionesView() {
           />
         </div>
       </div>
-
       {/* Tabla de cotizaciones */}
       <div className="border rounded-md">
         <Table>
@@ -347,20 +345,19 @@ export function CotizacionesView() {
           </TableBody>
         </Table>
       </div>
-
       {/* Total de cotizaciones */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {filteredCotizaciones.length} cotización
         {filteredCotizaciones.length !== 1 ? "es" : ""}
         {searchTerm && ` (filtrado de ${cotizaciones.length})`}
       </div>
-
       {/* Dialog para agregar cotización */}
       <CotizacionFormDialog
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onCotizacionAdded={handleCotizacionAdded}
-      />      {/* Dialog para editar cotización */}
+      />{" "}
+      {/* Dialog para editar cotización */}
       {editingCotizacion && (
         <CotizacionFormDialog
           open={!!editingCotizacion}

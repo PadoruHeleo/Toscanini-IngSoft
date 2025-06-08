@@ -474,7 +474,8 @@ export function OrdenesTrabajoView() {
           orden={editingOrden}
           isEditing={true}
         />
-      )}{" "}      {/* Dialog para crear/editar cotización */}
+      )}{" "}
+      {/* Dialog para crear/editar cotización */}
       <CotizacionFormDialog
         open={showCotizacionForm}
         onOpenChange={setShowCotizacionForm}

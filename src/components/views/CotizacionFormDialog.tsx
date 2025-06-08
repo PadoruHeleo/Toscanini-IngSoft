@@ -105,7 +105,8 @@ export default function CotizacionFormDialog({
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
-  const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");  const [cantidad, setCantidad] = useState<string>("1");
+  const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
+  const [cantidad, setCantidad] = useState<string>("1");
   const [formData, setFormData] = useState<FormData>({
     cotizacion_codigo: "",
     costo_revision: "25000",
@@ -120,7 +121,7 @@ export default function CotizacionFormDialog({
     const costoRevision = parseInt(formData.costo_revision) || 0;
     const costoReparacion = parseInt(formData.costo_reparacion) || 0;
     const costoPiezas = selectedPiezas.reduce(
-      (total, pieza) => total + (pieza.pieza_precio * pieza.cantidad),
+      (total, pieza) => total + pieza.pieza_precio * pieza.cantidad,
       0
     );
     return costoRevision + costoReparacion + costoPiezas;
@@ -137,7 +138,8 @@ export default function CotizacionFormDialog({
   }, [open]);
 
   // Inicializar formulario cuando se pasa una cotización para editar
-  useEffect(() => {    if (isEditing && cotizacion && open) {
+  useEffect(() => {
+    if (isEditing && cotizacion && open) {
       setFormData({
         cotizacion_codigo: cotizacion.cotizacion_codigo || "",
         costo_revision: cotizacion.costo_revision?.toString() || "0",
@@ -174,18 +176,23 @@ export default function CotizacionFormDialog({
     if (!cotizacion?.cotizacion_id) return;
 
     try {
-      const piezasCotizacion = await invoke<PiezaCotizacion[]>("get_piezas_cotizacion", {
-        cotizacionId: cotizacion.cotizacion_id,
-      });
+      const piezasCotizacion = await invoke<PiezaCotizacion[]>(
+        "get_piezas_cotizacion",
+        {
+          cotizacionId: cotizacion.cotizacion_id,
+        }
+      );
 
-      const selectedPiezasWithDetails: SelectedPieza[] = piezasCotizacion.map(pc => ({
-        pieza_id: pc.pieza_id,
-        cotizacion_id: pc.cotizacion_id,
-        cantidad: pc.cantidad,
-        pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
-        pieza_marca: pc.pieza_marca,
-        pieza_precio: pc.pieza_precio || 0,
-      }));
+      const selectedPiezasWithDetails: SelectedPieza[] = piezasCotizacion.map(
+        (pc) => ({
+          pieza_id: pc.pieza_id,
+          cotizacion_id: pc.cotizacion_id,
+          cantidad: pc.cantidad,
+          pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
+          pieza_marca: pc.pieza_marca,
+          pieza_precio: pc.pieza_precio || 0,
+        })
+      );
 
       setSelectedPiezas(selectedPiezasWithDetails);
     } catch (error) {
@@ -203,19 +210,24 @@ export default function CotizacionFormDialog({
 
     const costoRevision = parseInt(formData.costo_revision);
     if (isNaN(costoRevision) || costoRevision < 0) {
-      newErrors.costo_revision = "El costo de revisión debe ser un número válido mayor o igual a 0";
+      newErrors.costo_revision =
+        "El costo de revisión debe ser un número válido mayor o igual a 0";
     }
 
     const costoReparacion = parseInt(formData.costo_reparacion);
     if (isNaN(costoReparacion) || costoReparacion < 0) {
-      newErrors.costo_reparacion = "El costo de reparación debe ser un número válido mayor o igual a 0";
+      newErrors.costo_reparacion =
+        "El costo de reparación debe ser un número válido mayor o igual a 0";
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleInputChange = (field: keyof FormData, value: string | boolean) => {
+  const handleInputChange = (
+    field: keyof FormData,
+    value: string | boolean
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
     // Limpiar error del campo cuando el usuario empiece a escribir
@@ -227,7 +239,7 @@ export default function CotizacionFormDialog({
   const handleAddPieza = () => {
     if (!selectedPiezaId || !cantidad) return;
 
-    const pieza = piezas.find(p => p.pieza_id.toString() === selectedPiezaId);
+    const pieza = piezas.find((p) => p.pieza_id.toString() === selectedPiezaId);
     if (!pieza) return;
 
     const cantidadNum = parseInt(cantidad);
@@ -237,8 +249,10 @@ export default function CotizacionFormDialog({
     }
 
     // Verificar si la pieza ya está seleccionada
-    const existingIndex = selectedPiezas.findIndex(sp => sp.pieza_id === pieza.pieza_id);
-    
+    const existingIndex = selectedPiezas.findIndex(
+      (sp) => sp.pieza_id === pieza.pieza_id
+    );
+
     if (existingIndex >= 0) {
       // Actualizar cantidad si ya existe
       const updated = [...selectedPiezas];
@@ -262,16 +276,18 @@ export default function CotizacionFormDialog({
   };
 
   const handleRemovePieza = (piezaId: number) => {
-    setSelectedPiezas(selectedPiezas.filter(sp => sp.pieza_id !== piezaId));
+    setSelectedPiezas(selectedPiezas.filter((sp) => sp.pieza_id !== piezaId));
   };
 
   const handleUpdateCantidad = (piezaId: number, newCantidad: string) => {
     const cantidadNum = parseInt(newCantidad);
     if (isNaN(cantidadNum) || cantidadNum <= 0) return;
 
-    setSelectedPiezas(selectedPiezas.map(sp => 
-      sp.pieza_id === piezaId ? { ...sp, cantidad: cantidadNum } : sp
-    ));
+    setSelectedPiezas(
+      selectedPiezas.map((sp) =>
+        sp.pieza_id === piezaId ? { ...sp, cantidad: cantidadNum } : sp
+      )
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -294,15 +310,24 @@ export default function CotizacionFormDialog({
       if (isEditing && cotizacion) {
         // Actualizar cotización existente
         const updateData = {
-          cotizacion_codigo: formData.cotizacion_codigo !== cotizacion.cotizacion_codigo 
-            ? formData.cotizacion_codigo : undefined,
-          costo_revision: parseInt(formData.costo_revision) !== cotizacion.costo_revision 
-            ? parseInt(formData.costo_revision) : undefined,
-          costo_reparacion: parseInt(formData.costo_reparacion) !== cotizacion.costo_reparacion 
-            ? parseInt(formData.costo_reparacion) : undefined,
-          costo_total: costoTotal !== cotizacion.costo_total 
-            ? costoTotal : undefined,          is_aprobada: formData.is_aprobada !== cotizacion.is_aprobada 
-            ? formData.is_aprobada : undefined,
+          cotizacion_codigo:
+            formData.cotizacion_codigo !== cotizacion.cotizacion_codigo
+              ? formData.cotizacion_codigo
+              : undefined,
+          costo_revision:
+            parseInt(formData.costo_revision) !== cotizacion.costo_revision
+              ? parseInt(formData.costo_revision)
+              : undefined,
+          costo_reparacion:
+            parseInt(formData.costo_reparacion) !== cotizacion.costo_reparacion
+              ? parseInt(formData.costo_reparacion)
+              : undefined,
+          costo_total:
+            costoTotal !== cotizacion.costo_total ? costoTotal : undefined,
+          is_aprobada:
+            formData.is_aprobada !== cotizacion.is_aprobada
+              ? formData.is_aprobada
+              : undefined,
         };
 
         const result = await invoke<boolean>("update_cotizacion", {
@@ -313,7 +338,7 @@ export default function CotizacionFormDialog({
         if (result) {
           // Actualizar piezas
           await updateCotizacionPiezas(cotizacion.cotizacion_id);
-          
+
           success(
             "Cotización actualizada",
             `La cotización ${formData.cotizacion_codigo} ha sido actualizada exitosamente.`
@@ -327,7 +352,8 @@ export default function CotizacionFormDialog({
         const createData = {
           cotizacion_codigo: formData.cotizacion_codigo,
           costo_revision: parseInt(formData.costo_revision),
-          costo_reparacion: parseInt(formData.costo_reparacion),          costo_total: costoTotal,
+          costo_reparacion: parseInt(formData.costo_reparacion),
+          costo_total: costoTotal,
           is_aprobada: formData.is_aprobada,
           is_borrador: true, // Siempre crear como borrador
           created_by: user.usuario_id,
@@ -350,9 +376,15 @@ export default function CotizacionFormDialog({
                 updatedBy: user.usuario_id,
               });
             } catch (error) {
-              console.error("Error asociando cotización a orden de trabajo:", error);
+              console.error(
+                "Error asociando cotización a orden de trabajo:",
+                error
+              );
               // No fallar completamente, solo mostrar advertencia
-              showError("Advertencia", "La cotización se creó pero no se pudo asociar a la orden de trabajo.");
+              showError(
+                "Advertencia",
+                "La cotización se creó pero no se pudo asociar a la orden de trabajo."
+              );
             }
           }
 
@@ -382,9 +414,12 @@ export default function CotizacionFormDialog({
     try {
       if (isEditing) {
         // Obtener piezas existentes para eliminar
-        const existingPiezas = await invoke<PiezaCotizacion[]>("get_piezas_cotizacion", {
-          cotizacionId,
-        });
+        const existingPiezas = await invoke<PiezaCotizacion[]>(
+          "get_piezas_cotizacion",
+          {
+            cotizacionId,
+          }
+        );
 
         // Eliminar piezas existentes
         for (const pieza of existingPiezas) {
@@ -415,7 +450,8 @@ export default function CotizacionFormDialog({
     const parts = [];
     if (pieza.pieza_nombre) parts.push(pieza.pieza_nombre);
     if (pieza.pieza_marca) parts.push(`(${pieza.pieza_marca})`);
-    if (pieza.pieza_precio) parts.push(`- $${pieza.pieza_precio}`);    return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
+    if (pieza.pieza_precio) parts.push(`- $${pieza.pieza_precio}`);
+    return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
   };
 
   const handleSendToClient = async () => {
@@ -426,7 +462,7 @@ export default function CotizacionFormDialog({
 
     try {
       setLoading(true);
-      
+
       // Actualizar is_borrador a false para marcar como enviada
       const result = await invoke<boolean>("update_cotizacion", {
         cotizacionId: cotizacion.cotizacion_id,
@@ -438,11 +474,11 @@ export default function CotizacionFormDialog({
           "Cotización enviada",
           "La cotización ha sido enviada al cliente exitosamente."
         );
-        
+
         if (onSendToClient) {
           onSendToClient(cotizacion.cotizacion_id);
         }
-        
+
         onCotizacionAdded(); // Refrescar la lista
         onOpenChange(false); // Cerrar el diálogo
       } else {
@@ -490,7 +526,9 @@ export default function CotizacionFormDialog({
                 className={errors.cotizacion_codigo ? "border-red-500" : ""}
               />
               {errors.cotizacion_codigo && (
-                <p className="text-sm text-red-500">{errors.cotizacion_codigo}</p>
+                <p className="text-sm text-red-500">
+                  {errors.cotizacion_codigo}
+                </p>
               )}
             </div>
 
@@ -506,7 +544,6 @@ export default function CotizacionFormDialog({
               />
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             {/* Costo de revisión */}
             <div className="space-y-2">
@@ -518,7 +555,8 @@ export default function CotizacionFormDialog({
                 value={formData.costo_revision}
                 onChange={(e) =>
                   handleInputChange("costo_revision", e.target.value)
-                }                placeholder="25000"
+                }
+                placeholder="25000"
                 className={errors.costo_revision ? "border-red-500" : ""}
               />
               {errors.costo_revision && (
@@ -541,10 +579,13 @@ export default function CotizacionFormDialog({
                 className={errors.costo_reparacion ? "border-red-500" : ""}
               />
               {errors.costo_reparacion && (
-                <p className="text-sm text-red-500">{errors.costo_reparacion}</p>
+                <p className="text-sm text-red-500">
+                  {errors.costo_reparacion}
+                </p>
               )}
             </div>
-          </div>          {/* Checkboxes */}
+          </div>{" "}
+          {/* Checkboxes */}
           <div className="flex gap-6">
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -557,7 +598,6 @@ export default function CotizacionFormDialog({
               <Label htmlFor="is_aprobada">Está aprobada</Label>
             </div>
           </div>
-
           {/* Gestión de piezas */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -575,7 +615,9 @@ export default function CotizacionFormDialog({
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
-                        loadingPiezas ? "Cargando piezas..." : "Seleccionar pieza"
+                        loadingPiezas
+                          ? "Cargando piezas..."
+                          : "Seleccionar pieza"
                       }
                     />
                   </SelectTrigger>
@@ -639,12 +681,17 @@ export default function CotizacionFormDialog({
                             min="1"
                             value={pieza.cantidad}
                             onChange={(e) =>
-                              handleUpdateCantidad(pieza.pieza_id, e.target.value)
+                              handleUpdateCantidad(
+                                pieza.pieza_id,
+                                e.target.value
+                              )
                             }
                             className="w-16"
                           />
                         </TableCell>
-                        <TableCell>${pieza.pieza_precio * pieza.cantidad}</TableCell>
+                        <TableCell>
+                          ${pieza.pieza_precio * pieza.cantidad}
+                        </TableCell>
                         <TableCell>
                           <Button
                             type="button"
@@ -662,12 +709,12 @@ export default function CotizacionFormDialog({
               </div>
             )}
           </div>
-
           {Object.keys(errors).length > 0 && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}          <DialogFooter className="gap-2">
+          )}{" "}
+          <DialogFooter className="gap-2">
             <Button
               type="button"
               variant="outline"
@@ -676,7 +723,7 @@ export default function CotizacionFormDialog({
             >
               Cancelar
             </Button>
-            
+
             {isEditing && cotizacion?.is_borrador && (
               <Button
                 type="button"
@@ -688,7 +735,7 @@ export default function CotizacionFormDialog({
                 {loading ? "Enviando..." : "Enviar al Cliente"}
               </Button>
             )}
-            
+
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
             </Button>
