@@ -638,20 +638,8 @@ export default function InformeFormDialog({
                 <p className="text-sm text-red-500">
                   {errors.tecnico_responsable}
                 </p>
-              )}
+              )}{" "}
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="recomendaciones">Recomendaciones</Label>
-            <Textarea
-              id="recomendaciones"
-              value={formData.recomendaciones}
-              onChange={(e) =>
-                handleInputChange("recomendaciones", e.target.value)
-              }
-              placeholder="Recomendaciones para el cliente..."
-              rows={3}
-            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="solucion_aplicada">Solución Aplicada</Label>
@@ -662,6 +650,18 @@ export default function InformeFormDialog({
                 handleInputChange("solucion_aplicada", e.target.value)
               }
               placeholder="Describa la solución aplicada..."
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="recomendaciones">Recomendaciones</Label>
+            <Textarea
+              id="recomendaciones"
+              value={formData.recomendaciones}
+              onChange={(e) =>
+                handleInputChange("recomendaciones", e.target.value)
+              }
+              placeholder="Recomendaciones para el cliente..."
               rows={3}
             />
           </div>
@@ -780,7 +780,8 @@ export default function InformeFormDialog({
               disabled={loading || loadingSendToClient}
             >
               Cancelar
-            </Button>            <Button type="submit" disabled={loading || loadingSendToClient}>
+            </Button>{" "}
+            <Button type="submit" disabled={loading || loadingSendToClient}>
               {loading
                 ? "Procesando..."
                 : isEditing
