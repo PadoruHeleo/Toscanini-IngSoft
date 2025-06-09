@@ -113,13 +113,15 @@ export default function InformeFormDialog({
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
-
   // Cargar piezas al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadPiezas();
       if (isEditing && informe) {
         loadInformePiezas();
+      } else if (!isEditing && ordenTrabajoId) {
+        // Cargar piezas de la cotización asociada a la orden de trabajo
+        loadPiezasFromOrdenTrabajo();
       }
     }
   }, [open]);
@@ -141,7 +143,11 @@ export default function InformeFormDialog({
         solucion_aplicada: "",
         tecnico_responsable: user?.usuario_nombre || "",
       });
-      setSelectedPiezas([]);
+      // No resetear selectedPiezas aquí si venimos de una orden de trabajo
+      // porque se cargarán automáticamente desde loadPiezasFromOrdenTrabajo
+      if (!ordenTrabajoId) {
+        setSelectedPiezas([]);
+      }
     }
     setErrors({});
   }, [isEditing, informe, open, user]);
@@ -158,7 +164,6 @@ export default function InformeFormDialog({
       setLoadingPiezas(false);
     }
   };
-
   const loadInformePiezas = async () => {
     if (!informe?.informe_id) return;
 
@@ -190,6 +195,51 @@ export default function InformeFormDialog({
         errorMsg += `\n${(error as any).message}`;
       }
       showError("Error", errorMsg);
+    }
+  };
+
+  const loadPiezasFromOrdenTrabajo = async () => {
+    if (!ordenTrabajoId) return;
+
+    try {
+      // Primero obtener la orden de trabajo para conseguir la cotización asociada
+      const ordenTrabajo = await invoke<any>("get_orden_trabajo_by_id", {
+        ordenId: ordenTrabajoId,
+      });
+
+      if (!ordenTrabajo?.cotizacion_id) {
+        console.log("La orden de trabajo no tiene una cotización asociada");
+        return;
+      }
+
+      // Obtener las piezas de la cotización
+      const piezasCotizacion = await invoke<any[]>("get_piezas_cotizacion", {
+        cotizacionId: ordenTrabajo.cotizacion_id,
+      });
+
+      // Convertir las piezas de cotización a formato de piezas de informe
+      const selectedPiezasWithDetails: SelectedPieza[] = piezasCotizacion.map(
+        (pc) => ({
+          pieza_id: pc.pieza_id,
+          informe_id: 0, // Se asignará cuando se cree el informe
+          cantidad: pc.cantidad || 1,
+          pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
+          pieza_marca: pc.pieza_marca,
+          pieza_precio: pc.pieza_precio || 0,
+        })
+      );
+
+      setSelectedPiezas(selectedPiezasWithDetails);
+
+      if (selectedPiezasWithDetails.length > 0) {
+        console.log(
+          `Se cargaron ${selectedPiezasWithDetails.length} piezas de la cotización asociada`
+        );
+      }
+    } catch (error) {
+      console.error("Error cargando piezas de la orden de trabajo:", error);
+      // No mostrar error al usuario ya que esto es una funcionalidad de conveniencia
+      // Si no se pueden cargar las piezas, simplemente no se precargan
     }
   };
 
@@ -410,10 +460,9 @@ export default function InformeFormDialog({
     if (pieza.pieza_precio) parts.push(`- $${pieza.pieza_precio}`);
     return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Editar Informe" : "Crear Nuevo Informe"}
