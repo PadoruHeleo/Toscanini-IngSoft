@@ -731,8 +731,7 @@ export default function InformeFormDialog({
               {errors.diagnostico && (
                 <p className="text-sm text-red-500">{errors.diagnostico}</p>
               )}
-            </div>
-
+            </div>{" "}
             <div className="space-y-2">
               <Label htmlFor="tecnico_responsable">
                 Técnico Responsable <span className="text-red-500">*</span>
@@ -740,11 +739,11 @@ export default function InformeFormDialog({
               <Input
                 id="tecnico_responsable"
                 value={formData.tecnico_responsable}
-                onChange={(e) =>
-                  handleInputChange("tecnico_responsable", e.target.value)
-                }
                 placeholder="Nombre del técnico responsable"
-                className={errors.tecnico_responsable ? "border-red-500" : ""}
+                disabled
+                className={`bg-gray-100 ${
+                  errors.tecnico_responsable ? "border-red-500" : ""
+                }`}
               />
               {errors.tecnico_responsable && (
                 <p className="text-sm text-red-500">
