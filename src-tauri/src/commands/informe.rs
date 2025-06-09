@@ -434,3 +434,69 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
     
     Ok(piezas)
 }
+
+/// Enviar informe por email al cliente
+#[tauri::command]
+pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {
+    use crate::email::EmailService;
+    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_informe_id;
+    use crate::commands::clientes::get_cliente_by_id;
+    
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el informe
+    let informe = get_informe_by_id(informe_id).await?
+        .ok_or_else(|| "Informe no encontrado".to_string())?;
+    
+    // Obtener la orden de trabajo asociada al informe
+    let orden_trabajo = get_orden_trabajo_by_informe_id(informe_id).await?
+        .ok_or_else(|| "No se encontró orden de trabajo asociada al informe".to_string())?;
+    
+    // Obtener información del cliente desde el equipo
+    let cliente_info = sqlx::query_as::<_, (i32, String, Option<String>)>(
+        "SELECT c.cliente_id, c.cliente_nombre, c.cliente_correo 
+         FROM CLIENTE c 
+         INNER JOIN EQUIPO e ON c.cliente_id = e.cliente_id 
+         WHERE e.equipo_id = ?"
+    )
+    .bind(orden_trabajo.equipo_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .ok_or_else(|| "No se encontró información del cliente".to_string())?;
+    
+    let cliente_email = cliente_info.2
+        .ok_or_else(|| "El cliente no tiene un correo electrónico registrado".to_string())?;
+    
+    // Obtener las piezas del informe
+    let piezas_informe = get_piezas_informe(informe_id).await?;
+    
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
+    
+    // Enviar el email
+    email_service.send_informe_email(
+        &cliente_email,
+        &cliente_info.1,
+        &informe,
+        &orden_trabajo,
+        &piezas_informe,
+    ).await
+    .map_err(|e| format!("Error enviando email: {}", e))?;
+    
+    // Registrar la acción en el log de auditoría
+    let _ = log_action(
+        "SEND_INFORME",
+        Some(sent_by),
+        "INFORME",
+        Some(informe_id),
+        None,
+        Some(&format!("Informe {} enviado a {}", 
+            informe.informe_codigo.as_deref().unwrap_or("N/A"),
+            cliente_email
+        ))
+    ).await;
+    
+    Ok(true)
+}

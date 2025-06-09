@@ -101,8 +101,7 @@ pub fn run() {
             commands::cotizacion::get_pieza_by_id,
             commands::cotizacion::create_pieza,
             commands::cotizacion::update_pieza,
-            commands::cotizacion::delete_pieza,              commands::cotizacion::get_piezas_cotizacion, // <-- Registro del comando faltante
-            commands::informe::get_informes,
+            commands::cotizacion::delete_pieza,              commands::cotizacion::get_piezas_cotizacion, // <-- Registro del comando faltante            commands::informe::get_informes,
             commands::informe::get_informe_by_id,
             commands::informe::get_informe_by_codigo,
             commands::informe::get_informes_detallados,
@@ -113,6 +112,7 @@ pub fn run() {
             commands::informe::count_informes,
             commands::informe::get_informes_with_pagination,
             commands::informe::get_piezas_informe,
+            commands::informe::send_informe_to_client,
             commands::database::get_database_status,
             commands::database::check_database_connection,
             commands::database::retry_database_connection,

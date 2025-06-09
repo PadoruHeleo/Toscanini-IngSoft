@@ -100,6 +100,7 @@ export default function InformeFormDialog({
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
+  const [loadingSendToClient, setLoadingSendToClient] = useState(false);
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
@@ -453,6 +454,118 @@ export default function InformeFormDialog({
     }
   };
 
+  const handleSubmitAndSendToClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoadingSendToClient(true);
+
+      // Crear el informe primero (solo para creación nueva)
+      if (!isEditing) {
+        const createData = {
+          diagnostico: formData.diagnostico,
+          recomendaciones: formData.recomendaciones.trim() || undefined,
+          solucion_aplicada: formData.solucion_aplicada.trim() || undefined,
+          tecnico_responsable: formData.tecnico_responsable,
+          created_by: user.usuario_id,
+          piezas:
+            selectedPiezas.length > 0
+              ? selectedPiezas.map((pieza) => ({
+                  pieza_id: pieza.pieza_id,
+                  cantidad: pieza.cantidad,
+                }))
+              : undefined,
+        };
+
+        const informeResult = await invoke<any>("create_informe", {
+          request: createData,
+        });
+        const informeId = informeResult?.informe_id ?? informeResult;
+
+        if (!informeId || isNaN(Number(informeId)) || informeId <= 0) {
+          showError(
+            "Error",
+            `No se pudo crear el informe. ID inválido: ${informeId}`
+          );
+          setLoadingSendToClient(false);
+          return;
+        }
+
+        // Asociar el informe a la orden de trabajo si corresponde
+        let asociadoAOrden = false;
+        if (ordenTrabajoId) {
+          try {
+            const asociado = await invoke<boolean>(
+              "asignar_informe_orden_trabajo",
+              {
+                ordenId: ordenTrabajoId,
+                informeId: informeId,
+                updatedBy: user.usuario_id,
+              }
+            );
+            asociadoAOrden = !!asociado;
+          } catch (error) {
+            console.error("Error asociando informe a orden de trabajo:", error);
+            showError(
+              "Advertencia",
+              "El informe se creó pero no se pudo asociar a la orden de trabajo."
+            );
+          }
+        }
+
+        // Enviar el informe al cliente
+        try {
+          await invoke<boolean>("send_informe_to_client", {
+            informeId: informeId,
+            sentBy: user.usuario_id,
+          });
+
+          success(
+            "Informe creado y enviado",
+            `El informe ha sido creado y enviado al cliente exitosamente.` +
+              (ordenTrabajoId
+                ? asociadoAOrden
+                  ? " (Asociado a la orden de trabajo)"
+                  : " (No se pudo asociar a la orden de trabajo)"
+                : "")
+          );
+          onInformeAdded();
+          onOpenChange(false);
+        } catch (error) {
+          console.error("Error enviando informe al cliente:", error);
+          showError(
+            "Informe creado pero no enviado",
+            "El informe fue creado exitosamente, pero no se pudo enviar al cliente. Puedes intentar enviarlo manualmente más tarde."
+          );
+          onInformeAdded();
+          onOpenChange(false);
+        }
+      } else {
+        // Para edición, no implementamos envío directo
+        showError(
+          "Función no disponible",
+          "El envío al cliente solo está disponible al crear nuevos informes."
+        );
+      }
+    } catch (error) {
+      showError(
+        "Error al crear y enviar informe",
+        error instanceof Error ? error.message : JSON.stringify(error)
+      );
+    } finally {
+      setLoadingSendToClient(false);
+    }
+  };
+
   const getPiezaDisplayName = (pieza: Pieza) => {
     const parts = [];
     if (pieza.pieza_nombre) parts.push(pieza.pieza_nombre);
@@ -487,7 +600,6 @@ export default function InformeFormDialog({
               />
             </div>
           )}
-
           {/* Campos del formulario */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -529,7 +641,6 @@ export default function InformeFormDialog({
               )}
             </div>
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="recomendaciones">Recomendaciones</Label>
             <Textarea
@@ -542,7 +653,6 @@ export default function InformeFormDialog({
               rows={3}
             />
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="solucion_aplicada">Solución Aplicada</Label>
             <Textarea
@@ -555,7 +665,6 @@ export default function InformeFormDialog({
               rows={3}
             />
           </div>
-
           {/* Sección de piezas utilizadas */}
           <div className="space-y-4 border-t pt-4">
             <h3 className="text-lg font-semibold">Piezas Utilizadas</h3>
@@ -662,24 +771,34 @@ export default function InformeFormDialog({
                 </Table>
               </div>
             )}
-          </div>
-
+          </div>{" "}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={loading}
+              disabled={loading || loadingSendToClient}
             >
               Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
+            </Button>            <Button type="submit" disabled={loading || loadingSendToClient}>
               {loading
                 ? "Procesando..."
                 : isEditing
                 ? "Actualizar Informe"
-                : "Crear Informe"}
+                : "Guardar Informe"}
             </Button>
+            {!isEditing && (
+              <Button
+                type="button"
+                onClick={handleSubmitAndSendToClient}
+                disabled={loading || loadingSendToClient}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {loadingSendToClient
+                  ? "Enviando..."
+                  : "Guardar y Enviar al Cliente"}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>
