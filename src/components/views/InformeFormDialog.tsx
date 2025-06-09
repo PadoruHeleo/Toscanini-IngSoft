@@ -113,16 +113,15 @@ export default function InformeFormDialog({
     tecnico_responsable: "",
   });
 
-  const [errors, setErrors] = useState<FormErrors>({});
-  // Cargar piezas al abrir el diálogo
+  const [errors, setErrors] = useState<FormErrors>({}); // Cargar piezas al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadPiezas();
       if (isEditing && informe) {
         loadInformePiezas();
       } else if (!isEditing && ordenTrabajoId) {
-        // Cargar piezas de la cotización asociada a la orden de trabajo
-        loadPiezasFromOrdenTrabajo();
+        // Cargar diagnóstico y piezas de la cotización asociada a la orden de trabajo
+        loadDataFromOrdenTrabajo();
       }
     }
   }, [open]);
@@ -198,8 +197,7 @@ export default function InformeFormDialog({
       showError("Error", errorMsg);
     }
   };
-
-  const loadPiezasFromOrdenTrabajo = async () => {
+  const loadDataFromOrdenTrabajo = async () => {
     if (!ordenTrabajoId) return;
 
     try {
@@ -211,6 +209,20 @@ export default function InformeFormDialog({
       if (!ordenTrabajo?.cotizacion_id) {
         console.log("La orden de trabajo no tiene una cotización asociada");
         return;
+      }
+
+      // Obtener la cotización completa para acceder al campo informe
+      const cotizacion = await invoke<any>("get_cotizacion_by_id", {
+        cotizacionId: ordenTrabajo.cotizacion_id,
+      });
+
+      // Cargar el diagnóstico desde el campo informe de la cotización
+      if (cotizacion?.informe) {
+        setFormData((prev) => ({
+          ...prev,
+          diagnostico: cotizacion.informe,
+        }));
+        console.log("Diagnóstico cargado desde la cotización asociada");
       }
 
       // Obtener las piezas de la cotización
@@ -238,9 +250,9 @@ export default function InformeFormDialog({
         );
       }
     } catch (error) {
-      console.error("Error cargando piezas de la orden de trabajo:", error);
+      console.error("Error cargando datos de la orden de trabajo:", error);
       // No mostrar error al usuario ya que esto es una funcionalidad de conveniencia
-      // Si no se pueden cargar las piezas, simplemente no se precargan
+      // Si no se pueden cargar los datos, simplemente no se precargan
     }
   };
 
