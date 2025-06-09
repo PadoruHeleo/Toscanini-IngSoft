@@ -40,6 +40,7 @@ interface Informe {
   tecnico_responsable?: string;
   created_by?: number;
   created_at?: string;
+  is_borrador?: boolean;
 }
 
 interface Pieza {
@@ -98,9 +99,9 @@ export default function InformeFormDialog({
   ordenTrabajoId,
 }: InformeFormDialogProps) {
   const { user } = useAuth();
-  const { success, error: showError } = useToastContext();
-  const [loading, setLoading] = useState(false);
+  const { success, error: showError } = useToastContext();  const [loading, setLoading] = useState(false);
   const [loadingSendToClient, setLoadingSendToClient] = useState(false);
+  const [loadingSendExisting, setLoadingSendExisting] = useState(false);
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
@@ -577,11 +578,51 @@ export default function InformeFormDialog({
       showError(
         "Error al crear y enviar informe",
         error instanceof Error ? error.message : JSON.stringify(error)
-      );
-    } finally {
+      );    } finally {
       setLoadingSendToClient(false);
     }
   };
+
+  const handleSendExistingToClient = async () => {
+    if (!user || !informe || !isEditing) {
+      showError("Error", "No se puede enviar el informe");
+      return;
+    }
+
+    try {
+      setLoadingSendExisting(true);
+
+      // Enviar el informe existente al cliente
+      await invoke<boolean>("send_informe_to_client", {
+        informeId: informe.informe_id,
+        sentBy: user.usuario_id,
+      });
+
+      // Actualizar el estado del informe para que ya no sea borrador
+      await invoke<boolean>("update_informe", {
+        informeId: informe.informe_id,
+        request: { is_borrador: false },
+        updatedBy: user.usuario_id,
+      });
+
+      success(
+        "Informe enviado",
+        "El informe ha sido enviado al cliente exitosamente."
+      );
+      
+      onInformeAdded(); // Recargar la vista
+      onOpenChange(false); // Cerrar el modal
+    } catch (error) {
+      console.error("Error enviando informe al cliente:", error);
+      showError(
+        "Error al enviar informe",
+        error instanceof Error ? error.message : "No se pudo enviar el informe al cliente."
+      );
+    } finally {
+      setLoadingSendExisting(false);
+    }
+  };
+
   const getPiezaDisplayName = (pieza: Pieza) => {
     const parts = [];
     if (pieza.pieza_nombre) parts.push(pieza.pieza_nombre);
@@ -777,27 +818,37 @@ export default function InformeFormDialog({
               </div>
             )}
           </div>{" "}
-          <DialogFooter>
-            <Button
+          <DialogFooter>            <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={loading || loadingSendToClient}
+              disabled={loading || loadingSendToClient || loadingSendExisting}
             >
               Cancelar
-            </Button>{" "}
-            <Button type="submit" disabled={loading || loadingSendToClient}>
+            </Button>{" "}<Button type="submit" disabled={loading || loadingSendToClient || loadingSendExisting}>
               {loading
                 ? "Procesando..."
                 : isEditing
                 ? "Actualizar Informe"
                 : "Guardar Informe"}
             </Button>
+            {isEditing && informe?.is_borrador && (
+              <Button
+                type="button"
+                onClick={handleSendExistingToClient}
+                disabled={loading || loadingSendToClient || loadingSendExisting}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loadingSendExisting
+                  ? "Enviando..."
+                  : "Enviar Informe a Cliente"}
+              </Button>
+            )}
             {!isEditing && (
               <Button
                 type="button"
                 onClick={handleSubmitAndSendToClient}
-                disabled={loading || loadingSendToClient}
+                disabled={loading || loadingSendToClient || loadingSendExisting}
                 className="bg-green-600 hover:bg-green-700"
               >
                 {loadingSendToClient
