@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, FileText } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Informe {
@@ -99,9 +99,11 @@ export default function InformeFormDialog({
   ordenTrabajoId,
 }: InformeFormDialogProps) {
   const { user } = useAuth();
-  const { success, error: showError } = useToastContext();  const [loading, setLoading] = useState(false);
+  const { success, error: showError } = useToastContext();
+  const [loading, setLoading] = useState(false);
   const [loadingSendToClient, setLoadingSendToClient] = useState(false);
   const [loadingSendExisting, setLoadingSendExisting] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
@@ -578,11 +580,11 @@ export default function InformeFormDialog({
       showError(
         "Error al crear y enviar informe",
         error instanceof Error ? error.message : JSON.stringify(error)
-      );    } finally {
+      );
+    } finally {
       setLoadingSendToClient(false);
     }
   };
-
   const handleSendExistingToClient = async () => {
     if (!user || !informe || !isEditing) {
       showError("Error", "No se puede enviar el informe");
@@ -609,17 +611,71 @@ export default function InformeFormDialog({
         "Informe enviado",
         "El informe ha sido enviado al cliente exitosamente."
       );
-      
+
       onInformeAdded(); // Recargar la vista
       onOpenChange(false); // Cerrar el modal
     } catch (error) {
       console.error("Error enviando informe al cliente:", error);
       showError(
         "Error al enviar informe",
-        error instanceof Error ? error.message : "No se pudo enviar el informe al cliente."
+        error instanceof Error
+          ? error.message
+          : "No se pudo enviar el informe al cliente."
       );
     } finally {
       setLoadingSendExisting(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    if (!informe && !formData.diagnostico.trim()) {
+      showError("Error", "No hay datos suficientes para generar el PDF");
+      return;
+    }
+
+    try {
+      setLoadingPdf(true);
+
+      // Si estamos editando, usar datos del informe existente
+      if (isEditing && informe) {
+        // Generar PDF para informe existente
+        await invoke<string>("generate_informe_pdf", {
+          informeId: informe.informe_id,
+        });
+      } else {
+        // Para crear nuevo informe, necesitamos validar los datos primero
+        if (!validateForm()) {
+          return;
+        }
+
+        // Generar PDF con datos del formulario
+        const pdfData = {
+          diagnostico: formData.diagnostico,
+          recomendaciones: formData.recomendaciones.trim() || undefined,
+          solucion_aplicada: formData.solucion_aplicada.trim() || undefined,
+          tecnico_responsable: formData.tecnico_responsable,
+          piezas: selectedPiezas.length > 0 ? selectedPiezas : undefined,
+        };
+
+        await invoke<string>("generate_informe_preview_pdf", {
+          data: pdfData,
+        });
+      }
+
+      success(
+        "PDF generado",
+        "El PDF del informe se ha generado exitosamente."
+      );
+    } catch (error) {
+      console.error("Error generando PDF:", error);
+      showError(
+        "Error al generar PDF",
+        error instanceof Error
+          ? error.message
+          : "No se pudo generar el PDF del informe."
+      );
+    } finally {
+      setLoadingPdf(false);
     }
   };
 
@@ -818,14 +874,50 @@ export default function InformeFormDialog({
               </div>
             )}
           </div>{" "}
-          <DialogFooter>            <Button
+          <DialogFooter>
+            <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={loading || loadingSendToClient || loadingSendExisting}
+              disabled={
+                loading ||
+                loadingSendToClient ||
+                loadingSendExisting ||
+                loadingPdf
+              }
             >
               Cancelar
-            </Button>{" "}<Button type="submit" disabled={loading || loadingSendToClient || loadingSendExisting}>
+            </Button>{" "}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreviewPdf}
+              disabled={
+                loading ||
+                loadingSendToClient ||
+                loadingSendExisting ||
+                loadingPdf
+              }
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {loadingPdf ? (
+                "Generando..."
+              ) : (
+                <>
+                  <FileText className="w-4 h-4 mr-1" />
+                  PDF
+                </>
+              )}
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                loading ||
+                loadingSendToClient ||
+                loadingSendExisting ||
+                loadingPdf
+              }
+            >
               {loading
                 ? "Procesando..."
                 : isEditing
@@ -836,7 +928,12 @@ export default function InformeFormDialog({
               <Button
                 type="button"
                 onClick={handleSendExistingToClient}
-                disabled={loading || loadingSendToClient || loadingSendExisting}
+                disabled={
+                  loading ||
+                  loadingSendToClient ||
+                  loadingSendExisting ||
+                  loadingPdf
+                }
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 {loadingSendExisting
@@ -848,7 +945,12 @@ export default function InformeFormDialog({
               <Button
                 type="button"
                 onClick={handleSubmitAndSendToClient}
-                disabled={loading || loadingSendToClient || loadingSendExisting}
+                disabled={
+                  loading ||
+                  loadingSendToClient ||
+                  loadingSendExisting ||
+                  loadingPdf
+                }
                 className="bg-green-600 hover:bg-green-700"
               >
                 {loadingSendToClient
