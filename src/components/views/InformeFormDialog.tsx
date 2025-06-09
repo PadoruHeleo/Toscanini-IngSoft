@@ -577,12 +577,10 @@ export default function InformeFormDialog({
       setLoadingSendToClient(false);
     }
   };
-
   const getPiezaDisplayName = (pieza: Pieza) => {
     const parts = [];
     if (pieza.pieza_nombre) parts.push(pieza.pieza_nombre);
     if (pieza.pieza_marca) parts.push(`(${pieza.pieza_marca})`);
-    if (pieza.pieza_precio) parts.push(`- $${pieza.pieza_precio}`);
     return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
   };
   return (
@@ -729,13 +727,12 @@ export default function InformeFormDialog({
             {selectedPiezas.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
                 <Table>
+                  {" "}
                   <TableHeader>
                     <TableRow>
                       <TableHead>Pieza</TableHead>
                       <TableHead>Marca</TableHead>
                       <TableHead>Cantidad</TableHead>
-                      <TableHead>Precio Unitario</TableHead>
-                      <TableHead>Subtotal</TableHead>
                       <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -743,7 +740,7 @@ export default function InformeFormDialog({
                     {selectedPiezas.map((pieza) => (
                       <TableRow key={pieza.pieza_id}>
                         <TableCell>{pieza.pieza_nombre}</TableCell>
-                        <TableCell>{pieza.pieza_marca || "N/A"}</TableCell>
+                        <TableCell>{pieza.pieza_marca || "N/A"}</TableCell>{" "}
                         <TableCell>
                           <Input
                             type="number"
@@ -757,15 +754,6 @@ export default function InformeFormDialog({
                             }
                             className="w-20"
                           />
-                        </TableCell>
-                        <TableCell>
-                          ${pieza.pieza_precio.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          $
-                          {(
-                            pieza.pieza_precio * pieza.cantidad
-                          ).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Button
