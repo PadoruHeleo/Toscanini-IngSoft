@@ -14,6 +14,11 @@ pub struct Informe {
     pub is_borrador: Option<bool>,
     pub created_by: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
+    // Nuevos campos para compatibilidad con el frontend
+    pub diagnostico: Option<String>,
+    pub recomendaciones: Option<String>,
+    pub solucion_aplicada: Option<String>,
+    pub tecnico_responsable: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -38,6 +43,11 @@ pub struct InformeDetallado {
     pub created_by: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
     pub created_by_nombre: Option<String>,
+    // Nuevos campos para compatibilidad con el frontend
+    pub diagnostico: Option<String>,
+    pub recomendaciones: Option<String>,
+    pub solucion_aplicada: Option<String>,
+    pub tecnico_responsable: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +58,11 @@ pub struct CreateInformeRequest {
     pub is_borrador: Option<bool>,
     pub created_by: i32,
     pub piezas: Option<Vec<PiezaInformeRequest>>,
+    // Nuevos campos
+    pub diagnostico: String,
+    pub recomendaciones: Option<String>,
+    pub solucion_aplicada: Option<String>,
+    pub tecnico_responsable: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,6 +71,11 @@ pub struct UpdateInformeRequest {
     pub informe_acciones: Option<String>,
     pub informe_obs: Option<String>,
     pub is_borrador: Option<bool>,
+    // Nuevos campos
+    pub diagnostico: Option<String>,
+    pub recomendaciones: Option<String>,
+    pub solucion_aplicada: Option<String>,
+    pub tecnico_responsable: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,10 +88,10 @@ pub struct PiezaInformeRequest {
 #[tauri::command]
 pub async fn get_informes() -> Result<Vec<Informe>, String> {
     let pool = get_db_pool_safe()?;
-    
-    let informes = sqlx::query_as::<_, Informe>(
+      let informes = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs, 
-                is_borrador, created_by, created_at 
+                is_borrador, created_by, created_at,
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
          FROM INFORME 
          ORDER BY created_at DESC"
     )
@@ -86,11 +106,11 @@ pub async fn get_informes() -> Result<Vec<Informe>, String> {
 #[tauri::command]
 pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
-    
-    let informes = sqlx::query_as::<_, InformeDetallado>(
+      let informes = sqlx::query_as::<_, InformeDetallado>(
         "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
                 i.is_borrador, i.created_by, i.created_at,
-                u.usuario_nombre as created_by_nombre
+                u.usuario_nombre as created_by_nombre,
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
          ORDER BY i.created_at DESC"
@@ -105,11 +125,12 @@ pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> 
 /// Obtener un informe por ID
 #[tauri::command]
 pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, String> {
+    println!("[DEBUG] get_informe_by_id: Recibido informe_id = {}", informe_id);
     let pool = get_db_pool_safe()?;
-    
     let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
-                is_borrador, created_by, created_at 
+                is_borrador, created_by, created_at,
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
          FROM INFORME 
          WHERE informe_id = ?"
     )
@@ -117,7 +138,7 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
+    println!("[DEBUG] get_informe_by_id: Resultado = {:?}", informe);
     Ok(informe)
 }
 
@@ -125,10 +146,10 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
 #[tauri::command]
 pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Informe>, String> {
     let pool = get_db_pool_safe()?;
-    
-    let informe = sqlx::query_as::<_, Informe>(
+      let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
-                is_borrador, created_by, created_at 
+                is_borrador, created_by, created_at,
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
          FROM INFORME 
          WHERE informe_codigo = ?"
     )
@@ -173,18 +194,22 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
     
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
-    
-    // Crear el informe
+      // Crear el informe
     let result = sqlx::query(
         "INSERT INTO INFORME (informe_codigo, informe_acciones, informe_obs, 
-                             is_borrador, created_by) 
-         VALUES (?, ?, ?, ?, ?)"
+                             is_borrador, created_by, diagnostico, recomendaciones, 
+                             solucion_aplicada, tecnico_responsable) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&codigo)
     .bind(&request.informe_acciones)
     .bind(&request.informe_obs)
     .bind(request.is_borrador.unwrap_or(true))
     .bind(request.created_by)
+    .bind(&request.diagnostico)
+    .bind(&request.recomendaciones)
+    .bind(&request.solucion_aplicada)
+    .bind(&request.tecnico_responsable)
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
@@ -241,19 +266,26 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
             }
         }
     }
-    
-    let result = sqlx::query(
+      let result = sqlx::query(
         "UPDATE INFORME SET 
          informe_codigo = COALESCE(?, informe_codigo),
          informe_acciones = COALESCE(?, informe_acciones),
          informe_obs = COALESCE(?, informe_obs),
-         is_borrador = COALESCE(?, is_borrador)
+         is_borrador = COALESCE(?, is_borrador),
+         diagnostico = COALESCE(?, diagnostico),
+         recomendaciones = COALESCE(?, recomendaciones),
+         solucion_aplicada = COALESCE(?, solucion_aplicada),
+         tecnico_responsable = COALESCE(?, tecnico_responsable)
          WHERE informe_id = ?"
     )
     .bind(&request.informe_codigo)
     .bind(&request.informe_acciones)
     .bind(&request.informe_obs)
     .bind(request.is_borrador)
+    .bind(&request.diagnostico)
+    .bind(&request.recomendaciones)
+    .bind(&request.solucion_aplicada)
+    .bind(&request.tecnico_responsable)
     .bind(informe_id)
     .execute(pool)
     .await
@@ -361,11 +393,11 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
     let pool = get_db_pool_safe()?;
     
     let search_pattern = format!("%{}%", search_term);
-    
-    let informes = sqlx::query_as::<_, InformeDetallado>(
+      let informes = sqlx::query_as::<_, InformeDetallado>(
         "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
                 i.is_borrador, i.created_by, i.created_at,
-                u.usuario_nombre as created_by_nombre
+                u.usuario_nombre as created_by_nombre,
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
          WHERE i.informe_codigo LIKE ? 
@@ -396,11 +428,11 @@ pub async fn count_informes() -> Result<i64, String> {
 #[tauri::command]
 pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
-    
-    let informes = sqlx::query_as::<_, InformeDetallado>(
+      let informes = sqlx::query_as::<_, InformeDetallado>(
         "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
                 i.is_borrador, i.created_by, i.created_at,
-                u.usuario_nombre as created_by_nombre
+                u.usuario_nombre as created_by_nombre,
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
          ORDER BY i.created_at DESC
@@ -437,10 +469,8 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
 
 /// Enviar informe por email al cliente
 #[tauri::command]
-pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {
-    use crate::email::EmailService;
+pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {    use crate::email::EmailService;
     use crate::commands::ordenes_trabajo::get_orden_trabajo_by_informe_id;
-    use crate::commands::clientes::get_cliente_by_id;
     
     let pool = get_db_pool_safe()?;
     

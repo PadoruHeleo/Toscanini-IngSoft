@@ -369,10 +369,10 @@ export default function InformeFormDialog({
               ? formData.tecnico_responsable
               : undefined,
         };
-
         const result = await invoke<boolean>("update_informe", {
           informeId: informe.informe_id,
           request: updateData,
+          updatedBy: user.usuario_id,
         });
 
         if (result) {
@@ -387,10 +387,14 @@ export default function InformeFormDialog({
       } else {
         // Crear nuevo informe
         const createData = {
+          // Campos nuevos (principales)
           diagnostico: formData.diagnostico,
           recomendaciones: formData.recomendaciones.trim() || undefined,
           solucion_aplicada: formData.solucion_aplicada.trim() || undefined,
           tecnico_responsable: formData.tecnico_responsable,
+          // Campos antiguos para compatibilidad con el backend
+          informe_acciones: formData.diagnostico, // Mapear diagnóstico a informe_acciones
+          informe_obs: formData.recomendaciones.trim() || undefined, // Mapear recomendaciones a informe_obs
           created_by: user.usuario_id,
           piezas:
             selectedPiezas.length > 0
@@ -415,8 +419,7 @@ export default function InformeFormDialog({
           return;
         }
 
-        let asociadoAOrden = false;
-        // Si se proporciona ordenTrabajoId, asociar el informe a la orden
+        let asociadoAOrden = false; // Si se proporciona ordenTrabajoId, asociar el informe a la orden
         if (ordenTrabajoId) {
           try {
             const asociado = await invoke<boolean>(
@@ -479,15 +482,17 @@ export default function InformeFormDialog({
     }
 
     try {
-      setLoadingSendToClient(true);
-
-      // Crear el informe primero (solo para creación nueva)
+      setLoadingSendToClient(true); // Crear el informe primero (solo para creación nueva)
       if (!isEditing) {
         const createData = {
+          // Campos nuevos (principales)
           diagnostico: formData.diagnostico,
           recomendaciones: formData.recomendaciones.trim() || undefined,
           solucion_aplicada: formData.solucion_aplicada.trim() || undefined,
           tecnico_responsable: formData.tecnico_responsable,
+          // Campos antiguos para compatibilidad con el backend
+          informe_acciones: formData.diagnostico, // Mapear diagnóstico a informe_acciones
+          informe_obs: formData.recomendaciones.trim() || undefined, // Mapear recomendaciones a informe_obs
           created_by: user.usuario_id,
           piezas:
             selectedPiezas.length > 0

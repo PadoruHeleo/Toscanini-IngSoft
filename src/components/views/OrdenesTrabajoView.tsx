@@ -287,7 +287,6 @@ export function OrdenesTrabajoView() {
       showError("Sin informe", "Esta orden no tiene un informe asociado.");
       return;
     }
-
     try {
       // Cargar el informe desde el backend
       const informeData = await invoke<any>("get_informe_by_id", {
@@ -303,7 +302,12 @@ export function OrdenesTrabajoView() {
       }
     } catch (error) {
       console.error("Error cargando informe:", error);
-      showError("Error", "No se pudo abrir el informe.");
+      showError(
+        "Error",
+        `No se pudo abrir el informe.\n${
+          error instanceof Error ? error.message : JSON.stringify(error)
+        }`
+      );
     }
   };
 
