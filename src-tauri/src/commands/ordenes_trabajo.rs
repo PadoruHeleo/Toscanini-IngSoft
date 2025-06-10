@@ -637,3 +637,23 @@ pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrab
     
     Ok(ordenes)
 }
+
+/// Obtener orden de trabajo por informe_id
+#[tauri::command]
+pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let orden = sqlx::query_as::<_, OrdenTrabajo>(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, 
+                has_garantia, equipo_id, cotizacion_id, informe_id, 
+                created_by, created_at 
+         FROM ORDEN_TRABAJO 
+         WHERE informe_id = ?"
+    )
+    .bind(informe_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(orden)
+}

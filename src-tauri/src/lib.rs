@@ -8,6 +8,9 @@ use database::init_database;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Cargar variables de entorno desde .env
+    dotenv::dotenv().ok();
+    
     // Inicializar runtime de Tokio para operaciones async
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
       // Inicializar la base de datos
@@ -101,8 +104,18 @@ pub fn run() {
             commands::cotizacion::get_pieza_by_id,
             commands::cotizacion::create_pieza,
             commands::cotizacion::update_pieza,
-            commands::cotizacion::delete_pieza,
-            commands::cotizacion::get_piezas_cotizacion, // <-- Registro del comando faltante
+            commands::cotizacion::delete_pieza,              commands::cotizacion::get_piezas_cotizacion, // <-- Registro del comando faltante            commands::informe::get_informes,
+            commands::informe::get_informe_by_id,
+            commands::informe::get_informe_by_codigo,
+            commands::informe::get_informes_detallados,
+            commands::informe::create_informe,
+            commands::informe::update_informe,
+            commands::informe::delete_informe,
+            commands::informe::search_informes,
+            commands::informe::count_informes,
+            commands::informe::get_informes_with_pagination,
+            commands::informe::get_piezas_informe,
+            commands::informe::send_informe_to_client,
             commands::database::get_database_status,
             commands::database::check_database_connection,
             commands::database::retry_database_connection,

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
+import InformeFormDialog from "./InformeFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -132,6 +133,10 @@ export function OrdenesTrabajoView() {
   const [loadingCotizacion, setLoadingCotizacion] = useState<number | null>(
     null
   );
+  const [showInformeForm, setShowInformeForm] = useState(false);
+  const [selectedOrdenForInforme, setSelectedOrdenForInforme] =
+    useState<OrdenTrabajo | null>(null);
+  const [editingInforme, setEditingInforme] = useState<any>(null);
 
   const loadOrdenes = async () => {
     try {
@@ -277,21 +282,32 @@ export function OrdenesTrabajoView() {
       setLoadingCotizacion(null);
     }
   };
-
   const handleVerInforme = async (orden: OrdenTrabajo) => {
     if (!orden.informe_id) {
       showError("Sin informe", "Esta orden no tiene un informe asociado.");
       return;
     }
-
     try {
-      // TODO: Implementar vista de informe
-      showError(
-        "Función no implementada",
-        "La vista de informe estará disponible próximamente."
-      );
+      // Cargar el informe desde el backend
+      const informeData = await invoke<any>("get_informe_by_id", {
+        informeId: orden.informe_id,
+      });
+
+      if (informeData) {
+        setEditingInforme(informeData);
+        setSelectedOrdenForInforme(orden);
+        setShowInformeForm(true);
+      } else {
+        showError("Error", "No se pudo cargar el informe.");
+      }
     } catch (error) {
-      showError("Error", "No se pudo abrir el informe.");
+      console.error("Error cargando informe:", error);
+      showError(
+        "Error",
+        `No se pudo abrir el informe.\n${
+          error instanceof Error ? error.message : JSON.stringify(error)
+        }`
+      );
     }
   };
 
@@ -305,12 +321,12 @@ export function OrdenesTrabajoView() {
     }
 
     try {
-      // TODO: Implementar creación de informe
-      showError(
-        "Función no implementada",
-        "La creación de informe estará disponible próximamente."
-      );
+      // Abrir diálogo de creación de informe
+      setEditingInforme(null);
+      setSelectedOrdenForInforme(orden);
+      setShowInformeForm(true);
     } catch (error) {
+      console.error("Error preparando creación de informe:", error);
       showError("Error", "No se pudo crear el informe.");
     }
   };
@@ -566,6 +582,24 @@ export function OrdenesTrabajoView() {
             loadOrdenes(); // Recargar de todas formas
           }
         }}
+      />
+      {/* Dialog para crear/editar informe */}
+      <InformeFormDialog
+        open={showInformeForm}
+        onOpenChange={(open) => {
+          setShowInformeForm(open);
+          if (!open) {
+            // Limpiar estados cuando se cierre el diálogo
+            setSelectedOrdenForInforme(null);
+            setEditingInforme(null);
+          }
+        }}
+        onInformeAdded={() => {
+          loadOrdenes(); // Recargar la lista de órdenes
+        }}
+        informe={editingInforme}
+        isEditing={!!editingInforme}
+        ordenTrabajoId={selectedOrdenForInforme?.orden_id}
       />
     </div>
   );
