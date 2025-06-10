@@ -288,7 +288,8 @@ export function CotizacionesView() {
                     {cotizacion.created_at
                       ? new Date(cotizacion.created_at).toLocaleDateString()
                       : "N/A"}
-                  </TableCell>                  <TableCell>
+                  </TableCell>{" "}
+                  <TableCell>
                     <div className="flex gap-1 justify-end">
                       {/* Ver detalles */}
                       <Button

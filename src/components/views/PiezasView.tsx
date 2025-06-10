@@ -201,7 +201,8 @@ export default function PiezasView() {
                     {pieza.pieza_precio != null
                       ? `$${pieza.pieza_precio}`
                       : "-"}
-                  </TableCell>                  <TableCell>
+                  </TableCell>{" "}
+                  <TableCell>
                     <div className="flex gap-1 justify-end">
                       <Button
                         variant="outline"

@@ -142,7 +142,8 @@ export function EquiposView() {
                   <TableCell>
                     {equipo.cliente_nombre || "Sin cliente"}
                   </TableCell>
-                  <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>{" "}                  <TableCell className="text-right">
+                  <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>{" "}
+                  <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
                         variant="outline"

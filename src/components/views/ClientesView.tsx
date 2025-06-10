@@ -186,7 +186,8 @@ export function ClientesView() {
                   <TableCell className="max-w-xs truncate">
                     {cliente.cliente_direccion || "N/A"}
                   </TableCell>
-                  <TableCell>{formatDate(cliente.created_at)}</TableCell>                  <TableCell className="text-right">
+                  <TableCell>{formatDate(cliente.created_at)}</TableCell>{" "}
+                  <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
                         variant="outline"
