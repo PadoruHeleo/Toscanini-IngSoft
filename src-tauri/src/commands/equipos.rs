@@ -578,3 +578,20 @@ pub async fn get_equipos_modelos_by_marca(marca: String) -> Result<Vec<String>, 
     
     Ok(modelos)
 }
+
+/// Obtener ubicaciones únicas de equipos
+#[tauri::command]
+pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    let ubicaciones = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT equipo_ubicacion 
+         FROM EQUIPO 
+         WHERE equipo_ubicacion IS NOT NULL AND equipo_ubicacion != ''
+         ORDER BY equipo_ubicacion"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(ubicaciones)
+}

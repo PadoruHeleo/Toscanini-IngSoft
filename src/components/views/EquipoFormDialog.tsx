@@ -97,14 +97,18 @@ export function EquipoFormDialog({
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [marcas, setMarcas] = useState<string[]>([]);
   const [modelos, setModelos] = useState<string[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<string[]>([]);
   const [showNewMarcaInput, setShowNewMarcaInput] = useState(false);
   const [showNewModeloInput, setShowNewModeloInput] = useState(false);
+  const [showNewUbicacionInput, setShowNewUbicacionInput] = useState(false);
   const [newMarcaValue, setNewMarcaValue] = useState("");
   const [newModeloValue, setNewModeloValue] = useState("");
+  const [newUbicacionValue, setNewUbicacionValue] = useState("");
   const [tipoIngreso, setTipoIngreso] = useState<
     "almacenamiento" | "mantenimiento"
   >("almacenamiento");
-  const [preInforme, setPreInforme] = useState("");  const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
+  const [preInforme, setPreInforme] = useState("");
+  const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [newClienteData, setNewClienteData] = useState<{
     cliente_rut: string;
@@ -121,7 +125,8 @@ export function EquipoFormDialog({
   });
   const [newClienteErrors, setNewClienteErrors] = useState<
     Record<string, string>
-  >({});  const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
+  >({});
+  const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
     numero_serie: "",
     equipo_marca: "",
     equipo_modelo: "",
@@ -130,12 +135,12 @@ export function EquipoFormDialog({
     cliente_id: undefined,
     created_by: user?.usuario_id || 0,
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  // Cargar clientes al abrir el diálogo
+  const [errors, setErrors] = useState<Record<string, string>>({}); // Cargar clientes al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadClientes();
       loadMarcas();
+      loadUbicaciones();
     }
   }, [open]);
 
@@ -147,13 +152,21 @@ export function EquipoFormDialog({
       console.error("Error cargando clientes:", error);
     }
   };
-
   const loadMarcas = async () => {
     try {
       const marcasData = await invoke<string[]>("get_equipos_marcas");
       setMarcas(marcasData);
     } catch (error) {
       console.error("Error cargando marcas:", error);
+    }
+  };
+
+  const loadUbicaciones = async () => {
+    try {
+      const ubicacionesData = await invoke<string[]>("get_equipos_ubicaciones");
+      setUbicaciones(ubicacionesData);
+    } catch (error) {
+      console.error("Error cargando ubicaciones:", error);
     }
   };
   const loadModelosByMarca = async (marca: string) => {
@@ -200,13 +213,14 @@ export function EquipoFormDialog({
       const clienteRequest: CreateClienteRequest = {
         ...newClienteData,
         created_by: user?.usuario_id || 0,
-      };      const nuevoCliente = await invoke<Cliente>("create_cliente", {
+      };
+      const nuevoCliente = await invoke<Cliente>("create_cliente", {
         request: clienteRequest,
-      });      // Agregar el nuevo cliente a la lista inmediatamente
-      setClientes(prev => [...prev, nuevoCliente]);
+      }); // Agregar el nuevo cliente a la lista inmediatamente
+      setClientes((prev) => [...prev, nuevoCliente]);
 
       // Seleccionar el nuevo cliente en el formulario
-      setFormData(prev => ({ ...prev, cliente_id: nuevoCliente.cliente_id }));
+      setFormData((prev) => ({ ...prev, cliente_id: nuevoCliente.cliente_id }));
 
       // Cerrar el modal y limpiar datos
       setShowNewClienteDialog(false);
@@ -260,7 +274,8 @@ export function EquipoFormDialog({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };  const handleSubmit = async (e: React.FormEvent) => {
+  };
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -273,7 +288,8 @@ export function EquipoFormDialog({
 
   const handleConfirmSubmit = async () => {
     try {
-      setLoading(true);      const equipoData: CreateEquipoRequest = {
+      setLoading(true);
+      const equipoData: CreateEquipoRequest = {
         numero_serie: formData.numero_serie!,
         equipo_marca: formData.equipo_marca!,
         equipo_modelo: formData.equipo_modelo!,
@@ -282,7 +298,7 @@ export function EquipoFormDialog({
         equipo_ubicacion: formData.equipo_ubicacion || undefined,
         cliente_id: formData.cliente_id!,
         created_by: user?.usuario_id || 0,
-      };// Crear el equipo primero
+      }; // Crear el equipo primero
       const equipoCreado = await invoke<Equipo>("create_equipo", {
         request: equipoData,
       });
@@ -335,7 +351,7 @@ export function EquipoFormDialog({
       }
 
       // Cerrar diálogo
-      onOpenChange(false);      // Limpiar formulario
+      onOpenChange(false); // Limpiar formulario
       setFormData({
         numero_serie: "",
         equipo_marca: "",
@@ -350,8 +366,10 @@ export function EquipoFormDialog({
       setErrors({});
       setShowNewMarcaInput(false);
       setShowNewModeloInput(false);
+      setShowNewUbicacionInput(false);
       setNewMarcaValue("");
       setNewModeloValue("");
+      setNewUbicacionValue("");
       setShowNewClienteDialog(false);
       setNewClienteData({
         cliente_rut: "",
@@ -371,7 +389,8 @@ export function EquipoFormDialog({
         typeof error === "string"
           ? error
           : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
-      );      setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
+      );
+      setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
     } finally {
       setLoading(false);
       setShowConfirmationDialog(false);
@@ -484,7 +503,8 @@ export function EquipoFormDialog({
                     onChange={(e) => setNewMarcaValue(e.target.value)}
                     placeholder="Ingrese nueva marca"
                     className={errors.equipo_marca ? "border-red-500" : ""}
-                  />                  <Button
+                  />{" "}
+                  <Button
                     type="button"
                     variant="outline"
                     size="sm"
@@ -493,7 +513,7 @@ export function EquipoFormDialog({
                         const nuevaMarca = newMarcaValue.trim();
                         // Agregar la nueva marca a la lista si no existe
                         if (!marcas.includes(nuevaMarca)) {
-                          setMarcas(prev => [...prev, nuevaMarca]);
+                          setMarcas((prev) => [...prev, nuevaMarca]);
                         }
                         handleInputChange("equipo_marca", nuevaMarca);
                         setShowNewMarcaInput(false);
@@ -560,7 +580,8 @@ export function EquipoFormDialog({
                     placeholder="Ingrese nuevo modelo"
                     className={errors.equipo_modelo ? "border-red-500" : ""}
                     disabled={!formData.equipo_marca}
-                  />                  <Button
+                  />{" "}
+                  <Button
                     type="button"
                     variant="outline"
                     size="sm"
@@ -569,12 +590,9 @@ export function EquipoFormDialog({
                         const nuevoModelo = newModeloValue.trim();
                         // Agregar el nuevo modelo a la lista si no existe
                         if (!modelos.includes(nuevoModelo)) {
-                          setModelos(prev => [...prev, nuevoModelo]);
+                          setModelos((prev) => [...prev, nuevoModelo]);
                         }
-                        handleInputChange(
-                          "equipo_modelo",
-                          nuevoModelo
-                        );
+                        handleInputChange("equipo_modelo", nuevoModelo);
                         setShowNewModeloInput(false);
                         setNewModeloValue("");
                       }
@@ -696,17 +714,74 @@ export function EquipoFormDialog({
             {errors.cliente_id && (
               <p className="text-sm text-red-500">{errors.cliente_id}</p>
             )}
-          </div>          <div className="grid grid-cols-2 gap-4">
+          </div>{" "}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="equipo_ubicacion">Ubicación</Label>
-              <Input
-                id="equipo_ubicacion"
-                value={formData.equipo_ubicacion || ""}
-                onChange={(e) =>
-                  handleInputChange("equipo_ubicacion", e.target.value)
-                }
-                placeholder="Ej: Oficina Central"
-              />
+              {showNewUbicacionInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newUbicacionValue}
+                    onChange={(e) => setNewUbicacionValue(e.target.value)}
+                    placeholder="Ingrese nueva ubicación"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (newUbicacionValue.trim()) {
+                        const nuevaUbicacion = newUbicacionValue.trim();
+                        // Agregar la nueva ubicación a la lista si no existe
+                        if (!ubicaciones.includes(nuevaUbicacion)) {
+                          setUbicaciones((prev) => [...prev, nuevaUbicacion]);
+                        }
+                        handleInputChange("equipo_ubicacion", nuevaUbicacion);
+                        setShowNewUbicacionInput(false);
+                        setNewUbicacionValue("");
+                      }
+                    }}
+                  >
+                    ✓
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowNewUbicacionInput(false);
+                      setNewUbicacionValue("");
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.equipo_ubicacion || ""}
+                  onValueChange={(value) => {
+                    if (value === "nueva_ubicacion") {
+                      setShowNewUbicacionInput(true);
+                    } else {
+                      handleInputChange("equipo_ubicacion", value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar ubicación" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ubicaciones.map((ubicacion) => (
+                      <SelectItem key={ubicacion} value={ubicacion}>
+                        {ubicacion}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="nueva_ubicacion">
+                      ➕ Agregar nueva ubicación
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           {errors.submit && (
@@ -739,20 +814,42 @@ export function EquipoFormDialog({
           <DialogHeader>
             <DialogTitle>Confirmar Creación de Equipo</DialogTitle>
             <DialogDescription>
-              ¿Está seguro que desea crear este equipo con la siguiente información?
+              ¿Está seguro que desea crear este equipo con la siguiente
+              información?
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-2 text-sm">
-            <div><strong>Marca:</strong> {formData.equipo_marca}</div>
-            <div><strong>Modelo:</strong> {formData.equipo_modelo}</div>
-            <div><strong>Número de Serie:</strong> {formData.numero_serie}</div>
-            <div><strong>Tipo:</strong> {formData.equipo_tipo}</div>
-            <div><strong>Cliente:</strong> {clientes.find(c => c.cliente_id === formData.cliente_id)?.cliente_nombre}</div>
+            <div>
+              <strong>Marca:</strong> {formData.equipo_marca}
+            </div>
+            <div>
+              <strong>Modelo:</strong> {formData.equipo_modelo}
+            </div>
+            <div>
+              <strong>Número de Serie:</strong> {formData.numero_serie}
+            </div>
+            <div>
+              <strong>Tipo:</strong> {formData.equipo_tipo}
+            </div>
+            <div>
+              <strong>Cliente:</strong>{" "}
+              {
+                clientes.find((c) => c.cliente_id === formData.cliente_id)
+                  ?.cliente_nombre
+              }
+            </div>
             {formData.equipo_ubicacion && (
-              <div><strong>Ubicación:</strong> {formData.equipo_ubicacion}</div>
+              <div>
+                <strong>Ubicación:</strong> {formData.equipo_ubicacion}
+              </div>
             )}
-            <div><strong>Tipo de Ingreso:</strong> {tipoIngreso === "mantenimiento" ? "Mantenimiento (se creará orden de trabajo)" : "Almacenamiento"}</div>
+            <div>
+              <strong>Tipo de Ingreso:</strong>{" "}
+              {tipoIngreso === "mantenimiento"
+                ? "Mantenimiento (se creará orden de trabajo)"
+                : "Almacenamiento"}
+            </div>
           </div>
 
           <DialogFooter className="gap-2">
@@ -764,10 +861,7 @@ export function EquipoFormDialog({
             >
               Cancelar
             </Button>
-            <Button 
-              onClick={handleConfirmSubmit}
-              disabled={loading}
-            >
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
               {loading ? "Creando..." : "Confirmar y Crear"}
             </Button>
           </DialogFooter>
