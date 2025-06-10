@@ -60,6 +60,7 @@ export function ClienteFormDialog({
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [formData, setFormData] = useState({
     cliente_rut: "",
     cliente_nombre: "",
@@ -109,11 +110,21 @@ export function ClienteFormDialog({
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
+      return;
+    }
+
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      setShowConfirmationDialog(false);
       return;
     }
 
@@ -188,7 +199,6 @@ export function ClienteFormDialog({
           ? error
           : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
       );
-
       setErrors({
         submit: `Error al ${
           isEditing ? "actualizar" : "crear"
@@ -196,6 +206,7 @@ export function ClienteFormDialog({
       });
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
 
@@ -236,7 +247,6 @@ export function ClienteFormDialog({
               <p className="text-sm text-red-500">{errors.cliente_rut}</p>
             )}
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="cliente_nombre">Nombre *</Label>
             <Input
@@ -252,7 +262,6 @@ export function ClienteFormDialog({
               <p className="text-sm text-red-500">{errors.cliente_nombre}</p>
             )}
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="cliente_correo">Correo Electrónico *</Label>
             <Input
@@ -269,7 +278,6 @@ export function ClienteFormDialog({
               <p className="text-sm text-red-500">{errors.cliente_correo}</p>
             )}
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="cliente_telefono">Teléfono</Label>
             <Input
@@ -281,7 +289,6 @@ export function ClienteFormDialog({
               placeholder="Ej: +56 9 1234 5678"
             />
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="cliente_direccion">Dirección</Label>
             <Input
@@ -293,13 +300,11 @@ export function ClienteFormDialog({
               placeholder="Dirección completa del cliente"
             />
           </div>
-
           {errors.submit && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               {errors.submit}
             </div>
           )}
-
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -318,9 +323,70 @@ export function ClienteFormDialog({
                 ? "Actualizar Cliente"
                 : "Crear Cliente"}
             </Button>
-          </DialogFooter>
+          </DialogFooter>{" "}
         </form>
       </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación de Cliente"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "¿Está seguro que desea actualizar este cliente con los cambios realizados?"
+                : "¿Está seguro que desea crear este cliente con la siguiente información?"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            <div>
+              <strong>RUT:</strong> {formData.cliente_rut}
+            </div>
+            <div>
+              <strong>Nombre:</strong> {formData.cliente_nombre}
+            </div>
+            <div>
+              <strong>Correo:</strong> {formData.cliente_correo}
+            </div>
+            {formData.cliente_telefono && (
+              <div>
+                <strong>Teléfono:</strong> {formData.cliente_telefono}
+              </div>
+            )}
+            {formData.cliente_direccion && (
+              <div>
+                <strong>Dirección:</strong> {formData.cliente_direccion}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
+              {loading
+                ? "Procesando..."
+                : isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

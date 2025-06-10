@@ -109,6 +109,7 @@ export default function InformeFormDialog({
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
   const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
   const [cantidad, setCantidad] = useState<string>("1");
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     diagnostico: "",
     recomendaciones: "",
@@ -336,7 +337,6 @@ export default function InformeFormDialog({
       )
     );
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -346,6 +346,17 @@ export default function InformeFormDialog({
     }
 
     if (!validateForm()) {
+      return;
+    }
+
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      setShowConfirmationDialog(false);
       return;
     }
 
@@ -469,6 +480,7 @@ export default function InformeFormDialog({
       );
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
 
@@ -957,9 +969,83 @@ export default function InformeFormDialog({
                   : "Guardar y Enviar al Cliente"}
               </Button>
             )}
-          </DialogFooter>
+          </DialogFooter>{" "}
         </form>
       </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación de Informe"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "¿Está seguro que desea actualizar este informe con los cambios realizados?"
+                : "¿Está seguro que desea crear este informe con la siguiente información?"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            <div>
+              <strong>Técnico Responsable:</strong>{" "}
+              {formData.tecnico_responsable}
+            </div>
+            <div>
+              <strong>Piezas:</strong> {selectedPiezas.length} pieza(s)
+              utilizada(s)
+            </div>
+            {formData.diagnostico && (
+              <div>
+                <strong>Diagnóstico:</strong>{" "}
+                {formData.diagnostico.length > 50
+                  ? formData.diagnostico.substring(0, 50) + "..."
+                  : formData.diagnostico}
+              </div>
+            )}
+            {formData.solucion_aplicada && (
+              <div>
+                <strong>Solución:</strong>{" "}
+                {formData.solucion_aplicada.length > 50
+                  ? formData.solucion_aplicada.substring(0, 50) + "..."
+                  : formData.solucion_aplicada}
+              </div>
+            )}
+            {formData.recomendaciones && (
+              <div>
+                <strong>Recomendaciones:</strong>{" "}
+                {formData.recomendaciones.length > 50
+                  ? formData.recomendaciones.substring(0, 50) + "..."
+                  : formData.recomendaciones}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
+              {loading
+                ? "Procesando..."
+                : isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

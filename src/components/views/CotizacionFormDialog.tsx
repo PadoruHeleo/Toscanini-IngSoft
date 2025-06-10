@@ -109,6 +109,7 @@ export default function CotizacionFormDialog({
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
   const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
   const [cantidad, setCantidad] = useState<string>("1");
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     costo_revision: "25000",
     costo_reparacion: "0",
@@ -299,7 +300,6 @@ export default function CotizacionFormDialog({
       )
     );
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -309,6 +309,17 @@ export default function CotizacionFormDialog({
     }
 
     if (!validateForm()) {
+      return;
+    }
+
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      setShowConfirmationDialog(false);
       return;
     }
 
@@ -440,6 +451,7 @@ export default function CotizacionFormDialog({
       );
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
 
@@ -770,9 +782,78 @@ export default function CotizacionFormDialog({
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
             </Button>
-          </DialogFooter>
+          </DialogFooter>{" "}
         </form>
       </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación de Cotización"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "¿Está seguro que desea actualizar esta cotización con los cambios realizados?"
+                : "¿Está seguro que desea crear esta cotización con la siguiente información?"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            <div>
+              <strong>Costo Revisión:</strong> $
+              {parseInt(formData.costo_revision || "0").toLocaleString()}
+            </div>
+            <div>
+              <strong>Costo Reparación:</strong> $
+              {parseInt(formData.costo_reparacion || "0").toLocaleString()}
+            </div>
+            <div>
+              <strong>Piezas:</strong> {selectedPiezas.length} pieza(s)
+              seleccionada(s)
+            </div>
+            <div>
+              <strong>Costo Total:</strong> ${calculateTotal().toLocaleString()}
+            </div>
+            <div>
+              <strong>Estado:</strong>{" "}
+              {formData.is_aprobada ? "Aprobada" : "Pendiente"}
+            </div>
+            {formData.informe && (
+              <div>
+                <strong>Informe:</strong>{" "}
+                {formData.informe.length > 50
+                  ? formData.informe.substring(0, 50) + "..."
+                  : formData.informe}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
+              {loading
+                ? "Procesando..."
+                : isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

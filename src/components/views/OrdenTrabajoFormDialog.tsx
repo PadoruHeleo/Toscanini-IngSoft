@@ -104,6 +104,7 @@ export default function OrdenTrabajoFormDialog({
   const [loading, setLoading] = useState(false);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     orden_codigo: "",
     orden_desc: "",
@@ -272,7 +273,6 @@ export default function OrdenTrabajoFormDialog({
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -282,6 +282,16 @@ export default function OrdenTrabajoFormDialog({
     }
 
     if (!validateForm()) {
+      return;
+    }
+
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+  const handleConfirmSubmit = async () => {
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      setShowConfirmationDialog(false);
       return;
     }
 
@@ -369,6 +379,7 @@ export default function OrdenTrabajoFormDialog({
       );
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
 
@@ -384,7 +395,7 @@ export default function OrdenTrabajoFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing
@@ -570,9 +581,87 @@ export default function OrdenTrabajoFormDialog({
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
             </Button>
-          </DialogFooter>
+          </DialogFooter>{" "}
         </form>
       </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación de Orden"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "¿Está seguro que desea actualizar esta orden de trabajo con los cambios realizados?"
+                : "¿Está seguro que desea crear esta orden de trabajo con la siguiente información?"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            <div>
+              <strong>Código:</strong> {formData.orden_codigo}
+            </div>
+            <div>
+              <strong>Equipo:</strong>{" "}
+              {equipos.find(
+                (e) => e.equipo_id.toString() === formData.equipo_id
+              )
+                ? getEquipoDisplayName(
+                    equipos.find(
+                      (e) => e.equipo_id.toString() === formData.equipo_id
+                    )!
+                  )
+                : "No seleccionado"}
+            </div>
+            <div>
+              <strong>Prioridad:</strong>{" "}
+              {prioridadOptions.find((p) => p.value === formData.prioridad)
+                ?.label || formData.prioridad}
+            </div>
+            <div>
+              <strong>Estado:</strong>{" "}
+              {estadoOptions.find((e) => e.value === formData.estado)?.label ||
+                formData.estado}
+            </div>
+            <div>
+              <strong>Garantía:</strong> {formData.has_garantia ? "Sí" : "No"}
+            </div>
+            {formData.pre_informe && (
+              <div>
+                <strong>Pre-informe:</strong>{" "}
+                {formData.pre_informe.length > 50
+                  ? formData.pre_informe.substring(0, 50) + "..."
+                  : formData.pre_informe}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
+              {loading
+                ? "Procesando..."
+                : isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
