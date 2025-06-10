@@ -104,8 +104,8 @@ export function EquipoFormDialog({
   const [tipoIngreso, setTipoIngreso] = useState<
     "almacenamiento" | "mantenimiento"
   >("almacenamiento");
-  const [preInforme, setPreInforme] = useState("");
-  const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
+  const [preInforme, setPreInforme] = useState("");  const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [newClienteData, setNewClienteData] = useState<{
     cliente_rut: string;
     cliente_nombre: string;
@@ -260,14 +260,18 @@ export function EquipoFormDialog({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-  const handleSubmit = async (e: React.FormEvent) => {
+  };  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
       return;
     }
 
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+
+  const handleConfirmSubmit = async () => {
     try {
       setLoading(true);      const equipoData: CreateEquipoRequest = {
         numero_serie: formData.numero_serie!,
@@ -367,11 +371,10 @@ export function EquipoFormDialog({
         typeof error === "string"
           ? error
           : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
-      );
-
-      setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
+      );      setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
   const handleInputChange = (field: keyof CreateEquipoRequest, value: any) => {
@@ -725,7 +728,52 @@ export function EquipoFormDialog({
             </Button>{" "}
           </DialogFooter>
         </form>
-      </DialogContent>{" "}
+      </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Creación de Equipo</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea crear este equipo con la siguiente información?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-2 text-sm">
+            <div><strong>Marca:</strong> {formData.equipo_marca}</div>
+            <div><strong>Modelo:</strong> {formData.equipo_modelo}</div>
+            <div><strong>Número de Serie:</strong> {formData.numero_serie}</div>
+            <div><strong>Tipo:</strong> {formData.equipo_tipo}</div>
+            <div><strong>Cliente:</strong> {clientes.find(c => c.cliente_id === formData.cliente_id)?.cliente_nombre}</div>
+            {formData.equipo_ubicacion && (
+              <div><strong>Ubicación:</strong> {formData.equipo_ubicacion}</div>
+            )}
+            <div><strong>Tipo de Ingreso:</strong> {tipoIngreso === "mantenimiento" ? "Mantenimiento (se creará orden de trabajo)" : "Almacenamiento"}</div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConfirmSubmit}
+              disabled={loading}
+            >
+              {loading ? "Creando..." : "Confirmar y Crear"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal para agregar nuevo cliente */}
       <Dialog
         open={showNewClienteDialog}
