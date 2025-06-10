@@ -105,6 +105,10 @@ export default function OrdenTrabajoFormDialog({
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  // Check if the work order is locked (has associated quote or report)
+  const isOrderLocked = Boolean(
+    isEditing && orden && (orden.cotizacion_id || orden.informe_id)
+  );
   const [formData, setFormData] = useState<FormData>({
     orden_codigo: "",
     orden_desc: "",
@@ -190,6 +194,28 @@ export default function OrdenTrabajoFormDialog({
       }
     }
   }, [equipos.length, isEditing]);
+  // Asegurar que el equipo se seleccione correctamente al editar después de cargar equipos
+  useEffect(() => {
+    if (isEditing && orden && equipos.length > 0 && orden.equipo_id) {
+      // Verificar si el equipo existe en la lista cargada
+      const equipoExists = equipos.find((e) => e.equipo_id === orden.equipo_id);
+      if (equipoExists) {
+        // Solo actualizar si el formData no tiene el equipo correcto establecido
+        setFormData((prev) => {
+          if (prev.equipo_id !== orden.equipo_id!.toString()) {
+            console.log(
+              `Estableciendo equipo_id al editar: ${orden.equipo_id}`
+            );
+            return {
+              ...prev,
+              equipo_id: orden.equipo_id!.toString(),
+            };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [equipos.length, isEditing, orden?.equipo_id]);
 
   const loadEquipos = async () => {
     try {
@@ -278,6 +304,16 @@ export default function OrdenTrabajoFormDialog({
 
     if (!user) {
       showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+
+    // Check if the order is locked for editing
+    if (isOrderLocked) {
+      const lockReason = orden?.cotizacion_id ? "cotización" : "informe";
+      showError(
+        "Edición no permitida",
+        `No se puede editar esta orden de trabajo porque ya tiene una ${lockReason} asociada.`
+      );
       return;
     }
 
@@ -395,7 +431,8 @@ export default function OrdenTrabajoFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
+        {" "}
         <DialogHeader>
           <DialogTitle>
             {isEditing
@@ -408,12 +445,41 @@ export default function OrdenTrabajoFormDialog({
               : "Completa los datos para crear una nueva orden de trabajo"}
           </DialogDescription>
         </DialogHeader>
-
+        {/* Warning message for locked orders */}
+        {isOrderLocked && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-yellow-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Edición restringida
+                </h3>
+                <div className="mt-1 text-sm text-yellow-700">
+                  Esta orden de trabajo no se puede editar porque ya tiene una{" "}
+                  {orden?.cotizacion_id ? "cotización" : "informe"} asociada.
+                  Los campos se muestran en modo de solo lectura.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             {/* Código de la orden */}
             <div className="space-y-2">
-              <Label htmlFor="orden_codigo">Código de Orden *</Label>
+              <Label htmlFor="orden_codigo">Código de Orden *</Label>{" "}
               <Input
                 id="orden_codigo"
                 type="text"
@@ -423,6 +489,7 @@ export default function OrdenTrabajoFormDialog({
                 }
                 placeholder="Ej: OT-2024-001"
                 className={errors.orden_codigo ? "border-red-500" : ""}
+                disabled={isOrderLocked}
               />
               {errors.orden_codigo && (
                 <p className="text-sm text-red-500">{errors.orden_codigo}</p>
@@ -431,10 +498,11 @@ export default function OrdenTrabajoFormDialog({
 
             {/* Equipo */}
             <div className="space-y-2">
-              <Label htmlFor="equipo_id">Equipo *</Label>
+              <Label htmlFor="equipo_id">Equipo *</Label>{" "}
               <Select
                 value={formData.equipo_id}
                 onValueChange={(value) => handleInputChange("equipo_id", value)}
+                disabled={isOrderLocked}
               >
                 <SelectTrigger
                   className={errors.equipo_id ? "border-red-500" : ""}
@@ -488,10 +556,11 @@ export default function OrdenTrabajoFormDialog({
           <div className="grid grid-cols-2 gap-4">
             {/* Prioridad */}
             <div className="space-y-2">
-              <Label htmlFor="prioridad">Prioridad *</Label>
+              <Label htmlFor="prioridad">Prioridad *</Label>{" "}
               <Select
                 value={formData.prioridad}
                 onValueChange={(value) => handleInputChange("prioridad", value)}
+                disabled={isOrderLocked}
               >
                 <SelectTrigger
                   className={errors.prioridad ? "border-red-500" : ""}
@@ -513,10 +582,11 @@ export default function OrdenTrabajoFormDialog({
 
             {/* Estado */}
             <div className="space-y-2">
-              <Label htmlFor="estado">Estado *</Label>
+              <Label htmlFor="estado">Estado *</Label>{" "}
               <Select
                 value={formData.estado}
                 onValueChange={(value) => handleInputChange("estado", value)}
+                disabled={isOrderLocked}
               >
                 <SelectTrigger
                   className={errors.estado ? "border-red-500" : ""}
@@ -536,7 +606,7 @@ export default function OrdenTrabajoFormDialog({
               )}
             </div>
           </div>
-          {/* Garantía */}
+          {/* Garantía */}{" "}
           <div className="flex items-center space-x-2">
             <Checkbox
               id="has_garantia"
@@ -544,12 +614,13 @@ export default function OrdenTrabajoFormDialog({
               onCheckedChange={(checked) =>
                 handleInputChange("has_garantia", !!checked)
               }
+              disabled={isOrderLocked}
             />
             <Label htmlFor="has_garantia">Equipo tiene garantía</Label>
           </div>
           {/* Pre-informe */}
           <div className="space-y-2">
-            <Label htmlFor="pre_informe">Pre-informe *</Label>
+            <Label htmlFor="pre_informe">Pre-informe *</Label>{" "}
             <Textarea
               id="pre_informe"
               value={formData.pre_informe}
@@ -559,6 +630,7 @@ export default function OrdenTrabajoFormDialog({
               placeholder="Diagnóstico inicial del equipo"
               className={errors.pre_informe ? "border-red-500" : ""}
               rows={4}
+              disabled={isOrderLocked}
             />
             {errors.pre_informe && (
               <p className="text-sm text-red-500">{errors.pre_informe}</p>
@@ -568,7 +640,7 @@ export default function OrdenTrabajoFormDialog({
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}
+          )}{" "}
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -576,11 +648,13 @@ export default function OrdenTrabajoFormDialog({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancelar
+              {isOrderLocked ? "Cerrar" : "Cancelar"}
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
-            </Button>
+            {!isOrderLocked && (
+              <Button type="submit" disabled={loading}>
+                {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
+              </Button>
+            )}
           </DialogFooter>{" "}
         </form>
       </DialogContent>
