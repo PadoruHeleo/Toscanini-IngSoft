@@ -17,7 +17,10 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   validateSession: () => Promise<boolean>;
 }
@@ -102,10 +105,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => clearInterval(interval);
   }, [user]);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
-      setIsLoading(true);
+      // NO activamos setIsLoading aquí para evitar la pantalla de carga completa
       const result = await invoke<User | null>("authenticate_usuario", {
         usuarioCorreo: email,
         usuarioContrasena: password,
@@ -114,15 +119,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result) {
         setUser(result);
         localStorage.setItem("user", JSON.stringify(result));
-        return true;
+        return { success: true };
       }
-      return false;
+      return { success: false, error: "UNKNOWN_ERROR" };
     } catch (error) {
       console.error("Login error:", error);
-      return false;
-    } finally {
-      setIsLoading(false);
+      return { success: false, error: String(error) };
     }
+    // NO hay finally con setIsLoading(false) aquí
   };
 
   const logout = async () => {

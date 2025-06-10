@@ -255,10 +255,10 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Si encontramos el usuario, verificar la contraseña
+      // Si encontramos el usuario, verificar la contraseña
     if let Some(user) = usuario {
-        if let Some(ref stored_password) = user.usuario_contrasena {            // Verificar la contraseña usando bcrypt
+        if let Some(ref stored_password) = user.usuario_contrasena {            
+            // Verificar la contraseña usando bcrypt
             if verify_password(&usuario_contrasena, stored_password)? {
                 // Generar token de sesión
                 let session_token = Uuid::new_v4().to_string();
@@ -301,7 +301,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                 };
                 return Ok(Some(safe_user));
             } else {
-                // Registrar intento de login fallido
+                // Registrar intento de login fallido - contraseña incorrecta
                 let _ = log_action(
                     "LOGIN_FAILED",
                     None,
@@ -310,7 +310,10 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     None,
                     Some(&format!("Intento de login fallido para {}", usuario_correo))
                 ).await;
+                return Err("INVALID_PASSWORD".to_string());
             }
+        } else {
+                    return Err("USER_NO_PASSWORD".to_string());
         }
     } else {
         // Registrar intento de login con usuario inexistente
@@ -322,10 +325,8 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
             None,
             Some(&format!("Intento de login con usuario inexistente: {}", usuario_correo))
         ).await;
+        return Err("USER_NOT_FOUND".to_string());
     }
-    
-    // Credenciales inválidas
-    Ok(None)
 }
 
 #[tauri::command]
