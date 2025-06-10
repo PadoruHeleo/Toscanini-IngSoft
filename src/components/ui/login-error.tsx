@@ -1,5 +1,10 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { IconAlertCircle, IconLock, IconWifi } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconLock,
+  IconWifi,
+  IconUserX,
+} from "@tabler/icons-react";
 
 interface LoginErrorProps {
   error: string;
@@ -48,6 +53,26 @@ export function LoginError({ error, className = "" }: LoginErrorProps) {
           bgColor: "bg-red-50 border-red-200",
           textColor: "text-red-800",
           iconColor: "text-red-600",
+        };
+      case "EMAIL_NOT_REGISTERED":
+        return {
+          icon: <IconUserX className="h-4 w-4" />,
+          title: "Correo no registrado",
+          message:
+            "Este correo electrónico no está registrado en nuestro sistema. Verifica que hayas ingresado el correo correcto o contacta al administrador.",
+          bgColor: "bg-yellow-50 border-yellow-200",
+          textColor: "text-yellow-800",
+          iconColor: "text-yellow-600",
+        };
+      case "EMAIL_SERVICE_ERROR":
+        return {
+          icon: <IconWifi className="h-4 w-4" />,
+          title: "Error del servicio de correo",
+          message:
+            "No se pudo enviar el correo de recuperación. Por favor, intenta nuevamente en unos minutos.",
+          bgColor: "bg-orange-50 border-orange-200",
+          textColor: "text-orange-800",
+          iconColor: "text-orange-600",
         };
       case "Database error":
       case "NETWORK_ERROR":

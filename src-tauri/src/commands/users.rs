@@ -429,9 +429,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     .bind(&request.usuario_correo)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    let user = match usuario {
+    .map_err(|e| format!("Database error: {}", e))?;    let user = match usuario {
         Some(u) => u,
         None => {
             // Registrar intento de recuperación con correo inexistente
@@ -443,7 +441,9 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
                 None,
                 Some(&format!("Intento de recuperación con correo inexistente: {}", request.usuario_correo))
             ).await;
-            return Err("Correo electrónico no encontrado".to_string());
+            
+            // Retornar error específico indicando que el correo no está registrado
+            return Err("EMAIL_NOT_REGISTERED".to_string());
         }
     };
       // Generar código de 6 dígitos
@@ -482,9 +482,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     let user_name = user.usuario_nombre.as_deref().unwrap_or("Usuario");
     email_service.send_password_reset_email(&request.usuario_correo, &reset_code, user_name)
         .await
-        .map_err(|e| format!("Error sending email: {}", e))?;
-    
-    // Registrar solicitud exitosa
+        .map_err(|e| format!("Error sending email: {}", e))?;    // Registrar solicitud exitosa
     let _ = log_action(
         "PASSWORD_RESET_REQUESTED",
         Some(user.usuario_id),
@@ -494,7 +492,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
         Some(&format!("Código de recuperación enviado a {}", request.usuario_correo))
     ).await;
     
-    Ok("Código de recuperación enviado a tu correo electrónico".to_string())
+    Ok("Código de recuperación enviado a tu correo electrónico. Revisa tu bandeja de entrada.".to_string())
 }
 
 #[tauri::command]
