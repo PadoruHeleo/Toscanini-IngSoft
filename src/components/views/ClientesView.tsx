@@ -11,7 +11,7 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Edit, Trash2 } from "lucide-react";
 import { ClienteFormDialog } from "./ClienteFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -186,23 +186,26 @@ export function ClientesView() {
                   <TableCell className="max-w-xs truncate">
                     {cliente.cliente_direccion || "N/A"}
                   </TableCell>
-                  <TableCell>{formatDate(cliente.created_at)}</TableCell>
+                  <TableCell>{formatDate(cliente.created_at)}</TableCell>{" "}
                   <TableCell className="text-right">
-                    <div className="flex gap-2 justify-end">
+                    <div className="flex gap-1 justify-end">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleEditCliente(cliente)}
+                        className="text-gray-600 hover:text-gray-700"
+                        title="Editar cliente"
                       >
-                        Editar
+                        <Edit className="h-3 w-3" />
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleDeleteCliente(cliente)}
                         className="text-red-600 hover:text-red-700"
+                        title="Eliminar cliente"
                       >
-                        Eliminar
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </TableCell>

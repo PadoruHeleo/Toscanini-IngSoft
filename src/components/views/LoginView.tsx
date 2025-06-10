@@ -11,29 +11,68 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
+import { LoginError } from "@/components/ui/login-error";
 import { InitSetup } from "@/components/InitSetup";
 
 export function LoginView() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const { login, isLoading } = useAuth();
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState({ email: "", password: "" });
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const { login } = useAuth();
   const { setCurrentView } = useView();
 
+  const validateFields = () => {
+    const errors = { email: "", password: "" };
+    let hasErrors = false;
+
+    if (!email.trim()) {
+      errors.email = "El correo electrónico es requerido";
+      hasErrors = true;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = "Ingresa un correo electrónico válido";
+      hasErrors = true;
+    }
+
+    if (!password.trim()) {
+      errors.password = "La contraseña es requerida";
+      hasErrors = true;
+    } else if (password.length < 3) {
+      errors.password = "La contraseña debe tener al menos 3 caracteres";
+      hasErrors = true;
+    }
+
+    setFieldErrors(errors);
+    return !hasErrors;
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setFieldErrors({ email: "", password: "" });
+    setIsLoginLoading(true);
 
-    if (!email || !password) {
-      setError("Por favor, completa todos los campos");
+    if (!validateFields()) {
+      setIsLoginLoading(false);
       return;
     }
 
-    const success = await login(email, password);
-    if (!success) {
-      setError(
-        "Credenciales inválidas. Por favor, verifica tu email y contraseña."
-      );
+    try {
+      const result = await login(email, password);
+
+      if (!result.success) {
+        setLoginAttempts((prev) => prev + 1);
+        // Para seguridad, usamos un mensaje genérico para todos los tipos de error
+        setError("INVALID_CREDENTIALS");
+
+        // Limpiar la contraseña después de un fallo para seguridad
+        setPassword("");
+      }
+    } catch (err) {
+      setError("NETWORK_ERROR");
+    } finally {
+      setIsLoginLoading(false);
     }
   };
   return (
@@ -48,7 +87,7 @@ export function LoginView() {
             <CardDescription className="text-center">
               Ingresa tus credenciales para acceder al sistema
             </CardDescription>
-          </CardHeader>
+          </CardHeader>{" "}
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -58,10 +97,25 @@ export function LoginView() {
                   type="email"
                   placeholder="tu@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) {
+                      setFieldErrors((prev) => ({ ...prev, email: "" }));
+                    }
+                  }}
+                  disabled={isLoginLoading}
                   autoComplete="email"
+                  className={
+                    fieldErrors.email
+                      ? "border-red-500 focus:border-red-500"
+                      : ""
+                  }
                 />
+                {fieldErrors.email && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Contraseña</Label>
@@ -70,18 +124,48 @@ export function LoginView() {
                   type="password"
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (fieldErrors.password) {
+                      setFieldErrors((prev) => ({ ...prev, password: "" }));
+                    }
+                  }}
+                  disabled={isLoginLoading}
                   autoComplete="current-password"
+                  className={
+                    fieldErrors.password
+                      ? "border-red-500 focus:border-red-500"
+                      : ""
+                  }
                 />
-              </div>
-              {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
-                  {error}
+                {fieldErrors.password && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {fieldErrors.password}
+                  </p>
+                )}
+              </div>{" "}
+              {error && <LoginError error={error} className="mt-3" />}
+              {loginAttempts >= 3 && (
+                <div className="text-center">
+                  <p className="text-sm text-orange-600 mb-2">
+                    Has intentado iniciar sesión {loginAttempts} veces sin
+                    éxito.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("password-reset")}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline focus:outline-none focus:underline"
+                  >
+                    ¿Necesitas recuperar tu contraseña?
+                  </button>
                 </div>
               )}{" "}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoginLoading}
+              >
+                {isLoginLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
               </Button>
               <div className="text-center">
                 <button

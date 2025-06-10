@@ -201,24 +201,28 @@ export default function PiezasView() {
                     {pieza.pieza_precio != null
                       ? `$${pieza.pieza_precio}`
                       : "-"}
-                  </TableCell>
+                  </TableCell>{" "}
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenForm(pieza)}
-                      title="Editar"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(pieza)}
-                      title="Eliminar"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
+                    <div className="flex gap-1 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenForm(pieza)}
+                        className="text-gray-600 hover:text-gray-700"
+                        title="Editar pieza"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(pieza)}
+                        className="text-red-600 hover:text-red-700"
+                        title="Eliminar pieza"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Label } from "@/components/ui/label";
+import { LoginError } from "@/components/ui/login-error";
 
 interface RequestPasswordResetRequest {
   usuario_correo: string;
@@ -33,13 +34,32 @@ export function PasswordResetView() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({ email: "" });
   const { setCurrentView } = useView();
 
+  const validateEmail = (email: string): boolean => {
+    if (!email.trim()) {
+      setFieldErrors({ email: "El correo electrónico es requerido" });
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFieldErrors({ email: "Ingresa un correo electrónico válido" });
+      return false;
+    }
+    setFieldErrors({ email: "" });
+    return true;
+  };
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
     setMessage("");
+
+    // Validar email antes de enviar
+    if (!validateEmail(email)) {
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const request: RequestPasswordResetRequest = {
@@ -52,7 +72,23 @@ export function PasswordResetView() {
       setMessage(response);
       setStep("verify");
     } catch (err) {
-      setError(err as string);
+      // Convertir el error a un código que el componente LoginError pueda manejar
+      const errorMessage = String(err);
+      if (errorMessage.includes("EMAIL_NOT_REGISTERED")) {
+        setError("EMAIL_NOT_REGISTERED");
+      } else if (
+        errorMessage.includes("Email service error") ||
+        errorMessage.includes("Error sending email")
+      ) {
+        setError("EMAIL_SERVICE_ERROR");
+      } else if (
+        errorMessage.includes("Database error") ||
+        errorMessage.includes("Connection")
+      ) {
+        setError("NETWORK_ERROR");
+      } else {
+        setError("UNKNOWN_ERROR");
+      }
     } finally {
       setLoading(false);
     }
@@ -150,33 +186,41 @@ export function PasswordResetView() {
             <Alert>
               <AlertDescription>{message}</AlertDescription>
             </Alert>
-          )}
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
+          )}{" "}
+          {error && <LoginError error={error} className="mt-3" />}
           {step === "request" && (
             <form onSubmit={handleRequestReset} className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
                 <Input
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) {
+                      setFieldErrors({ email: "" });
+                    }
+                  }}
                   placeholder="tu@correo.com"
+                  disabled={loading}
+                  className={
+                    fieldErrors.email
+                      ? "border-red-500 focus:border-red-500"
+                      : ""
+                  }
                 />
+                {fieldErrors.email && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Enviando..." : "Enviar Código"}
               </Button>
             </form>
           )}
-
           {step === "verify" && (
             <div className="space-y-4">
               <div>
@@ -205,7 +249,6 @@ export function PasswordResetView() {
               </Button>
             </div>
           )}
-
           {step === "reset" && (
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
@@ -240,7 +283,6 @@ export function PasswordResetView() {
               </Button>
             </form>
           )}
-
           {step === "success" && (
             <div className="space-y-4 text-center">
               <div className="text-green-600 text-lg font-medium">
@@ -257,7 +299,6 @@ export function PasswordResetView() {
               </Button>
             </div>
           )}
-
           {/* Back to Login button - visible for all steps except success */}
           {step !== "success" && (
             <div className="pt-4 border-t">

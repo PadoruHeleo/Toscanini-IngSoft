@@ -57,8 +57,6 @@ interface OrdenTrabajoFormDialogProps {
 }
 
 interface FormData {
-  orden_codigo: string;
-  orden_desc: string;
   prioridad: string;
   estado: string;
   has_garantia: boolean;
@@ -67,8 +65,6 @@ interface FormData {
 }
 
 interface FormErrors {
-  orden_codigo?: string;
-  orden_desc?: string;
   prioridad?: string;
   estado?: string;
   equipo_id?: string;
@@ -104,17 +100,18 @@ export default function OrdenTrabajoFormDialog({
   const [loading, setLoading] = useState(false);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  // Check if the work order is locked (has associated quote or report)
+  const isOrderLocked = Boolean(
+    isEditing && orden && (orden.cotizacion_id || orden.informe_id)
+  );
   const [formData, setFormData] = useState<FormData>({
-    orden_codigo: "",
-    orden_desc: "",
     prioridad: "media",
     estado: "recibido",
     has_garantia: false,
     equipo_id: "",
     pre_informe: "",
-  });
-
-  const [errors, setErrors] = useState<FormErrors>({}); // Función para generar la descripción automáticamente
+  }); // Función para generar la descripción automáticamente
   const generateDescription = (equipoId: string, preInforme: string) => {
     if (!equipoId || !preInforme.trim() || equipos.length === 0) return "";
 
@@ -125,7 +122,10 @@ export default function OrdenTrabajoFormDialog({
     const modelo = equipo.equipo_modelo || "Modelo desconocido";
 
     return `El equipo ${marca} ${modelo} presenta ${preInforme.trim()}`;
-  }; // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
+  };
+
+  const [generatedDescription, setGeneratedDescription] = useState<string>("");
+  const [errors, setErrors] = useState<FormErrors>({}); // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
   useEffect(() => {
     if (
       formData.equipo_id &&
@@ -137,7 +137,7 @@ export default function OrdenTrabajoFormDialog({
         formData.pre_informe
       );
       if (newDescription) {
-        setFormData((prev) => ({ ...prev, orden_desc: newDescription }));
+        setGeneratedDescription(newDescription);
       }
     }
   }, [formData.equipo_id, formData.pre_informe, equipos]);
@@ -150,8 +150,6 @@ export default function OrdenTrabajoFormDialog({
   useEffect(() => {
     if (isEditing && orden && open) {
       setFormData({
-        orden_codigo: orden.orden_codigo || "",
-        orden_desc: orden.orden_desc || "",
         prioridad: orden.prioridad || "media",
         estado: orden.estado || "recibido",
         has_garantia: orden.has_garantia || false,
@@ -161,8 +159,6 @@ export default function OrdenTrabajoFormDialog({
     } else if (!isEditing && open) {
       // Resetear formulario para crear nueva orden
       setFormData({
-        orden_codigo: "",
-        orden_desc: "",
         prioridad: "media",
         estado: "recibido",
         has_garantia: false,
@@ -171,8 +167,7 @@ export default function OrdenTrabajoFormDialog({
       });
     }
     setErrors({});
-  }, [isEditing, orden, open]);
-  // Regenerar descripción para órdenes existentes una vez que se cargan los equipos
+  }, [isEditing, orden, open]); // Regenerar descripción para órdenes existentes una vez que se cargan los equipos
   useEffect(() => {
     if (
       isEditing &&
@@ -185,10 +180,32 @@ export default function OrdenTrabajoFormDialog({
         formData.pre_informe
       );
       if (newDescription) {
-        setFormData((prev) => ({ ...prev, orden_desc: newDescription }));
+        setGeneratedDescription(newDescription);
       }
     }
   }, [equipos.length, isEditing]);
+  // Asegurar que el equipo se seleccione correctamente al editar después de cargar equipos
+  useEffect(() => {
+    if (isEditing && orden && equipos.length > 0 && orden.equipo_id) {
+      // Verificar si el equipo existe en la lista cargada
+      const equipoExists = equipos.find((e) => e.equipo_id === orden.equipo_id);
+      if (equipoExists) {
+        // Solo actualizar si el formData no tiene el equipo correcto establecido
+        setFormData((prev) => {
+          if (prev.equipo_id !== orden.equipo_id!.toString()) {
+            console.log(
+              `Estableciendo equipo_id al editar: ${orden.equipo_id}`
+            );
+            return {
+              ...prev,
+              equipo_id: orden.equipo_id!.toString(),
+            };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [equipos.length, isEditing, orden?.equipo_id]);
 
   const loadEquipos = async () => {
     try {
@@ -205,13 +222,9 @@ export default function OrdenTrabajoFormDialog({
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    if (!formData.orden_codigo.trim()) {
-      newErrors.orden_codigo = "El código es requerido";
-    }
-
     // La descripción se genera automáticamente, pero verificamos que exista
-    if (!formData.orden_desc.trim()) {
-      newErrors.orden_desc =
+    if (!generatedDescription.trim()) {
+      newErrors.prioridad =
         "Seleccione un equipo y complete el pre-informe para generar la descripción";
     }
 
@@ -259,7 +272,7 @@ export default function OrdenTrabajoFormDialog({
         ) {
           const newDescription = generateDescription(equipoId, preInforme);
           if (newDescription) {
-            newData.orden_desc = newDescription;
+            setGeneratedDescription(newDescription);
           }
         }
       }
@@ -272,7 +285,6 @@ export default function OrdenTrabajoFormDialog({
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -281,24 +293,35 @@ export default function OrdenTrabajoFormDialog({
       return;
     }
 
+    // Check if the order is locked for editing
+    if (isOrderLocked) {
+      const lockReason = orden?.cotizacion_id ? "cotización" : "informe";
+      showError(
+        "Edición no permitida",
+        `No se puede editar esta orden de trabajo porque ya tiene una ${lockReason} asociada.`
+      );
+      return;
+    }
+
     if (!validateForm()) {
+      return;
+    }
+
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+  const handleConfirmSubmit = async () => {
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      setShowConfirmationDialog(false);
       return;
     }
 
     try {
       setLoading(true);
-
       if (isEditing && orden) {
         // Actualizar orden existente
         const updateData = {
-          orden_codigo:
-            formData.orden_codigo !== orden.orden_codigo
-              ? formData.orden_codigo
-              : undefined,
-          orden_desc:
-            formData.orden_desc !== orden.orden_desc
-              ? formData.orden_desc
-              : undefined,
           prioridad:
             formData.prioridad !== orden.prioridad
               ? formData.prioridad
@@ -327,7 +350,7 @@ export default function OrdenTrabajoFormDialog({
         if (result) {
           success(
             "Orden actualizada",
-            `La orden ${formData.orden_codigo} ha sido actualizada exitosamente.`
+            `La orden ha sido actualizada exitosamente.`
           );
           onOrdenAdded();
         } else {
@@ -336,8 +359,7 @@ export default function OrdenTrabajoFormDialog({
       } else {
         // Crear nueva orden
         const createData = {
-          orden_codigo: formData.orden_codigo,
-          orden_desc: formData.orden_desc,
+          orden_desc: generatedDescription,
           prioridad: formData.prioridad,
           estado: formData.estado,
           has_garantia: formData.has_garantia,
@@ -352,10 +374,7 @@ export default function OrdenTrabajoFormDialog({
         });
 
         if (result) {
-          success(
-            "Orden creada",
-            `La orden ${formData.orden_codigo} ha sido creada exitosamente.`
-          );
+          success("Orden creada", `La orden ha sido creada exitosamente.`);
           onOrdenAdded();
         } else {
           showError("Error", "No se pudo crear la orden de trabajo.");
@@ -369,6 +388,7 @@ export default function OrdenTrabajoFormDialog({
       );
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
 
@@ -384,7 +404,8 @@ export default function OrdenTrabajoFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
+        {" "}
         <DialogHeader>
           <DialogTitle>
             {isEditing
@@ -397,33 +418,61 @@ export default function OrdenTrabajoFormDialog({
               : "Completa los datos para crear una nueva orden de trabajo"}
           </DialogDescription>
         </DialogHeader>
-
+        {/* Warning message for locked orders */}
+        {isOrderLocked && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-yellow-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Edición restringida
+                </h3>
+                <div className="mt-1 text-sm text-yellow-700">
+                  Esta orden de trabajo no se puede editar porque ya tiene una{" "}
+                  {orden?.cotizacion_id ? "cotización" : "informe"} asociada.
+                  Los campos se muestran en modo de solo lectura.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}{" "}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {/* Código de la orden */}
+            {/* Código de la orden (auto-generado) */}
             <div className="space-y-2">
-              <Label htmlFor="orden_codigo">Código de Orden *</Label>
+              <Label htmlFor="orden_codigo">Código de Orden</Label>
               <Input
                 id="orden_codigo"
                 type="text"
-                value={formData.orden_codigo}
-                onChange={(e) =>
-                  handleInputChange("orden_codigo", e.target.value)
+                value={
+                  isEditing && orden?.orden_codigo
+                    ? orden.orden_codigo
+                    : "(Se generará automáticamente)"
                 }
-                placeholder="Ej: OT-2024-001"
-                className={errors.orden_codigo ? "border-red-500" : ""}
+                readOnly
+                className="bg-gray-50 font-semibold"
               />
-              {errors.orden_codigo && (
-                <p className="text-sm text-red-500">{errors.orden_codigo}</p>
-              )}
             </div>
 
             {/* Equipo */}
             <div className="space-y-2">
-              <Label htmlFor="equipo_id">Equipo *</Label>
+              <Label htmlFor="equipo_id">Equipo *</Label>{" "}
               <Select
                 value={formData.equipo_id}
                 onValueChange={(value) => handleInputChange("equipo_id", value)}
+                disabled={isOrderLocked}
               >
                 <SelectTrigger
                   className={errors.equipo_id ? "border-red-500" : ""}
@@ -449,9 +498,67 @@ export default function OrdenTrabajoFormDialog({
               </Select>
               {errors.equipo_id && (
                 <p className="text-sm text-red-500">{errors.equipo_id}</p>
-              )}
+              )}{" "}
             </div>
-          </div>{" "}
+          </div>
+          {/* Detalles del Equipo Seleccionado */}
+          {formData.equipo_id && (
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">
+                Detalles del Equipo Seleccionado
+              </h3>
+              {(() => {
+                const equipo = equipos.find(
+                  (e) => e.equipo_id.toString() === formData.equipo_id
+                );
+                if (!equipo)
+                  return (
+                    <p className="text-sm text-gray-500">
+                      Cargando detalles...
+                    </p>
+                  );
+
+                return (
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-600">
+                        Cliente:
+                      </span>
+                      <p className="mt-1">
+                        {equipo.cliente_nombre || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">
+                        Número de Serie:
+                      </span>
+                      <p className="mt-1">
+                        {equipo.numero_serie || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Marca:</span>
+                      <p className="mt-1">
+                        {equipo.equipo_marca || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Modelo:</span>
+                      <p className="mt-1">
+                        {equipo.equipo_modelo || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Tipo:</span>
+                      <p className="mt-1">
+                        {equipo.equipo_tipo || "No especificado"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
           {/* Descripción */}
           <div className="space-y-2">
             <Label htmlFor="orden_desc">
@@ -462,25 +569,21 @@ export default function OrdenTrabajoFormDialog({
             </Label>
             <Textarea
               id="orden_desc"
-              value={formData.orden_desc}
+              value={generatedDescription}
               readOnly
               placeholder="La descripción se generará automáticamente al seleccionar un equipo y escribir el pre-informe"
-              className={`bg-gray-50 ${
-                errors.orden_desc ? "border-red-500" : ""
-              }`}
+              className="bg-gray-50"
               rows={3}
             />
-            {errors.orden_desc && (
-              <p className="text-sm text-red-500">{errors.orden_desc}</p>
-            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             {/* Prioridad */}
             <div className="space-y-2">
-              <Label htmlFor="prioridad">Prioridad *</Label>
+              <Label htmlFor="prioridad">Prioridad *</Label>{" "}
               <Select
                 value={formData.prioridad}
                 onValueChange={(value) => handleInputChange("prioridad", value)}
+                disabled={isOrderLocked}
               >
                 <SelectTrigger
                   className={errors.prioridad ? "border-red-500" : ""}
@@ -502,10 +605,11 @@ export default function OrdenTrabajoFormDialog({
 
             {/* Estado */}
             <div className="space-y-2">
-              <Label htmlFor="estado">Estado *</Label>
+              <Label htmlFor="estado">Estado *</Label>{" "}
               <Select
                 value={formData.estado}
                 onValueChange={(value) => handleInputChange("estado", value)}
+                disabled={isOrderLocked}
               >
                 <SelectTrigger
                   className={errors.estado ? "border-red-500" : ""}
@@ -525,7 +629,7 @@ export default function OrdenTrabajoFormDialog({
               )}
             </div>
           </div>
-          {/* Garantía */}
+          {/* Garantía */}{" "}
           <div className="flex items-center space-x-2">
             <Checkbox
               id="has_garantia"
@@ -533,12 +637,13 @@ export default function OrdenTrabajoFormDialog({
               onCheckedChange={(checked) =>
                 handleInputChange("has_garantia", !!checked)
               }
+              disabled={isOrderLocked}
             />
             <Label htmlFor="has_garantia">Equipo tiene garantía</Label>
           </div>
           {/* Pre-informe */}
           <div className="space-y-2">
-            <Label htmlFor="pre_informe">Pre-informe *</Label>
+            <Label htmlFor="pre_informe">Pre-informe *</Label>{" "}
             <Textarea
               id="pre_informe"
               value={formData.pre_informe}
@@ -548,6 +653,7 @@ export default function OrdenTrabajoFormDialog({
               placeholder="Diagnóstico inicial del equipo"
               className={errors.pre_informe ? "border-red-500" : ""}
               rows={4}
+              disabled={isOrderLocked}
             />
             {errors.pre_informe && (
               <p className="text-sm text-red-500">{errors.pre_informe}</p>
@@ -557,7 +663,7 @@ export default function OrdenTrabajoFormDialog({
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}
+          )}{" "}
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -565,14 +671,89 @@ export default function OrdenTrabajoFormDialog({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancelar
+              {isOrderLocked ? "Cerrar" : "Cancelar"}
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
-            </Button>
-          </DialogFooter>
+            {!isOrderLocked && (
+              <Button type="submit" disabled={loading}>
+                {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
+              </Button>
+            )}
+          </DialogFooter>{" "}
         </form>
       </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación de Orden"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "¿Está seguro que desea actualizar esta orden de trabajo con los cambios realizados?"
+                : "¿Está seguro que desea crear esta orden de trabajo con la siguiente información?"}
+            </DialogDescription>
+          </DialogHeader>{" "}
+          <div className="space-y-2 text-sm">
+            <div>
+              <strong>Equipo:</strong>{" "}
+              {equipos.find(
+                (e) => e.equipo_id.toString() === formData.equipo_id
+              )
+                ? getEquipoDisplayName(
+                    equipos.find(
+                      (e) => e.equipo_id.toString() === formData.equipo_id
+                    )!
+                  )
+                : "No seleccionado"}
+            </div>
+            <div>
+              <strong>Prioridad:</strong>{" "}
+              {prioridadOptions.find((p) => p.value === formData.prioridad)
+                ?.label || formData.prioridad}
+            </div>
+            <div>
+              <strong>Estado:</strong>{" "}
+              {estadoOptions.find((e) => e.value === formData.estado)?.label ||
+                formData.estado}
+            </div>
+            <div>
+              <strong>Garantía:</strong> {formData.has_garantia ? "Sí" : "No"}
+            </div>
+            {formData.pre_informe && (
+              <div>
+                <strong>Pre-informe:</strong>{" "}
+                {formData.pre_informe.length > 50
+                  ? formData.pre_informe.substring(0, 50) + "..."
+                  : formData.pre_informe}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
+              {loading
+                ? "Procesando..."
+                : isEditing
+                ? "Confirmar Actualización"
+                : "Confirmar Creación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

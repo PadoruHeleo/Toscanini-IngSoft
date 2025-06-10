@@ -62,6 +62,18 @@ pub struct ResetPasswordRequest {
     pub nueva_contrasena: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChangeEmailRequest {
+    pub new_email: String,
+    pub password: String, // Requiere contraseña actual para confirmar
+}
+
 #[tauri::command]
 pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
     let pool = get_db_pool_safe()?;
@@ -255,10 +267,10 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Si encontramos el usuario, verificar la contraseña
+      // Si encontramos el usuario, verificar la contraseña
     if let Some(user) = usuario {
-        if let Some(ref stored_password) = user.usuario_contrasena {            // Verificar la contraseña usando bcrypt
+        if let Some(ref stored_password) = user.usuario_contrasena {            
+            // Verificar la contraseña usando bcrypt
             if verify_password(&usuario_contrasena, stored_password)? {
                 // Generar token de sesión
                 let session_token = Uuid::new_v4().to_string();
@@ -301,7 +313,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                 };
                 return Ok(Some(safe_user));
             } else {
-                // Registrar intento de login fallido
+                // Registrar intento de login fallido - contraseña incorrecta
                 let _ = log_action(
                     "LOGIN_FAILED",
                     None,
@@ -310,7 +322,10 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     None,
                     Some(&format!("Intento de login fallido para {}", usuario_correo))
                 ).await;
+                return Err("INVALID_PASSWORD".to_string());
             }
+        } else {
+                    return Err("USER_NO_PASSWORD".to_string());
         }
     } else {
         // Registrar intento de login con usuario inexistente
@@ -322,10 +337,8 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
             None,
             Some(&format!("Intento de login con usuario inexistente: {}", usuario_correo))
         ).await;
+        return Err("USER_NOT_FOUND".to_string());
     }
-    
-    // Credenciales inválidas
-    Ok(None)
 }
 
 #[tauri::command]
@@ -428,9 +441,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     .bind(&request.usuario_correo)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    let user = match usuario {
+    .map_err(|e| format!("Database error: {}", e))?;    let user = match usuario {
         Some(u) => u,
         None => {
             // Registrar intento de recuperación con correo inexistente
@@ -442,7 +453,9 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
                 None,
                 Some(&format!("Intento de recuperación con correo inexistente: {}", request.usuario_correo))
             ).await;
-            return Err("Correo electrónico no encontrado".to_string());
+            
+            // Retornar error específico indicando que el correo no está registrado
+            return Err("EMAIL_NOT_REGISTERED".to_string());
         }
     };
       // Generar código de 6 dígitos
@@ -481,9 +494,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     let user_name = user.usuario_nombre.as_deref().unwrap_or("Usuario");
     email_service.send_password_reset_email(&request.usuario_correo, &reset_code, user_name)
         .await
-        .map_err(|e| format!("Error sending email: {}", e))?;
-    
-    // Registrar solicitud exitosa
+        .map_err(|e| format!("Error sending email: {}", e))?;    // Registrar solicitud exitosa
     let _ = log_action(
         "PASSWORD_RESET_REQUESTED",
         Some(user.usuario_id),
@@ -493,7 +504,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
         Some(&format!("Código de recuperación enviado a {}", request.usuario_correo))
     ).await;
     
-    Ok("Código de recuperación enviado a tu correo electrónico".to_string())
+    Ok("Código de recuperación enviado a tu correo electrónico. Revisa tu bandeja de entrada.".to_string())
 }
 
 #[tauri::command]
@@ -726,8 +737,144 @@ pub async fn cleanup_expired_sessions() -> Result<u64, String> {
         "USUARIO",
         None,
         None,
-        Some(&format!("Sesiones expiradas limpiadas: {}", cleaned_count))
-    ).await;
+        Some(&format!("Sesiones expiradas limpiadas: {}", cleaned_count))    ).await;
     
     Ok(cleaned_count)
+}
+
+#[tauri::command]
+pub async fn change_user_password(usuario_id: i32, request: ChangePasswordRequest) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el usuario actual
+    let user = get_usuario_by_id(usuario_id).await?
+        .ok_or_else(|| "Usuario no encontrado".to_string())?;
+    
+    // Verificar la contraseña actual
+    if let Some(ref stored_password) = user.usuario_contrasena {
+        if !verify_password(&request.current_password, stored_password)? {
+            // Registrar intento fallido
+            let _ = log_action(
+                "CHANGE_PASSWORD_FAILED",
+                Some(usuario_id),
+                "USUARIO",
+                Some(usuario_id),
+                None,
+                Some("Intento de cambio de contraseña con contraseña actual incorrecta")
+            ).await;
+            return Err("Contraseña actual incorrecta".to_string());
+        }
+    } else {
+        return Err("Usuario sin contraseña configurada".to_string());
+    }
+    
+    // Validar nueva contraseña
+    if request.new_password.len() < 6 {
+        return Err("La nueva contraseña debe tener al menos 6 caracteres".to_string());
+    }
+    
+    // Encriptar la nueva contraseña
+    let hashed_password = hash_password(&request.new_password)?;
+    
+    // Actualizar la contraseña
+    let result = sqlx::query(
+        "UPDATE USUARIO SET usuario_contrasena = ? WHERE usuario_id = ?"
+    )
+    .bind(&hashed_password)
+    .bind(usuario_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let success = result.rows_affected() > 0;
+    
+    if success {
+        // Registrar cambio exitoso
+        let _ = log_action(
+            "CHANGE_PASSWORD_SUCCESS",
+            Some(usuario_id),
+            "USUARIO",
+            Some(usuario_id),
+            None,
+            Some("Contraseña cambiada exitosamente")
+        ).await;
+    }
+    
+    Ok(success)
+}
+
+#[tauri::command]
+pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> Result<Option<Usuario>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el usuario actual
+    let user = get_usuario_by_id(usuario_id).await?
+        .ok_or_else(|| "Usuario no encontrado".to_string())?;
+    
+    // Verificar la contraseña para confirmar la identidad
+    if let Some(ref stored_password) = user.usuario_contrasena {
+        if !verify_password(&request.password, stored_password)? {
+            // Registrar intento fallido
+            let _ = log_action(
+                "CHANGE_EMAIL_FAILED",
+                Some(usuario_id),
+                "USUARIO",
+                Some(usuario_id),
+                None,
+                Some("Intento de cambio de email con contraseña incorrecta")
+            ).await;
+            return Err("Contraseña incorrecta".to_string());
+        }
+    } else {
+        return Err("Usuario sin contraseña configurada".to_string());
+    }
+    
+    // Validar formato del nuevo email
+    if !request.new_email.contains('@') || !request.new_email.contains('.') {
+        return Err("Formato de email inválido".to_string());
+    }
+    
+    // Verificar que el nuevo email no esté en uso por otro usuario
+    let existing_user = sqlx::query_as::<_, Usuario>(
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
+         FROM USUARIO 
+         WHERE usuario_correo = ? AND usuario_id != ?"
+    )
+    .bind(&request.new_email)
+    .bind(usuario_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if existing_user.is_some() {
+        return Err("El email ya está en uso por otro usuario".to_string());
+    }
+    
+    // Actualizar el email
+    let old_email = user.usuario_correo.clone();
+    let result = sqlx::query(
+        "UPDATE USUARIO SET usuario_correo = ? WHERE usuario_id = ?"
+    )
+    .bind(&request.new_email)
+    .bind(usuario_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Registrar cambio exitoso
+        let _ = log_action(
+            "CHANGE_EMAIL_SUCCESS",
+            Some(usuario_id),
+            "USUARIO",
+            Some(usuario_id),
+            Some(&old_email.unwrap_or_else(|| "N/A".to_string())),
+            Some(&request.new_email)
+        ).await;
+        
+        // Retornar el usuario actualizado
+        get_usuario_by_id(usuario_id).await
+    } else {
+        Err("No se pudo actualizar el email".to_string())
+    }
 }

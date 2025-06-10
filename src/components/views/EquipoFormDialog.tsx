@@ -51,6 +51,8 @@ interface EquipoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEquipoAdded: () => void;
+  equipo?: Equipo;
+  isEditing?: boolean;
 }
 
 interface CreateEquipoRequest {
@@ -64,8 +66,18 @@ interface CreateEquipoRequest {
   created_by: number;
 }
 
+interface UpdateEquipoRequest {
+  numero_serie?: string;
+  equipo_marca?: string;
+  equipo_modelo?: string;
+  equipo_tipo?: string;
+  equipo_precio?: number;
+  equipo_ubicacion?: string;
+  cliente_id?: number;
+}
+
 interface CreateOrdenTrabajoRequest {
-  orden_codigo: string;
+  // orden_codigo se genera automáticamente
   orden_desc: string;
   prioridad: string;
   estado: string;
@@ -90,6 +102,8 @@ export function EquipoFormDialog({
   open,
   onOpenChange,
   onEquipoAdded,
+  equipo,
+  isEditing = false,
 }: EquipoFormDialogProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
@@ -97,15 +111,25 @@ export function EquipoFormDialog({
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [marcas, setMarcas] = useState<string[]>([]);
   const [modelos, setModelos] = useState<string[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<string[]>([]);
   const [showNewMarcaInput, setShowNewMarcaInput] = useState(false);
   const [showNewModeloInput, setShowNewModeloInput] = useState(false);
+  const [showNewUbicacionInput, setShowNewUbicacionInput] = useState(false);
   const [newMarcaValue, setNewMarcaValue] = useState("");
   const [newModeloValue, setNewModeloValue] = useState("");
+  const [newUbicacionValue, setNewUbicacionValue] = useState("");
   const [tipoIngreso, setTipoIngreso] = useState<
     "almacenamiento" | "mantenimiento"
   >("almacenamiento");
   const [preInforme, setPreInforme] = useState("");
   const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  const [showConfirmMarcaDialog, setShowConfirmMarcaDialog] = useState(false);
+  const [showConfirmModeloDialog, setShowConfirmModeloDialog] = useState(false);
+  const [showConfirmUbicacionDialog, setShowConfirmUbicacionDialog] =
+    useState(false);
+  const [showConfirmClienteDialog, setShowConfirmClienteDialog] =
+    useState(false);
   const [newClienteData, setNewClienteData] = useState<{
     cliente_rut: string;
     cliente_nombre: string;
@@ -127,19 +151,50 @@ export function EquipoFormDialog({
     equipo_marca: "",
     equipo_modelo: "",
     equipo_tipo: "",
-    equipo_precio: undefined,
     equipo_ubicacion: "",
     cliente_id: undefined,
     created_by: user?.usuario_id || 0,
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  // Cargar clientes al abrir el diálogo
+  const [errors, setErrors] = useState<Record<string, string>>({}); // Cargar clientes al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadClientes();
       loadMarcas();
+      loadUbicaciones();
     }
   }, [open]);
+
+  // Inicializar formulario cuando se pasa un equipo para editar
+  useEffect(() => {
+    if (isEditing && equipo && open) {
+      setFormData({
+        numero_serie: equipo.numero_serie || "",
+        equipo_marca: equipo.equipo_marca || "",
+        equipo_modelo: equipo.equipo_modelo || "",
+        equipo_tipo: equipo.equipo_tipo || "",
+        equipo_precio: equipo.equipo_precio || 0,
+        equipo_ubicacion: equipo.equipo_ubicacion || "",
+        cliente_id: equipo.cliente_id || undefined,
+        created_by: user?.usuario_id || 0,
+      });
+      // Load models for the brand when editing
+      if (equipo.equipo_marca) {
+        loadModelosByMarca(equipo.equipo_marca);
+      }
+    } else if (!isEditing && open) {
+      // Reset form for creating new equipment
+      setFormData({
+        numero_serie: "",
+        equipo_marca: "",
+        equipo_modelo: "",
+        equipo_tipo: "",
+        equipo_ubicacion: "",
+        cliente_id: undefined,
+        created_by: user?.usuario_id || 0,
+      });
+    }
+    setErrors({});
+  }, [isEditing, equipo, open, user?.usuario_id]);
 
   const loadClientes = async () => {
     try {
@@ -149,13 +204,21 @@ export function EquipoFormDialog({
       console.error("Error cargando clientes:", error);
     }
   };
-
   const loadMarcas = async () => {
     try {
       const marcasData = await invoke<string[]>("get_equipos_marcas");
       setMarcas(marcasData);
     } catch (error) {
       console.error("Error cargando marcas:", error);
+    }
+  };
+
+  const loadUbicaciones = async () => {
+    try {
+      const ubicacionesData = await invoke<string[]>("get_equipos_ubicaciones");
+      setUbicaciones(ubicacionesData);
+    } catch (error) {
+      console.error("Error cargando ubicaciones:", error);
     }
   };
   const loadModelosByMarca = async (marca: string) => {
@@ -191,7 +254,6 @@ export function EquipoFormDialog({
     setNewClienteErrors(errors);
     return Object.keys(errors).length === 0;
   };
-
   const handleCreateCliente = async () => {
     if (!validateClienteForm()) {
       return;
@@ -203,16 +265,13 @@ export function EquipoFormDialog({
         ...newClienteData,
         created_by: user?.usuario_id || 0,
       };
-
       const nuevoCliente = await invoke<Cliente>("create_cliente", {
         request: clienteRequest,
-      });
-
-      // Actualizar la lista de clientes
-      await loadClientes();
+      }); // Agregar el nuevo cliente a la lista inmediatamente
+      setClientes((prev) => [...prev, nuevoCliente]);
 
       // Seleccionar el nuevo cliente en el formulario
-      handleInputChange("cliente_id", nuevoCliente.cliente_id);
+      setFormData((prev) => ({ ...prev, cliente_id: nuevoCliente.cliente_id }));
 
       // Cerrar el modal y limpiar datos
       setShowNewClienteDialog(false);
@@ -238,6 +297,51 @@ export function EquipoFormDialog({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Funciones de confirmación para cada acción
+  const handleConfirmMarca = () => {
+    if (newMarcaValue.trim()) {
+      const nuevaMarca = newMarcaValue.trim();
+      if (!marcas.includes(nuevaMarca)) {
+        setMarcas((prev) => [...prev, nuevaMarca]);
+      }
+      handleInputChange("equipo_marca", nuevaMarca);
+      setShowNewMarcaInput(false);
+      setNewMarcaValue("");
+      setShowConfirmMarcaDialog(false);
+    }
+  };
+
+  const handleConfirmModelo = () => {
+    if (newModeloValue.trim()) {
+      const nuevoModelo = newModeloValue.trim();
+      if (!modelos.includes(nuevoModelo)) {
+        setModelos((prev) => [...prev, nuevoModelo]);
+      }
+      handleInputChange("equipo_modelo", nuevoModelo);
+      setShowNewModeloInput(false);
+      setNewModeloValue("");
+      setShowConfirmModeloDialog(false);
+    }
+  };
+
+  const handleConfirmUbicacion = () => {
+    if (newUbicacionValue.trim()) {
+      const nuevaUbicacion = newUbicacionValue.trim();
+      if (!ubicaciones.includes(nuevaUbicacion)) {
+        setUbicaciones((prev) => [...prev, nuevaUbicacion]);
+      }
+      handleInputChange("equipo_ubicacion", nuevaUbicacion);
+      setShowNewUbicacionInput(false);
+      setNewUbicacionValue("");
+      setShowConfirmUbicacionDialog(false);
+    }
+  };
+
+  const handleConfirmCreateCliente = () => {
+    setShowConfirmClienteDialog(false);
+    setShowNewClienteDialog(true);
   };
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -274,68 +378,88 @@ export function EquipoFormDialog({
       return;
     }
 
+    // Mostrar modal de confirmación en lugar de enviar directamente
+    setShowConfirmationDialog(true);
+  };
+  const handleConfirmSubmit = async () => {
     try {
       setLoading(true);
 
-      const equipoData: CreateEquipoRequest = {
-        numero_serie: formData.numero_serie!,
-        equipo_marca: formData.equipo_marca!,
-        equipo_modelo: formData.equipo_modelo!,
-        equipo_tipo: formData.equipo_tipo!,
-        equipo_precio: formData.equipo_precio || undefined,
-        equipo_ubicacion: formData.equipo_ubicacion || undefined,
-        cliente_id: formData.cliente_id!,
-        created_by: user?.usuario_id || 0,
-      }; // Crear el equipo primero
-      const equipoCreado = await invoke<Equipo>("create_equipo", {
-        request: equipoData,
-      });
-
-      let ordenCodigo: string | null = null;
-
-      // Si es para mantenimiento, crear orden de trabajo
-      if (tipoIngreso === "mantenimiento") {
-        const fechaActual = new Date();
-        const codigoOrden = `OT-${fechaActual.getFullYear()}${(
-          fechaActual.getMonth() + 1
-        )
-          .toString()
-          .padStart(2, "0")}${fechaActual
-          .getDate()
-          .toString()
-          .padStart(2, "0")}-${equipoCreado.equipo_id}`;
-        const ordenData: CreateOrdenTrabajoRequest = {
-          orden_codigo: codigoOrden,
-          orden_desc: `El equipo ${
-            formData.equipo_marca || "Marca desconocida"
-          } ${
-            formData.equipo_modelo || "Modelo desconocido"
-          } presenta ${preInforme.trim()}`,
-          prioridad: "media",
-          estado: "recibido",
-          has_garantia: false,
-          equipo_id: equipoCreado.equipo_id,
-          created_by: user?.usuario_id || 0,
-          pre_informe: preInforme,
-          cotizacion_id: undefined,
-          informe_id: undefined,
+      if (isEditing && equipo) {
+        // Update existing equipment
+        const updateData: UpdateEquipoRequest = {
+          numero_serie: formData.numero_serie || undefined,
+          equipo_marca: formData.equipo_marca || undefined,
+          equipo_modelo: formData.equipo_modelo || undefined,
+          equipo_tipo: formData.equipo_tipo || undefined,
+          equipo_precio: formData.equipo_precio || undefined,
+          equipo_ubicacion: formData.equipo_ubicacion || undefined,
+          cliente_id: formData.cliente_id || undefined,
         };
+        await invoke("update_equipo", {
+          equipoId: equipo.equipo_id,
+          request: updateData,
+          updatedBy: user?.usuario_id || 0,
+        });
 
-        await invoke("create_orden_trabajo", { request: ordenData });
-        ordenCodigo = codigoOrden;
-      }
-
-      // Mostrar notificación de éxito
-      if (tipoIngreso === "mantenimiento" && ordenCodigo) {
         success(
-          "¡Equipo creado y orden de trabajo generada!",
-          `Equipo: ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})\nOrden de trabajo: ${ordenCodigo}`
+          "¡Equipo actualizado exitosamente!",
+          `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido actualizado correctamente.`
         );
       } else {
-        success(
-          "¡Equipo creado exitosamente!",
-          `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido registrado correctamente.`
-        );
+        // Create new equipment
+        const equipoData: CreateEquipoRequest = {
+          numero_serie: formData.numero_serie!,
+          equipo_marca: formData.equipo_marca!,
+          equipo_modelo: formData.equipo_modelo!,
+          equipo_tipo: formData.equipo_tipo!,
+          equipo_precio: 0, // Precio fijo en 0
+          equipo_ubicacion: formData.equipo_ubicacion || undefined,
+          cliente_id: formData.cliente_id!,
+          created_by: user?.usuario_id || 0,
+        };
+
+        const equipoCreado = await invoke<Equipo>("create_equipo", {
+          request: equipoData,
+        });
+
+        let ordenCodigo: string | null = null; // Si es para mantenimiento, crear orden de trabajo
+        if (tipoIngreso === "mantenimiento") {
+          const ordenData: CreateOrdenTrabajoRequest = {
+            // orden_codigo se genera automáticamente en el backend
+            orden_desc: `El equipo ${
+              formData.equipo_marca || "Marca desconocida"
+            } ${
+              formData.equipo_modelo || "Modelo desconocido"
+            } presenta ${preInforme.trim()}`,
+            prioridad: "media",
+            estado: "recibido",
+            has_garantia: false,
+            equipo_id: equipoCreado.equipo_id,
+            created_by: user?.usuario_id || 0,
+            pre_informe: preInforme,
+            cotizacion_id: undefined,
+            informe_id: undefined,
+          };
+
+          const ordenCreada = await invoke<any>("create_orden_trabajo", {
+            request: ordenData,
+          });
+          ordenCodigo = ordenCreada?.orden_codigo || "Código no disponible";
+        }
+
+        // Mostrar notificación de éxito
+        if (tipoIngreso === "mantenimiento" && ordenCodigo) {
+          success(
+            "¡Equipo creado y orden de trabajo generada!",
+            `Equipo: ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})\nOrden de trabajo: ${ordenCodigo}`
+          );
+        } else {
+          success(
+            "¡Equipo creado exitosamente!",
+            `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido registrado correctamente.`
+          );
+        }
       }
 
       // Cerrar diálogo
@@ -345,7 +469,6 @@ export function EquipoFormDialog({
         equipo_marca: "",
         equipo_modelo: "",
         equipo_tipo: "",
-        equipo_precio: undefined,
         equipo_ubicacion: "",
         cliente_id: undefined,
         created_by: user?.usuario_id || 0,
@@ -355,9 +478,15 @@ export function EquipoFormDialog({
       setErrors({});
       setShowNewMarcaInput(false);
       setShowNewModeloInput(false);
+      setShowNewUbicacionInput(false);
       setNewMarcaValue("");
       setNewModeloValue("");
+      setNewUbicacionValue("");
       setShowNewClienteDialog(false);
+      setShowConfirmMarcaDialog(false);
+      setShowConfirmModeloDialog(false);
+      setShowConfirmUbicacionDialog(false);
+      setShowConfirmClienteDialog(false);
       setNewClienteData({
         cliente_rut: "",
         cliente_nombre: "",
@@ -368,19 +497,28 @@ export function EquipoFormDialog({
       setNewClienteErrors({});
       onEquipoAdded();
     } catch (error) {
-      console.error("Error creando equipo:", error);
+      console.error(
+        isEditing ? "Error actualizando equipo:" : "Error creando equipo:",
+        error
+      );
 
       // Mostrar notificación de error
       showError(
-        "Error al crear el equipo",
+        isEditing
+          ? "Error al actualizar el equipo"
+          : "Error al crear el equipo",
         typeof error === "string"
           ? error
           : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
       );
-
-      setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
+      setErrors({
+        submit: isEditing
+          ? "Error al actualizar el equipo. Intente nuevamente."
+          : "Error al crear el equipo. Intente nuevamente.",
+      });
     } finally {
       setLoading(false);
+      setShowConfirmationDialog(false);
     }
   };
   const handleInputChange = (field: keyof CreateEquipoRequest, value: any) => {
@@ -399,72 +537,79 @@ export function EquipoFormDialog({
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
+        {" "}
         <DialogHeader>
-          <DialogTitle>Agregar Nuevo Equipo</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Editar Equipo" : "Agregar Nuevo Equipo"}
+          </DialogTitle>
           <DialogDescription>
-            Complete la información del equipo que desea registrar.
+            {isEditing
+              ? "Modifica la información del equipo."
+              : "Complete la información del equipo que desea registrar."}
           </DialogDescription>
-        </DialogHeader>
-
+        </DialogHeader>{" "}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Selector de tipo de ingreso */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Tipo de Ingreso</CardTitle>
-              <CardDescription className="text-xs">
-                Seleccione si el equipo es para almacenamiento o ingresa
-                directamente a mantenimiento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Select
-                value={tipoIngreso}
-                onValueChange={(value: "almacenamiento" | "mantenimiento") =>
-                  setTipoIngreso(value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="almacenamiento">
-                    📦 Almacenamiento - Solo registrar equipo
-                  </SelectItem>
-                  <SelectItem value="mantenimiento">
-                    🔧 Mantenimiento - Crear orden de trabajo
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-          {/* Campo de pre-informe - solo visible si es mantenimiento */}
-          {tipoIngreso === "mantenimiento" && (
-            <div className="space-y-2">
-              <Label htmlFor="preInforme">
-                Pre-informe / Observaciones del Cliente *
-              </Label>
-              <textarea
-                id="preInforme"
-                value={preInforme}
-                onChange={(e) => {
-                  setPreInforme(e.target.value);
-                  if (errors.preInforme) {
-                    setErrors((prev) => ({ ...prev, preInforme: "" }));
-                  }
-                }}
-                placeholder="Ingrese las observaciones del cliente sobre el estado del equipo, problemas reportados, etc."
-                className={`min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
-                  errors.preInforme ? "border-red-500" : ""
-                }`}
-              />
-              {errors.preInforme && (
-                <p className="text-sm text-red-500">{errors.preInforme}</p>
+          {/* Selector de tipo de ingreso - solo para equipos nuevos */}
+          {!isEditing && (
+            <>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Tipo de Ingreso</CardTitle>
+                  <CardDescription className="text-xs">
+                    Seleccione si el equipo es para almacenamiento o ingresa
+                    directamente a mantenimiento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Select
+                    value={tipoIngreso}
+                    onValueChange={(
+                      value: "almacenamiento" | "mantenimiento"
+                    ) => setTipoIngreso(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="almacenamiento">
+                        📦 Almacenamiento - Solo registrar equipo
+                      </SelectItem>
+                      <SelectItem value="mantenimiento">
+                        🔧 Mantenimiento - Crear orden de trabajo
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+              {/* Campo de pre-informe - solo visible si es mantenimiento */}
+              {tipoIngreso === "mantenimiento" && (
+                <div className="space-y-2">
+                  <Label htmlFor="preInforme">
+                    Pre-informe / Observaciones del Cliente *
+                  </Label>
+                  <textarea
+                    id="preInforme"
+                    value={preInforme}
+                    onChange={(e) => {
+                      setPreInforme(e.target.value);
+                      if (errors.preInforme) {
+                        setErrors((prev) => ({ ...prev, preInforme: "" }));
+                      }
+                    }}
+                    placeholder="Ingrese las observaciones del cliente sobre el estado del equipo, problemas reportados, etc."
+                    className={`min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
+                      errors.preInforme ? "border-red-500" : ""
+                    }`}
+                  />{" "}
+                  {errors.preInforme && (
+                    <p className="text-sm text-red-500">{errors.preInforme}</p>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -491,16 +636,14 @@ export function EquipoFormDialog({
                     onChange={(e) => setNewMarcaValue(e.target.value)}
                     placeholder="Ingrese nueva marca"
                     className={errors.equipo_marca ? "border-red-500" : ""}
-                  />
+                  />{" "}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       if (newMarcaValue.trim()) {
-                        handleInputChange("equipo_marca", newMarcaValue.trim());
-                        setShowNewMarcaInput(false);
-                        setNewMarcaValue("");
+                        setShowConfirmMarcaDialog(true);
                       }
                     }}
                   >
@@ -563,19 +706,14 @@ export function EquipoFormDialog({
                     placeholder="Ingrese nuevo modelo"
                     className={errors.equipo_modelo ? "border-red-500" : ""}
                     disabled={!formData.equipo_marca}
-                  />
+                  />{" "}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       if (newModeloValue.trim()) {
-                        handleInputChange(
-                          "equipo_modelo",
-                          newModeloValue.trim()
-                        );
-                        setShowNewModeloInput(false);
-                        setNewModeloValue("");
+                        setShowConfirmModeloDialog(true);
                       }
                     }}
                     disabled={!formData.equipo_marca}
@@ -667,7 +805,7 @@ export function EquipoFormDialog({
               value={formData.cliente_id?.toString() || ""}
               onValueChange={(value) => {
                 if (value === "nuevo_cliente") {
-                  setShowNewClienteDialog(true);
+                  setShowConfirmClienteDialog(true);
                 } else {
                   handleInputChange("cliente_id", parseInt(value));
                 }
@@ -695,35 +833,67 @@ export function EquipoFormDialog({
             {errors.cliente_id && (
               <p className="text-sm text-red-500">{errors.cliente_id}</p>
             )}
-          </div>
+          </div>{" "}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="equipo_precio">Precio</Label>
-              <Input
-                id="equipo_precio"
-                type="number"
-                value={formData.equipo_precio || ""}
-                onChange={(e) =>
-                  handleInputChange(
-                    "equipo_precio",
-                    e.target.value ? parseInt(e.target.value) : undefined
-                  )
-                }
-                placeholder="Ej: 150000"
-                min="0"
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="equipo_ubicacion">Ubicación</Label>
-              <Input
-                id="equipo_ubicacion"
-                value={formData.equipo_ubicacion || ""}
-                onChange={(e) =>
-                  handleInputChange("equipo_ubicacion", e.target.value)
-                }
-                placeholder="Ej: Oficina Central"
-              />
+              {showNewUbicacionInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newUbicacionValue}
+                    onChange={(e) => setNewUbicacionValue(e.target.value)}
+                    placeholder="Ingrese nueva ubicación"
+                  />{" "}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (newUbicacionValue.trim()) {
+                        setShowConfirmUbicacionDialog(true);
+                      }
+                    }}
+                  >
+                    ✓
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowNewUbicacionInput(false);
+                      setNewUbicacionValue("");
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.equipo_ubicacion || ""}
+                  onValueChange={(value) => {
+                    if (value === "nueva_ubicacion") {
+                      setShowNewUbicacionInput(true);
+                    } else {
+                      handleInputChange("equipo_ubicacion", value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar ubicación" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ubicaciones.map((ubicacion) => (
+                      <SelectItem key={ubicacion} value={ubicacion}>
+                        {ubicacion}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="nueva_ubicacion">
+                      ➕ Agregar nueva ubicación
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           {errors.submit && (
@@ -741,18 +911,99 @@ export function EquipoFormDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : "Guardar Equipo"}
+              {loading
+                ? isEditing
+                  ? "Actualizando..."
+                  : "Guardando..."
+                : isEditing
+                ? "Actualizar Equipo"
+                : "Guardar Equipo"}
             </Button>{" "}
           </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* Modal de confirmación */}
+      <Dialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+      >
+        <DialogContent className="max-w-md">
+          {" "}
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización de Equipo"
+                : "Confirmar Creación de Equipo"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "¿Está seguro que desea actualizar este equipo con la siguiente información?"
+                : "¿Está seguro que desea crear este equipo con la siguiente información?"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div>
+              <strong>Marca:</strong> {formData.equipo_marca}
+            </div>
+            <div>
+              <strong>Modelo:</strong> {formData.equipo_modelo}
+            </div>
+            <div>
+              <strong>Número de Serie:</strong> {formData.numero_serie}
+            </div>
+            <div>
+              <strong>Tipo:</strong> {formData.equipo_tipo}
+            </div>
+            <div>
+              <strong>Cliente:</strong>{" "}
+              {
+                clientes.find((c) => c.cliente_id === formData.cliente_id)
+                  ?.cliente_nombre
+              }
+            </div>
+            {formData.equipo_ubicacion && (
+              <div>
+                <strong>Ubicación:</strong> {formData.equipo_ubicacion}
+              </div>
+            )}
+            {!isEditing && (
+              <div>
+                <strong>Tipo de Ingreso:</strong>{" "}
+                {tipoIngreso === "mantenimiento"
+                  ? "Mantenimiento (se creará orden de trabajo)"
+                  : "Almacenamiento"}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmationDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>{" "}
+            <Button onClick={handleConfirmSubmit} disabled={loading}>
+              {loading
+                ? isEditing
+                  ? "Actualizando..."
+                  : "Creando..."
+                : isEditing
+                ? "Confirmar y Actualizar"
+                : "Confirmar y Crear"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal para agregar nuevo cliente */}
       <Dialog
         open={showNewClienteDialog}
         onOpenChange={setShowNewClienteDialog}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Agregar Nuevo Cliente</DialogTitle>
             <DialogDescription>
@@ -903,6 +1154,114 @@ export function EquipoFormDialog({
               disabled={loading}
             >
               {loading ? "Creando..." : "Crear Cliente"}
+            </Button>{" "}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear marca */}
+      <Dialog
+        open={showConfirmMarcaDialog}
+        onOpenChange={setShowConfirmMarcaDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nueva Marca</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea agregar la marca "{newMarcaValue}" al
+              sistema?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmMarcaDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmMarca}>Confirmar y Agregar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear modelo */}
+      <Dialog
+        open={showConfirmModeloDialog}
+        onOpenChange={setShowConfirmModeloDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nuevo Modelo</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea agregar el modelo "{newModeloValue}" para
+              la marca "{formData.equipo_marca}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmModeloDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmModelo}>Confirmar y Agregar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear ubicación */}
+      <Dialog
+        open={showConfirmUbicacionDialog}
+        onOpenChange={setShowConfirmUbicacionDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nueva Ubicación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea agregar la ubicación "{newUbicacionValue}"
+              al sistema?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmUbicacionDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmUbicacion}>
+              Confirmar y Agregar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear cliente */}
+      <Dialog
+        open={showConfirmClienteDialog}
+        onOpenChange={setShowConfirmClienteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nuevo Cliente</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea proceder a crear un nuevo cliente? Se
+              abrirá el formulario de registro.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmClienteDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmCreateCliente}>
+              Sí, Crear Cliente
             </Button>
           </DialogFooter>
         </DialogContent>
