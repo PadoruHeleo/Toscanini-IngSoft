@@ -121,13 +121,11 @@ export function EquipoFormDialog({
   });
   const [newClienteErrors, setNewClienteErrors] = useState<
     Record<string, string>
-  >({});
-  const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
+  >({});  const [formData, setFormData] = useState<Partial<CreateEquipoRequest>>({
     numero_serie: "",
     equipo_marca: "",
     equipo_modelo: "",
     equipo_tipo: "",
-    equipo_precio: undefined,
     equipo_ubicacion: "",
     cliente_id: undefined,
     created_by: user?.usuario_id || 0,
@@ -202,17 +200,13 @@ export function EquipoFormDialog({
       const clienteRequest: CreateClienteRequest = {
         ...newClienteData,
         created_by: user?.usuario_id || 0,
-      };
-
-      const nuevoCliente = await invoke<Cliente>("create_cliente", {
+      };      const nuevoCliente = await invoke<Cliente>("create_cliente", {
         request: clienteRequest,
-      });
-
-      // Actualizar la lista de clientes
-      await loadClientes();
+      });      // Agregar el nuevo cliente a la lista inmediatamente
+      setClientes(prev => [...prev, nuevoCliente]);
 
       // Seleccionar el nuevo cliente en el formulario
-      handleInputChange("cliente_id", nuevoCliente.cliente_id);
+      setFormData(prev => ({ ...prev, cliente_id: nuevoCliente.cliente_id }));
 
       // Cerrar el modal y limpiar datos
       setShowNewClienteDialog(false);
@@ -275,18 +269,16 @@ export function EquipoFormDialog({
     }
 
     try {
-      setLoading(true);
-
-      const equipoData: CreateEquipoRequest = {
+      setLoading(true);      const equipoData: CreateEquipoRequest = {
         numero_serie: formData.numero_serie!,
         equipo_marca: formData.equipo_marca!,
         equipo_modelo: formData.equipo_modelo!,
         equipo_tipo: formData.equipo_tipo!,
-        equipo_precio: formData.equipo_precio || undefined,
+        equipo_precio: 0, // Precio fijo en 0
         equipo_ubicacion: formData.equipo_ubicacion || undefined,
         cliente_id: formData.cliente_id!,
         created_by: user?.usuario_id || 0,
-      }; // Crear el equipo primero
+      };// Crear el equipo primero
       const equipoCreado = await invoke<Equipo>("create_equipo", {
         request: equipoData,
       });
@@ -339,13 +331,12 @@ export function EquipoFormDialog({
       }
 
       // Cerrar diálogo
-      onOpenChange(false); // Limpiar formulario
+      onOpenChange(false);      // Limpiar formulario
       setFormData({
         numero_serie: "",
         equipo_marca: "",
         equipo_modelo: "",
         equipo_tipo: "",
-        equipo_precio: undefined,
         equipo_ubicacion: "",
         cliente_id: undefined,
         created_by: user?.usuario_id || 0,
@@ -399,10 +390,9 @@ export function EquipoFormDialog({
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Agregar Nuevo Equipo</DialogTitle>
           <DialogDescription>
@@ -491,14 +481,18 @@ export function EquipoFormDialog({
                     onChange={(e) => setNewMarcaValue(e.target.value)}
                     placeholder="Ingrese nueva marca"
                     className={errors.equipo_marca ? "border-red-500" : ""}
-                  />
-                  <Button
+                  />                  <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       if (newMarcaValue.trim()) {
-                        handleInputChange("equipo_marca", newMarcaValue.trim());
+                        const nuevaMarca = newMarcaValue.trim();
+                        // Agregar la nueva marca a la lista si no existe
+                        if (!marcas.includes(nuevaMarca)) {
+                          setMarcas(prev => [...prev, nuevaMarca]);
+                        }
+                        handleInputChange("equipo_marca", nuevaMarca);
                         setShowNewMarcaInput(false);
                         setNewMarcaValue("");
                       }
@@ -563,16 +557,20 @@ export function EquipoFormDialog({
                     placeholder="Ingrese nuevo modelo"
                     className={errors.equipo_modelo ? "border-red-500" : ""}
                     disabled={!formData.equipo_marca}
-                  />
-                  <Button
+                  />                  <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       if (newModeloValue.trim()) {
+                        const nuevoModelo = newModeloValue.trim();
+                        // Agregar el nuevo modelo a la lista si no existe
+                        if (!modelos.includes(nuevoModelo)) {
+                          setModelos(prev => [...prev, nuevoModelo]);
+                        }
                         handleInputChange(
                           "equipo_modelo",
-                          newModeloValue.trim()
+                          nuevoModelo
                         );
                         setShowNewModeloInput(false);
                         setNewModeloValue("");
@@ -695,25 +693,7 @@ export function EquipoFormDialog({
             {errors.cliente_id && (
               <p className="text-sm text-red-500">{errors.cliente_id}</p>
             )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="equipo_precio">Precio</Label>
-              <Input
-                id="equipo_precio"
-                type="number"
-                value={formData.equipo_precio || ""}
-                onChange={(e) =>
-                  handleInputChange(
-                    "equipo_precio",
-                    e.target.value ? parseInt(e.target.value) : undefined
-                  )
-                }
-                placeholder="Ej: 150000"
-                min="0"
-              />
-            </div>
-
+          </div>          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="equipo_ubicacion">Ubicación</Label>
               <Input
@@ -745,14 +725,13 @@ export function EquipoFormDialog({
             </Button>{" "}
           </DialogFooter>
         </form>
-      </DialogContent>
-
+      </DialogContent>{" "}
       {/* Modal para agregar nuevo cliente */}
       <Dialog
         open={showNewClienteDialog}
         onOpenChange={setShowNewClienteDialog}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Agregar Nuevo Cliente</DialogTitle>
             <DialogDescription>
