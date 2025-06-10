@@ -288,55 +288,62 @@ export function CotizacionesView() {
                     {cotizacion.created_at
                       ? new Date(cotizacion.created_at).toLocaleDateString()
                       : "N/A"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-1">
+                  </TableCell>                  <TableCell>
+                    <div className="flex gap-1 justify-end">
                       {/* Ver detalles */}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => handleVerDetalles(cotizacion)}
+                        className="text-blue-600 hover:text-blue-700"
                         title="Ver detalles"
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3 w-3" />
                       </Button>
 
                       {/* Editar */}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => handleEditCotizacion(cotizacion)}
+                        className="text-gray-600 hover:text-gray-700"
                         title="Editar cotización"
                       >
-                        <Edit className="h-4 w-4" />
+                        <Edit className="h-3 w-3" />
                       </Button>
 
                       {/* Toggle aprobación */}
                       {!cotizacion.is_borrador && (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={() => handleToggleAprobacion(cotizacion)}
+                          className={
+                            cotizacion.is_aprobada
+                              ? "text-red-600 hover:text-red-700"
+                              : "text-green-600 hover:text-green-700"
+                          }
                           title={
                             cotizacion.is_aprobada ? "Rechazar" : "Aprobar"
                           }
                         >
                           {cotizacion.is_aprobada ? (
-                            <XCircle className="h-4 w-4 text-red-500" />
+                            <XCircle className="h-3 w-3" />
                           ) : (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <CheckCircle className="h-3 w-3" />
                           )}
                         </Button>
                       )}
 
                       {/* Eliminar */}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => handleDeleteCotizacion(cotizacion)}
+                        className="text-red-600 hover:text-red-700"
                         title="Eliminar cotización"
                       >
-                        <Trash2 className="h-4 w-4 text-red-500" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </TableCell>

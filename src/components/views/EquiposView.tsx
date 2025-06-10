@@ -142,13 +142,13 @@ export function EquiposView() {
                   <TableCell>
                     {equipo.cliente_nombre || "Sin cliente"}
                   </TableCell>
-                  <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>{" "}
-                  <TableCell className="text-right">
-                    <div className="flex gap-2 justify-end">
+                  <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>{" "}                  <TableCell className="text-right">
+                    <div className="flex gap-1 justify-end">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleEditEquipo(equipo)}
+                        className="text-gray-600 hover:text-gray-700"
                         title="Editar equipo"
                       >
                         <Edit className="h-3 w-3" />
