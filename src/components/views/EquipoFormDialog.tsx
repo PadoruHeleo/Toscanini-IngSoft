@@ -110,6 +110,12 @@ export function EquipoFormDialog({
   const [preInforme, setPreInforme] = useState("");
   const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  const [showConfirmMarcaDialog, setShowConfirmMarcaDialog] = useState(false);
+  const [showConfirmModeloDialog, setShowConfirmModeloDialog] = useState(false);
+  const [showConfirmUbicacionDialog, setShowConfirmUbicacionDialog] =
+    useState(false);
+  const [showConfirmClienteDialog, setShowConfirmClienteDialog] =
+    useState(false);
   const [newClienteData, setNewClienteData] = useState<{
     cliente_rut: string;
     cliente_nombre: string;
@@ -202,7 +208,6 @@ export function EquipoFormDialog({
     setNewClienteErrors(errors);
     return Object.keys(errors).length === 0;
   };
-
   const handleCreateCliente = async () => {
     if (!validateClienteForm()) {
       return;
@@ -246,6 +251,51 @@ export function EquipoFormDialog({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Funciones de confirmación para cada acción
+  const handleConfirmMarca = () => {
+    if (newMarcaValue.trim()) {
+      const nuevaMarca = newMarcaValue.trim();
+      if (!marcas.includes(nuevaMarca)) {
+        setMarcas((prev) => [...prev, nuevaMarca]);
+      }
+      handleInputChange("equipo_marca", nuevaMarca);
+      setShowNewMarcaInput(false);
+      setNewMarcaValue("");
+      setShowConfirmMarcaDialog(false);
+    }
+  };
+
+  const handleConfirmModelo = () => {
+    if (newModeloValue.trim()) {
+      const nuevoModelo = newModeloValue.trim();
+      if (!modelos.includes(nuevoModelo)) {
+        setModelos((prev) => [...prev, nuevoModelo]);
+      }
+      handleInputChange("equipo_modelo", nuevoModelo);
+      setShowNewModeloInput(false);
+      setNewModeloValue("");
+      setShowConfirmModeloDialog(false);
+    }
+  };
+
+  const handleConfirmUbicacion = () => {
+    if (newUbicacionValue.trim()) {
+      const nuevaUbicacion = newUbicacionValue.trim();
+      if (!ubicaciones.includes(nuevaUbicacion)) {
+        setUbicaciones((prev) => [...prev, nuevaUbicacion]);
+      }
+      handleInputChange("equipo_ubicacion", nuevaUbicacion);
+      setShowNewUbicacionInput(false);
+      setNewUbicacionValue("");
+      setShowConfirmUbicacionDialog(false);
+    }
+  };
+
+  const handleConfirmCreateCliente = () => {
+    setShowConfirmClienteDialog(false);
+    setShowNewClienteDialog(true);
   };
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -371,6 +421,10 @@ export function EquipoFormDialog({
       setNewModeloValue("");
       setNewUbicacionValue("");
       setShowNewClienteDialog(false);
+      setShowConfirmMarcaDialog(false);
+      setShowConfirmModeloDialog(false);
+      setShowConfirmUbicacionDialog(false);
+      setShowConfirmClienteDialog(false);
       setNewClienteData({
         cliente_rut: "",
         cliente_nombre: "",
@@ -510,14 +564,7 @@ export function EquipoFormDialog({
                     size="sm"
                     onClick={() => {
                       if (newMarcaValue.trim()) {
-                        const nuevaMarca = newMarcaValue.trim();
-                        // Agregar la nueva marca a la lista si no existe
-                        if (!marcas.includes(nuevaMarca)) {
-                          setMarcas((prev) => [...prev, nuevaMarca]);
-                        }
-                        handleInputChange("equipo_marca", nuevaMarca);
-                        setShowNewMarcaInput(false);
-                        setNewMarcaValue("");
+                        setShowConfirmMarcaDialog(true);
                       }
                     }}
                   >
@@ -587,14 +634,7 @@ export function EquipoFormDialog({
                     size="sm"
                     onClick={() => {
                       if (newModeloValue.trim()) {
-                        const nuevoModelo = newModeloValue.trim();
-                        // Agregar el nuevo modelo a la lista si no existe
-                        if (!modelos.includes(nuevoModelo)) {
-                          setModelos((prev) => [...prev, nuevoModelo]);
-                        }
-                        handleInputChange("equipo_modelo", nuevoModelo);
-                        setShowNewModeloInput(false);
-                        setNewModeloValue("");
+                        setShowConfirmModeloDialog(true);
                       }
                     }}
                     disabled={!formData.equipo_marca}
@@ -686,7 +726,7 @@ export function EquipoFormDialog({
               value={formData.cliente_id?.toString() || ""}
               onValueChange={(value) => {
                 if (value === "nuevo_cliente") {
-                  setShowNewClienteDialog(true);
+                  setShowConfirmClienteDialog(true);
                 } else {
                   handleInputChange("cliente_id", parseInt(value));
                 }
@@ -724,21 +764,14 @@ export function EquipoFormDialog({
                     value={newUbicacionValue}
                     onChange={(e) => setNewUbicacionValue(e.target.value)}
                     placeholder="Ingrese nueva ubicación"
-                  />
+                  />{" "}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       if (newUbicacionValue.trim()) {
-                        const nuevaUbicacion = newUbicacionValue.trim();
-                        // Agregar la nueva ubicación a la lista si no existe
-                        if (!ubicaciones.includes(nuevaUbicacion)) {
-                          setUbicaciones((prev) => [...prev, nuevaUbicacion]);
-                        }
-                        handleInputChange("equipo_ubicacion", nuevaUbicacion);
-                        setShowNewUbicacionInput(false);
-                        setNewUbicacionValue("");
+                        setShowConfirmUbicacionDialog(true);
                       }
                     }}
                   >
@@ -1024,6 +1057,114 @@ export function EquipoFormDialog({
               disabled={loading}
             >
               {loading ? "Creando..." : "Crear Cliente"}
+            </Button>{" "}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear marca */}
+      <Dialog
+        open={showConfirmMarcaDialog}
+        onOpenChange={setShowConfirmMarcaDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nueva Marca</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea agregar la marca "{newMarcaValue}" al
+              sistema?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmMarcaDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmMarca}>Confirmar y Agregar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear modelo */}
+      <Dialog
+        open={showConfirmModeloDialog}
+        onOpenChange={setShowConfirmModeloDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nuevo Modelo</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea agregar el modelo "{newModeloValue}" para
+              la marca "{formData.equipo_marca}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmModeloDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmModelo}>Confirmar y Agregar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear ubicación */}
+      <Dialog
+        open={showConfirmUbicacionDialog}
+        onOpenChange={setShowConfirmUbicacionDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nueva Ubicación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea agregar la ubicación "{newUbicacionValue}"
+              al sistema?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmUbicacionDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmUbicacion}>
+              Confirmar y Agregar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear cliente */}
+      <Dialog
+        open={showConfirmClienteDialog}
+        onOpenChange={setShowConfirmClienteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nuevo Cliente</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea proceder a crear un nuevo cliente? Se
+              abrirá el formulario de registro.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmClienteDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmCreateCliente}>
+              Sí, Crear Cliente
             </Button>
           </DialogFooter>
         </DialogContent>
