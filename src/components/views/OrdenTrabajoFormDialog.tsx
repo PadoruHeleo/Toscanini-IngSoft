@@ -498,9 +498,67 @@ export default function OrdenTrabajoFormDialog({
               </Select>
               {errors.equipo_id && (
                 <p className="text-sm text-red-500">{errors.equipo_id}</p>
-              )}
+              )}{" "}
             </div>
-          </div>{" "}
+          </div>
+          {/* Detalles del Equipo Seleccionado */}
+          {formData.equipo_id && (
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">
+                Detalles del Equipo Seleccionado
+              </h3>
+              {(() => {
+                const equipo = equipos.find(
+                  (e) => e.equipo_id.toString() === formData.equipo_id
+                );
+                if (!equipo)
+                  return (
+                    <p className="text-sm text-gray-500">
+                      Cargando detalles...
+                    </p>
+                  );
+
+                return (
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-600">
+                        Cliente:
+                      </span>
+                      <p className="mt-1">
+                        {equipo.cliente_nombre || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">
+                        Número de Serie:
+                      </span>
+                      <p className="mt-1">
+                        {equipo.numero_serie || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Marca:</span>
+                      <p className="mt-1">
+                        {equipo.equipo_marca || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Modelo:</span>
+                      <p className="mt-1">
+                        {equipo.equipo_modelo || "No especificado"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Tipo:</span>
+                      <p className="mt-1">
+                        {equipo.equipo_tipo || "No especificado"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
           {/* Descripción */}
           <div className="space-y-2">
             <Label htmlFor="orden_desc">
