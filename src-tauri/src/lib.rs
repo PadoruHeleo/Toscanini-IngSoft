@@ -8,6 +8,9 @@ use database::init_database;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Cargar variables de entorno desde .env
+    dotenv::dotenv().ok();
+    
     // Inicializar runtime de Tokio para operaciones async
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
       // Inicializar la base de datos
