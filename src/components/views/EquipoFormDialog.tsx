@@ -51,6 +51,8 @@ interface EquipoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEquipoAdded: () => void;
+  equipo?: Equipo;
+  isEditing?: boolean;
 }
 
 interface CreateEquipoRequest {
@@ -62,6 +64,16 @@ interface CreateEquipoRequest {
   equipo_ubicacion?: string;
   cliente_id: number;
   created_by: number;
+}
+
+interface UpdateEquipoRequest {
+  numero_serie?: string;
+  equipo_marca?: string;
+  equipo_modelo?: string;
+  equipo_tipo?: string;
+  equipo_precio?: number;
+  equipo_ubicacion?: string;
+  cliente_id?: number;
 }
 
 interface CreateOrdenTrabajoRequest {
@@ -90,6 +102,8 @@ export function EquipoFormDialog({
   open,
   onOpenChange,
   onEquipoAdded,
+  equipo,
+  isEditing = false,
 }: EquipoFormDialogProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
@@ -149,6 +163,38 @@ export function EquipoFormDialog({
       loadUbicaciones();
     }
   }, [open]);
+
+  // Inicializar formulario cuando se pasa un equipo para editar
+  useEffect(() => {
+    if (isEditing && equipo && open) {
+      setFormData({
+        numero_serie: equipo.numero_serie || "",
+        equipo_marca: equipo.equipo_marca || "",
+        equipo_modelo: equipo.equipo_modelo || "",
+        equipo_tipo: equipo.equipo_tipo || "",
+        equipo_precio: equipo.equipo_precio || 0,
+        equipo_ubicacion: equipo.equipo_ubicacion || "",
+        cliente_id: equipo.cliente_id || undefined,
+        created_by: user?.usuario_id || 0,
+      });
+      // Load models for the brand when editing
+      if (equipo.equipo_marca) {
+        loadModelosByMarca(equipo.equipo_marca);
+      }
+    } else if (!isEditing && open) {
+      // Reset form for creating new equipment
+      setFormData({
+        numero_serie: "",
+        equipo_marca: "",
+        equipo_modelo: "",
+        equipo_tipo: "",
+        equipo_ubicacion: "",
+        cliente_id: undefined,
+        created_by: user?.usuario_id || 0,
+      });
+    }
+    setErrors({});
+  }, [isEditing, equipo, open, user?.usuario_id]);
 
   const loadClientes = async () => {
     try {
@@ -335,69 +381,94 @@ export function EquipoFormDialog({
     // Mostrar modal de confirmación en lugar de enviar directamente
     setShowConfirmationDialog(true);
   };
-
   const handleConfirmSubmit = async () => {
     try {
       setLoading(true);
-      const equipoData: CreateEquipoRequest = {
-        numero_serie: formData.numero_serie!,
-        equipo_marca: formData.equipo_marca!,
-        equipo_modelo: formData.equipo_modelo!,
-        equipo_tipo: formData.equipo_tipo!,
-        equipo_precio: 0, // Precio fijo en 0
-        equipo_ubicacion: formData.equipo_ubicacion || undefined,
-        cliente_id: formData.cliente_id!,
-        created_by: user?.usuario_id || 0,
-      }; // Crear el equipo primero
-      const equipoCreado = await invoke<Equipo>("create_equipo", {
-        request: equipoData,
-      });
 
-      let ordenCodigo: string | null = null;
-
-      // Si es para mantenimiento, crear orden de trabajo
-      if (tipoIngreso === "mantenimiento") {
-        const fechaActual = new Date();
-        const codigoOrden = `OT-${fechaActual.getFullYear()}${(
-          fechaActual.getMonth() + 1
-        )
-          .toString()
-          .padStart(2, "0")}${fechaActual
-          .getDate()
-          .toString()
-          .padStart(2, "0")}-${equipoCreado.equipo_id}`;
-        const ordenData: CreateOrdenTrabajoRequest = {
-          orden_codigo: codigoOrden,
-          orden_desc: `El equipo ${
-            formData.equipo_marca || "Marca desconocida"
-          } ${
-            formData.equipo_modelo || "Modelo desconocido"
-          } presenta ${preInforme.trim()}`,
-          prioridad: "media",
-          estado: "recibido",
-          has_garantia: false,
-          equipo_id: equipoCreado.equipo_id,
-          created_by: user?.usuario_id || 0,
-          pre_informe: preInforme,
-          cotizacion_id: undefined,
-          informe_id: undefined,
+      if (isEditing && equipo) {
+        // Update existing equipment
+        const updateData: UpdateEquipoRequest = {
+          numero_serie: formData.numero_serie || undefined,
+          equipo_marca: formData.equipo_marca || undefined,
+          equipo_modelo: formData.equipo_modelo || undefined,
+          equipo_tipo: formData.equipo_tipo || undefined,
+          equipo_precio: formData.equipo_precio || undefined,
+          equipo_ubicacion: formData.equipo_ubicacion || undefined,
+          cliente_id: formData.cliente_id || undefined,
         };
+        await invoke("update_equipo", {
+          equipoId: equipo.equipo_id,
+          request: updateData,
+          updatedBy: user?.usuario_id || 0,
+        });
 
-        await invoke("create_orden_trabajo", { request: ordenData });
-        ordenCodigo = codigoOrden;
-      }
-
-      // Mostrar notificación de éxito
-      if (tipoIngreso === "mantenimiento" && ordenCodigo) {
         success(
-          "¡Equipo creado y orden de trabajo generada!",
-          `Equipo: ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})\nOrden de trabajo: ${ordenCodigo}`
+          "¡Equipo actualizado exitosamente!",
+          `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido actualizado correctamente.`
         );
       } else {
-        success(
-          "¡Equipo creado exitosamente!",
-          `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido registrado correctamente.`
-        );
+        // Create new equipment
+        const equipoData: CreateEquipoRequest = {
+          numero_serie: formData.numero_serie!,
+          equipo_marca: formData.equipo_marca!,
+          equipo_modelo: formData.equipo_modelo!,
+          equipo_tipo: formData.equipo_tipo!,
+          equipo_precio: 0, // Precio fijo en 0
+          equipo_ubicacion: formData.equipo_ubicacion || undefined,
+          cliente_id: formData.cliente_id!,
+          created_by: user?.usuario_id || 0,
+        };
+
+        const equipoCreado = await invoke<Equipo>("create_equipo", {
+          request: equipoData,
+        });
+
+        let ordenCodigo: string | null = null;
+
+        // Si es para mantenimiento, crear orden de trabajo
+        if (tipoIngreso === "mantenimiento") {
+          const fechaActual = new Date();
+          const codigoOrden = `OT-${fechaActual.getFullYear()}${(
+            fechaActual.getMonth() + 1
+          )
+            .toString()
+            .padStart(2, "0")}${fechaActual
+            .getDate()
+            .toString()
+            .padStart(2, "0")}-${equipoCreado.equipo_id}`;
+          const ordenData: CreateOrdenTrabajoRequest = {
+            orden_codigo: codigoOrden,
+            orden_desc: `El equipo ${
+              formData.equipo_marca || "Marca desconocida"
+            } ${
+              formData.equipo_modelo || "Modelo desconocido"
+            } presenta ${preInforme.trim()}`,
+            prioridad: "media",
+            estado: "recibido",
+            has_garantia: false,
+            equipo_id: equipoCreado.equipo_id,
+            created_by: user?.usuario_id || 0,
+            pre_informe: preInforme,
+            cotizacion_id: undefined,
+            informe_id: undefined,
+          };
+
+          await invoke("create_orden_trabajo", { request: ordenData });
+          ordenCodigo = codigoOrden;
+        }
+
+        // Mostrar notificación de éxito
+        if (tipoIngreso === "mantenimiento" && ordenCodigo) {
+          success(
+            "¡Equipo creado y orden de trabajo generada!",
+            `Equipo: ${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie})\nOrden de trabajo: ${ordenCodigo}`
+          );
+        } else {
+          success(
+            "¡Equipo creado exitosamente!",
+            `${formData.equipo_marca} ${formData.equipo_modelo} (S/N: ${formData.numero_serie}) ha sido registrado correctamente.`
+          );
+        }
       }
 
       // Cerrar diálogo
@@ -435,16 +506,25 @@ export function EquipoFormDialog({
       setNewClienteErrors({});
       onEquipoAdded();
     } catch (error) {
-      console.error("Error creando equipo:", error);
+      console.error(
+        isEditing ? "Error actualizando equipo:" : "Error creando equipo:",
+        error
+      );
 
       // Mostrar notificación de error
       showError(
-        "Error al crear el equipo",
+        isEditing
+          ? "Error al actualizar el equipo"
+          : "Error al crear el equipo",
         typeof error === "string"
           ? error
           : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
       );
-      setErrors({ submit: "Error al crear el equipo. Intente nuevamente." });
+      setErrors({
+        submit: isEditing
+          ? "Error al actualizar el equipo. Intente nuevamente."
+          : "Error al crear el equipo. Intente nuevamente.",
+      });
     } finally {
       setLoading(false);
       setShowConfirmationDialog(false);
@@ -469,68 +549,76 @@ export function EquipoFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
+        {" "}
         <DialogHeader>
-          <DialogTitle>Agregar Nuevo Equipo</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Editar Equipo" : "Agregar Nuevo Equipo"}
+          </DialogTitle>
           <DialogDescription>
-            Complete la información del equipo que desea registrar.
+            {isEditing
+              ? "Modifica la información del equipo."
+              : "Complete la información del equipo que desea registrar."}
           </DialogDescription>
-        </DialogHeader>
-
+        </DialogHeader>{" "}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Selector de tipo de ingreso */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Tipo de Ingreso</CardTitle>
-              <CardDescription className="text-xs">
-                Seleccione si el equipo es para almacenamiento o ingresa
-                directamente a mantenimiento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Select
-                value={tipoIngreso}
-                onValueChange={(value: "almacenamiento" | "mantenimiento") =>
-                  setTipoIngreso(value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="almacenamiento">
-                    📦 Almacenamiento - Solo registrar equipo
-                  </SelectItem>
-                  <SelectItem value="mantenimiento">
-                    🔧 Mantenimiento - Crear orden de trabajo
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-          {/* Campo de pre-informe - solo visible si es mantenimiento */}
-          {tipoIngreso === "mantenimiento" && (
-            <div className="space-y-2">
-              <Label htmlFor="preInforme">
-                Pre-informe / Observaciones del Cliente *
-              </Label>
-              <textarea
-                id="preInforme"
-                value={preInforme}
-                onChange={(e) => {
-                  setPreInforme(e.target.value);
-                  if (errors.preInforme) {
-                    setErrors((prev) => ({ ...prev, preInforme: "" }));
-                  }
-                }}
-                placeholder="Ingrese las observaciones del cliente sobre el estado del equipo, problemas reportados, etc."
-                className={`min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
-                  errors.preInforme ? "border-red-500" : ""
-                }`}
-              />
-              {errors.preInforme && (
-                <p className="text-sm text-red-500">{errors.preInforme}</p>
+          {/* Selector de tipo de ingreso - solo para equipos nuevos */}
+          {!isEditing && (
+            <>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Tipo de Ingreso</CardTitle>
+                  <CardDescription className="text-xs">
+                    Seleccione si el equipo es para almacenamiento o ingresa
+                    directamente a mantenimiento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Select
+                    value={tipoIngreso}
+                    onValueChange={(
+                      value: "almacenamiento" | "mantenimiento"
+                    ) => setTipoIngreso(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="almacenamiento">
+                        📦 Almacenamiento - Solo registrar equipo
+                      </SelectItem>
+                      <SelectItem value="mantenimiento">
+                        🔧 Mantenimiento - Crear orden de trabajo
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+              {/* Campo de pre-informe - solo visible si es mantenimiento */}
+              {tipoIngreso === "mantenimiento" && (
+                <div className="space-y-2">
+                  <Label htmlFor="preInforme">
+                    Pre-informe / Observaciones del Cliente *
+                  </Label>
+                  <textarea
+                    id="preInforme"
+                    value={preInforme}
+                    onChange={(e) => {
+                      setPreInforme(e.target.value);
+                      if (errors.preInforme) {
+                        setErrors((prev) => ({ ...prev, preInforme: "" }));
+                      }
+                    }}
+                    placeholder="Ingrese las observaciones del cliente sobre el estado del equipo, problemas reportados, etc."
+                    className={`min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
+                      errors.preInforme ? "border-red-500" : ""
+                    }`}
+                  />{" "}
+                  {errors.preInforme && (
+                    <p className="text-sm text-red-500">{errors.preInforme}</p>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -832,7 +920,13 @@ export function EquipoFormDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : "Guardar Equipo"}
+              {loading
+                ? isEditing
+                  ? "Actualizando..."
+                  : "Guardando..."
+                : isEditing
+                ? "Actualizar Equipo"
+                : "Guardar Equipo"}
             </Button>{" "}
           </DialogFooter>
         </form>
@@ -844,14 +938,19 @@ export function EquipoFormDialog({
         onOpenChange={setShowConfirmationDialog}
       >
         <DialogContent className="max-w-md">
+          {" "}
           <DialogHeader>
-            <DialogTitle>Confirmar Creación de Equipo</DialogTitle>
+            <DialogTitle>
+              {isEditing
+                ? "Confirmar Actualización de Equipo"
+                : "Confirmar Creación de Equipo"}
+            </DialogTitle>
             <DialogDescription>
-              ¿Está seguro que desea crear este equipo con la siguiente
-              información?
+              {isEditing
+                ? "¿Está seguro que desea actualizar este equipo con la siguiente información?"
+                : "¿Está seguro que desea crear este equipo con la siguiente información?"}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-2 text-sm">
             <div>
               <strong>Marca:</strong> {formData.equipo_marca}
@@ -877,14 +976,15 @@ export function EquipoFormDialog({
                 <strong>Ubicación:</strong> {formData.equipo_ubicacion}
               </div>
             )}
-            <div>
-              <strong>Tipo de Ingreso:</strong>{" "}
-              {tipoIngreso === "mantenimiento"
-                ? "Mantenimiento (se creará orden de trabajo)"
-                : "Almacenamiento"}
-            </div>
+            {!isEditing && (
+              <div>
+                <strong>Tipo de Ingreso:</strong>{" "}
+                {tipoIngreso === "mantenimiento"
+                  ? "Mantenimiento (se creará orden de trabajo)"
+                  : "Almacenamiento"}
+              </div>
+            )}
           </div>
-
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -893,9 +993,15 @@ export function EquipoFormDialog({
               disabled={loading}
             >
               Cancelar
-            </Button>
+            </Button>{" "}
             <Button onClick={handleConfirmSubmit} disabled={loading}>
-              {loading ? "Creando..." : "Confirmar y Crear"}
+              {loading
+                ? isEditing
+                  ? "Actualizando..."
+                  : "Creando..."
+                : isEditing
+                ? "Confirmar y Actualizar"
+                : "Confirmar y Crear"}
             </Button>
           </DialogFooter>
         </DialogContent>

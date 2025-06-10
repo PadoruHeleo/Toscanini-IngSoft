@@ -11,7 +11,7 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Edit } from "lucide-react";
 import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
 
 interface Equipo {
@@ -34,6 +34,7 @@ export function EquiposView() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingEquipo, setEditingEquipo] = useState<Equipo | null>(null);
   const loadEquipos = async () => {
     try {
       setLoading(true);
@@ -62,10 +63,15 @@ export function EquiposView() {
       equipo.equipo_ubicacion?.toLowerCase().includes(searchLower)
     );
   });
-
   const handleEquipoAdded = () => {
     loadEquipos(); // Recargar la lista
     setShowAddForm(false);
+    setEditingEquipo(null); // Clear editing state
+  };
+
+  const handleEditEquipo = (equipo: Equipo) => {
+    setEditingEquipo(equipo);
+    setShowAddForm(true); // Use the same form for editing
   };
 
   if (loading) {
@@ -82,7 +88,6 @@ export function EquiposView() {
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Equipo</Button>
       </div>
-
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1 max-w-sm">
@@ -100,7 +105,6 @@ export function EquiposView() {
           </Button>
         )}
       </div>
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -117,7 +121,10 @@ export function EquiposView() {
           <TableBody>
             {filteredEquipos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell
+                  colSpan={7}
+                  className="text-center py-8 text-gray-500"
+                >
                   {searchTerm
                     ? "No se encontraron equipos"
                     : "No hay equipos registrados"}
@@ -132,15 +139,19 @@ export function EquiposView() {
                   <TableCell>{equipo.equipo_modelo || "N/A"}</TableCell>
                   <TableCell>{equipo.numero_serie || "N/A"}</TableCell>
                   <TableCell>{equipo.equipo_tipo || "N/A"}</TableCell>
-                  <TableCell>{equipo.cliente_nombre || "Sin cliente"}</TableCell>
-                  <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>
+                  <TableCell>
+                    {equipo.cliente_nombre || "Sin cliente"}
+                  </TableCell>
+                  <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>{" "}
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
-                      <Button variant="outline" size="sm">
-                        Editar
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        Ver Detalles
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditEquipo(equipo)}
+                        title="Editar equipo"
+                      >
+                        <Edit className="h-3 w-3" />
                       </Button>
                     </div>
                   </TableCell>
@@ -150,16 +161,22 @@ export function EquiposView() {
           </TableBody>
         </Table>
       </div>
-
       {/* Total de equipos */}
       <div className="mt-4 text-sm text-gray-600">
-        Total: {filteredEquipos.length} equipo{filteredEquipos.length !== 1 ? "s" : ""}
-      </div>
-
+        Total: {filteredEquipos.length} equipo
+        {filteredEquipos.length !== 1 ? "s" : ""}
+      </div>{" "}
       <EquipoFormDialog
-        open={showAddForm}
-        onOpenChange={setShowAddForm}
+        open={showAddForm || editingEquipo !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowAddForm(false);
+            setEditingEquipo(null);
+          }
+        }}
         onEquipoAdded={handleEquipoAdded}
+        equipo={editingEquipo || undefined}
+        isEditing={editingEquipo !== null}
       />
     </div>
   );
