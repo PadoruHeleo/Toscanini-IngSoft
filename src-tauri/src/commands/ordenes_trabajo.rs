@@ -3,6 +3,7 @@ use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
 use chrono::{DateTime, Utc};
+use chrono::Datelike;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct OrdenTrabajo {
@@ -23,7 +24,7 @@ pub struct OrdenTrabajo {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrdenTrabajoRequest {
-    pub orden_codigo: String,
+    // orden_codigo se genera automáticamente
     pub orden_desc: String,
     pub prioridad: String, // 'baja', 'media', 'alta'
     pub estado: String, // 'pendiente', 'en_proceso', 'completado', 'cancelado'
@@ -272,12 +273,39 @@ pub async fn get_orden_trabajo_detallada_by_id(orden_id: i32) -> Result<Option<O
 #[tauri::command]
 pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<OrdenTrabajo, String> {
     let pool = get_db_pool_safe()?;
-      let result = sqlx::query(
+    
+    // Generar código automático: OT-YYYY-XXX
+    let year = chrono::Utc::now().year();
+    
+    // Buscar el mayor número correlativo existente para el año actual
+    let last_codigo: Option<String> = sqlx::query_scalar(
+        "SELECT orden_codigo FROM ORDEN_TRABAJO WHERE orden_codigo LIKE ? ORDER BY orden_id DESC LIMIT 1"
+    )
+    .bind(format!("OT-{}-%", year))
+    .fetch_one(pool)
+    .await
+    .ok();
+    
+    let next_number = if let Some(codigo) = last_codigo {
+        // Extraer el número correlativo actual y sumarle 1
+        let parts: Vec<&str> = codigo.split('-').collect();
+        if parts.len() == 3 {
+            parts[2].parse::<u32>().unwrap_or(0) + 1
+        } else {
+            1
+        }
+    } else {
+        1
+    };
+    
+    let codigo = format!("OT-{}-{:03}", year, next_number);
+    
+    let result = sqlx::query(
         "INSERT INTO ORDEN_TRABAJO (orden_codigo, orden_desc, prioridad, estado, has_garantia, 
                                    equipo_id, created_by, cotizacion_id, informe_id, pre_informe) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .bind(&request.orden_codigo)
+    .bind(&codigo)
     .bind(&request.orden_desc)
     .bind(&request.prioridad)
     .bind(&request.estado)
@@ -300,7 +328,7 @@ pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<
         "ORDEN_TRABAJO",
         Some(orden_id),
         None,
-        Some(&format!("Orden de trabajo creada: {} - {}", request.orden_codigo, request.orden_desc))
+        Some(&format!("Orden de trabajo creada: {}", codigo))
     ).await;
     
     // Obtener la orden recién creada

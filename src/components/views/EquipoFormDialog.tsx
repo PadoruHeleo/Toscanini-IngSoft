@@ -77,7 +77,7 @@ interface UpdateEquipoRequest {
 }
 
 interface CreateOrdenTrabajoRequest {
-  orden_codigo: string;
+  // orden_codigo se genera automáticamente
   orden_desc: string;
   prioridad: string;
   estado: string;
@@ -423,21 +423,10 @@ export function EquipoFormDialog({
           request: equipoData,
         });
 
-        let ordenCodigo: string | null = null;
-
-        // Si es para mantenimiento, crear orden de trabajo
+        let ordenCodigo: string | null = null; // Si es para mantenimiento, crear orden de trabajo
         if (tipoIngreso === "mantenimiento") {
-          const fechaActual = new Date();
-          const codigoOrden = `OT-${fechaActual.getFullYear()}${(
-            fechaActual.getMonth() + 1
-          )
-            .toString()
-            .padStart(2, "0")}${fechaActual
-            .getDate()
-            .toString()
-            .padStart(2, "0")}-${equipoCreado.equipo_id}`;
           const ordenData: CreateOrdenTrabajoRequest = {
-            orden_codigo: codigoOrden,
+            // orden_codigo se genera automáticamente en el backend
             orden_desc: `El equipo ${
               formData.equipo_marca || "Marca desconocida"
             } ${
@@ -453,8 +442,10 @@ export function EquipoFormDialog({
             informe_id: undefined,
           };
 
-          await invoke("create_orden_trabajo", { request: ordenData });
-          ordenCodigo = codigoOrden;
+          const ordenCreada = await invoke<any>("create_orden_trabajo", {
+            request: ordenData,
+          });
+          ordenCodigo = ordenCreada?.orden_codigo || "Código no disponible";
         }
 
         // Mostrar notificación de éxito
