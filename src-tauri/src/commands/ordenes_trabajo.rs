@@ -320,8 +320,7 @@ pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<
     .map_err(|e| format!("Database error: {}", e))?;
     
     let orden_id = result.last_insert_id() as i32;
-    
-    // Registrar la acción en el log de auditoría
+      // Registrar la acción en el log de auditoría
     let _ = log_action(
         "CREATE_ORDEN_TRABAJO",
         Some(request.created_by),
@@ -330,6 +329,9 @@ pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<
         None,
         Some(&format!("Orden de trabajo creada: {}", codigo))
     ).await;
+    
+    // Enviar notificación automática por email
+    let _ = send_orden_trabajo_notification(orden_id, request.created_by).await;
     
     // Obtener la orden recién creada
     get_orden_trabajo_by_id(orden_id)
@@ -664,6 +666,58 @@ pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrab
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(ordenes)
+}
+
+/// Enviar notificación de orden de trabajo por email
+#[tauri::command]
+pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Result<bool, String> {
+    use crate::email::EmailService;
+    use crate::commands::equipos::get_equipo_by_id;
+    
+    // Obtener la orden de trabajo
+    let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+    
+    // Obtener información del equipo
+    let equipo = get_equipo_by_id(orden_trabajo.equipo_id.unwrap_or(0)).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+    
+    // Obtener información del cliente
+    let pool = get_db_pool_safe()?;
+    let cliente_nombre = sqlx::query_scalar::<_, String>(
+        "SELECT cliente_nombre FROM CLIENTE WHERE cliente_id = ?"
+    )
+    .bind(equipo.cliente_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .unwrap_or_else(|| "Cliente no encontrado".to_string());
+    
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
+    
+    // Enviar el email
+    email_service.send_orden_trabajo_notification(
+        &orden_trabajo,
+        &equipo,
+        &cliente_nombre,
+    ).await
+    .map_err(|e| format!("Error enviando email: {}", e))?;
+    
+    // Registrar la acción en el log de auditoría
+    let _ = log_action(
+        "SEND_ORDEN_NOTIFICATION",
+        Some(sent_by),
+        "ORDEN_TRABAJO",
+        Some(orden_id),
+        None,
+        Some(&format!("Notificación de orden {} enviada a benitez.basti0@gmail.com", 
+            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")
+        ))
+    ).await;
+    
+    Ok(true)
 }
 
 /// Obtener orden de trabajo por informe_id
