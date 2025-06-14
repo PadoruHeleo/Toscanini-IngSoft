@@ -259,12 +259,15 @@ export default function InformeFormDialog({
       // Si no se pueden cargar los datos, simplemente no se precargan
     }
   };
-
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
     if (!formData.diagnostico.trim()) {
       newErrors.diagnostico = "El diagnóstico es requerido";
+    }
+
+    if (!formData.solucion_aplicada.trim()) {
+      newErrors.solucion_aplicada = "La solución aplicada es requerida";
     }
 
     if (!formData.tecnico_responsable.trim()) {
@@ -763,9 +766,11 @@ export default function InformeFormDialog({
                 </p>
               )}{" "}
             </div>
-          </div>
+          </div>{" "}
           <div className="space-y-2">
-            <Label htmlFor="solucion_aplicada">Solución Aplicada</Label>
+            <Label htmlFor="solucion_aplicada">
+              Solución Aplicada <span className="text-red-500">*</span>
+            </Label>
             <Textarea
               id="solucion_aplicada"
               value={formData.solucion_aplicada}
@@ -774,7 +779,11 @@ export default function InformeFormDialog({
               }
               placeholder="Describa la solución aplicada..."
               rows={3}
+              className={errors.solucion_aplicada ? "border-red-500" : ""}
             />
+            {errors.solucion_aplicada && (
+              <p className="text-sm text-red-500">{errors.solucion_aplicada}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="recomendaciones">Recomendaciones</Label>
