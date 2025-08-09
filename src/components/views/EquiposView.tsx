@@ -36,7 +36,7 @@ export function EquiposView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingEquipo, setEditingEquipo] = useState<Equipo | null>(null);
-  const [showHistorial, setShowHistorial] = useState(false);
+  const [historialEquipo, setHistorialEquipo] = useState<Equipo | null>(null);
   const loadEquipos = async () => {
     try {
       setLoading(true);
@@ -76,6 +76,7 @@ export function EquiposView() {
     setShowAddForm(true); // Use the same form for editing
   };
 
+
   if (loading) {
     return (
       <div className="p-4">
@@ -89,7 +90,6 @@ export function EquiposView() {
       <div className="flex justify-between items-center mb-4">
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Equipo</Button>
-        <Button onClick={() => setShowHistorial(true)}>Historial de Equipo</Button>
       </div>
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
@@ -157,6 +157,15 @@ export function EquiposView() {
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistorialEquipo(equipo)}
+                        className="text-gray-600 hover:text-gray-700"
+                        title="Ver historial del equipo"
+                      >
+                        Ver Historial Del Equipo
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -182,7 +191,11 @@ export function EquiposView() {
         equipo={editingEquipo || undefined}
         isEditing={editingEquipo !== null}
       />
-      <EquipoHistorialDialog open={showHistorial} onOpenChange={setShowHistorial} />
+      <EquipoHistorialDialog
+        open={historialEquipo !== null}
+        onOpenChange={(open) => !open && setHistorialEquipo(null)}
+        equipo={historialEquipo}
+      />
     </div>
   );
 }
