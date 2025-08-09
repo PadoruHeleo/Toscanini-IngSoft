@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Edit } from "lucide-react";
 import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
+import { EquipoHistorialDialog } from "@/components/views/EquipoHistorialDialog";
 
 interface Equipo {
   equipo_id: number;
@@ -35,6 +36,7 @@ export function EquiposView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingEquipo, setEditingEquipo] = useState<Equipo | null>(null);
+  const [showHistorial, setShowHistorial] = useState(false);
   const loadEquipos = async () => {
     try {
       setLoading(true);
@@ -87,6 +89,7 @@ export function EquiposView() {
       <div className="flex justify-between items-center mb-4">
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Equipo</Button>
+        <Button onClick={() => setShowHistorial(true)}>Historial de Equipo</Button>
       </div>
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
@@ -179,6 +182,8 @@ export function EquiposView() {
         equipo={editingEquipo || undefined}
         isEditing={editingEquipo !== null}
       />
+      <EquipoHistorialDialog open={showHistorial} onOpenChange={setShowHistorial} />
     </div>
   );
 }
+
