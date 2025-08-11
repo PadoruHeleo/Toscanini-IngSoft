@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Dialog,
   DialogContent,
@@ -22,23 +24,13 @@ interface Equipo {
   numero_serie?: string;
 }
 
-const historialEjemplo = [
-  {
-    fecha: "2024-01-01",
-    descripcion: "Ingreso a taller",
-    estado: "Recibido",
-  },
-  {
-    fecha: "2024-01-05",
-    descripcion: "Reparación iniciada",
-    estado: "En proceso",
-  },
-  {
-    fecha: "2024-01-10",
-    descripcion: "Reparación finalizada",
-    estado: "Listo",
-  },
-];
+interface OrdenTrabajo {
+  id?: number;
+  orden_id?: number;
+  created_at: string;
+  finished_at: string | null;
+  estado: string;
+}
 
 export function EquipoHistorialDialog({
   open,
@@ -49,6 +41,25 @@ export function EquipoHistorialDialog({
   onOpenChange: (open: boolean) => void;
   equipo: Equipo | null;
 }) {
+  const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    if (open && equipo) {
+      setLoading(true);
+      console.log(equipo.equipo_id)
+      invoke<OrdenTrabajo[]>("get_ordenes_trabajo_by_equipo", { equipoId: equipo.equipo_id })
+        .then((data) => {
+          console.log("Ordenes recibidas:", data);
+          setOrdenes(data);
+        })
+        .catch(() => { setOrdenes([]) })
+        .finally(() => setLoading(false));
+    } else {
+      setOrdenes([]);
+    }
+  }, [open, equipo]);
+  
   if (!equipo) return null;
 
   return (
@@ -63,24 +74,38 @@ export function EquipoHistorialDialog({
         <div className="grid gap-4">
           <div>
             <strong>Número de Serie:</strong> {equipo.numero_serie || "N/A"}
+            <br />
+            <strong>ID del equipo:</strong> {equipo.equipo_id || "N/A"}
           </div>
           <Table>
-            <TableCaption>Historial de movimientos</TableCaption>
+            <TableCaption>Órdenes de trabajo asociadas</TableCaption>
             <TableHeader>
               <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Descripción</TableHead>
+                <TableHead>ID Orden</TableHead>
+                <TableHead>Fecha de Ingreso</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Fecha de Finalizacion</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {historialEjemplo.map((item, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{item.fecha}</TableCell>
-                  <TableCell>{item.descripcion}</TableCell>
-                  <TableCell>{item.estado}</TableCell>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={3}>Cargando...</TableCell>
                 </TableRow>
-              ))}
+              ) : ordenes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3}>No hay órdenes de trabajo.</TableCell>
+                </TableRow>
+              ) : (
+                ordenes.map((orden) => (
+                  <TableRow key={orden.id}>
+                    <TableCell>{orden.id ?? orden.orden_id}</TableCell>
+                    <TableCell>{orden.created_at}</TableCell>
+                    <TableCell>{orden.estado !== "completado" ? orden.estado : "completado"}</TableCell>
+                    <TableCell>{orden.finished_at || "En progreso"}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
           <DialogFooter>
