@@ -10,3 +10,4 @@ export * from "./HelpView";
 export * from "./LoginView";
 export * from "./PasswordResetView";
 export * from "./PiezasView";
+export * from "./FiltrarOrdenesPorFecha";

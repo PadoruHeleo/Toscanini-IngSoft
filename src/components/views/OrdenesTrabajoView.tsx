@@ -15,6 +15,7 @@ import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
+import { FiltrarOrdenesPorFecha } from "./FiltrarOrdenesPorFecha";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -370,6 +371,10 @@ export function OrdenesTrabajoView() {
             Limpiar
           </Button>
         )}
+        {/* boton para las fechas */}
+        <FiltrarOrdenesPorFecha
+          onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
+        />
       </div>
       <div className="rounded-md border">
         <Table>
