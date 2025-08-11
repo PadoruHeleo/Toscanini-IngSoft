@@ -739,3 +739,29 @@ pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<O
     
     Ok(orden)
 }
+
+/// Obtener órdenes de trabajo filtradas por rango de fechas
+#[tauri::command]
+pub async fn get_ordenes_trabajo_por_fecha(
+    fecha_inicio: String,
+    fecha_fin: String,
+) -> Result<Vec<OrdenTrabajo>, String> {
+    // Obtener el pool (usa la función que ya tienes en database.rs)
+    let pool = crate::database::get_db_pool_safe()?; // ya usada en otras funciones
+
+    // Consulta: filtra por DATE(created_at) entre ambas fechas
+    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at 
+         FROM ORDEN_TRABAJO 
+         WHERE DATE(created_at) BETWEEN DATE(?) AND DATE(?)
+         ORDER BY created_at DESC"
+    )
+    .bind(&fecha_inicio)
+    .bind(&fecha_fin)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(ordenes)
+}
