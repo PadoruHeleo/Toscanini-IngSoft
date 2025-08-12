@@ -765,3 +765,39 @@ pub async fn get_ordenes_trabajo_por_fecha(
 
     Ok(ordenes)
 }
+
+/// Obtener órdenes de trabajo por un conjunto de prioridades
+#[tauri::command]
+pub async fn get_ordenes_trabajo_by_prioridades(
+    prioridades: Vec<String>
+) -> Result<Vec<OrdenTrabajo>, String> {
+    let pool = crate::database::get_db_pool_safe()?;
+
+    // Si no se envían prioridades, devolver lista vacía (o podrías devolver todas)
+    if prioridades.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Construir placeholders: "?, ?, ?" según cantidad
+    let placeholders = prioridades.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let query = format!(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, \
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at \
+         FROM ORDEN_TRABAJO \
+         WHERE prioridad IN ({}) \
+         ORDER BY created_at DESC",
+        placeholders
+    );
+
+    let mut q = sqlx::query_as::<_, OrdenTrabajo>(&query);
+    for p in &prioridades {
+        q = q.bind(p);
+    }
+
+    let ordenes = q
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(ordenes)
+}

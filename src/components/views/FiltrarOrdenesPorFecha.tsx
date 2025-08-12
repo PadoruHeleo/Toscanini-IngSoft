@@ -58,7 +58,7 @@ export function FiltrarOrdenesPorFecha({ onFiltrar }: Props) {
     <>
       {/* Botón que abre el modal */}
       <Button variant="outline" onClick={() => setIsOpen(true)}>
-        Filtro
+        Filtrar por Fecha
       </Button>
 
       {/* Modal */}
