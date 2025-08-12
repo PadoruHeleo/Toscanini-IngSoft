@@ -30,6 +30,12 @@ interface OrdenTrabajo {
   created_at: string;
   finished_at: string | null;
   estado: string;
+  informe_id?: number
+}
+
+function capitalize(str: string) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 export function EquipoHistorialDialog({
@@ -43,11 +49,11 @@ export function EquipoHistorialDialog({
 }) {
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [loading, setLoading] = useState(false);
-  
+  const [informe, setInforme] = useState<any>(null);
+
   useEffect(() => {
     if (open && equipo) {
       setLoading(true);
-      console.log(equipo.equipo_id)
       invoke<OrdenTrabajo[]>("get_ordenes_trabajo_by_equipo", { equipoId: equipo.equipo_id })
         .then((data) => {
           console.log("Ordenes recibidas:", data);
@@ -59,7 +65,22 @@ export function EquipoHistorialDialog({
       setOrdenes([]);
     }
   }, [open, equipo]);
-  
+
+
+  useEffect(() => {
+    if (ordenes.length > 0 && ordenes[0].informe_id) {
+      invoke<any>("get_informe_by_id", { informe_id: ordenes[0].informe_id })
+        .then((data) => {
+          console.log("Informe recibido:", data);
+          setInforme(data);
+        })
+        .catch(() => setInforme(null));
+    } else {
+      setInforme(null);
+      console.log("No hay informe asociado o no se pudo obtener.");
+    }
+  }, [ordenes]);
+
   if (!equipo) return null;
 
   return (
@@ -85,6 +106,7 @@ export function EquipoHistorialDialog({
                 <TableHead>Fecha de Ingreso</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha de Finalizacion</TableHead>
+                <TableHead>ID Informe</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -101,8 +123,9 @@ export function EquipoHistorialDialog({
                   <TableRow key={orden.id}>
                     <TableCell>{orden.id ?? orden.orden_id}</TableCell>
                     <TableCell>{orden.created_at}</TableCell>
-                    <TableCell>{orden.estado !== "completado" ? orden.estado : "completado"}</TableCell>
+                    <TableCell>{capitalize(orden.estado ?? "")}</TableCell>
                     <TableCell>{orden.finished_at || "En progreso"}</TableCell>
+                    <TableCell>{orden.informe_id ?? "No Aplica"}</TableCell>
                   </TableRow>
                 ))
               )}
