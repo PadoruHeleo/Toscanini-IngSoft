@@ -17,6 +17,7 @@ import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
 import { FiltrarOrdenesPorFecha } from "./FiltrarOrdenesPorFecha";
 import { FiltrarOrdenesPorPrioridad } from "./FiltrarOrdenesPorPrioridad";
+import { FiltrarOrdenesPorMarca } from "./FiltrarOrdenesPorMarca";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -372,11 +373,14 @@ export function OrdenesTrabajoView() {
             Limpiar
           </Button>
         )}
-        {/* boton para las fechas */}
+        {/* boton para los filtos */}
         <FiltrarOrdenesPorFecha
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
         <FiltrarOrdenesPorPrioridad
+          onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
+        />
+        <FiltrarOrdenesPorMarca
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
       </div>

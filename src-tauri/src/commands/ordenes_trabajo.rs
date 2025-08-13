@@ -801,3 +801,47 @@ pub async fn get_ordenes_trabajo_by_prioridades(
 
     Ok(ordenes)
 }
+// Obtener marcas de equipos
+#[tauri::command]
+pub async fn get_marcas_equipos() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    // Usamos EQUIPO y columna equipo_marca, ignorando vacíos/nulos.
+    let marcas = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT DISTINCT equipo_marca
+        FROM EQUIPO
+        WHERE equipo_marca IS NOT NULL AND equipo_marca <> ''
+        ORDER BY equipo_marca ASC
+        "#
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error (marcas): {}", e))?;
+
+    Ok(marcas)
+}
+//Filtrar órdenes por marca de EQUIPO 
+#[tauri::command]
+pub async fn get_ordenes_trabajo_por_marca(marca: String) -> Result<Vec<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+        r#"
+        SELECT 
+            ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
+            ot.has_garantia, ot.equipo_id, ot.created_by, ot.cotizacion_id, 
+            ot.informe_id, ot.pre_informe, ot.created_at, ot.finished_at
+        FROM ORDEN_TRABAJO ot
+        INNER JOIN EQUIPO e ON e.equipo_id = ot.equipo_id
+        WHERE LOWER(e.equipo_marca) = LOWER(?)
+        ORDER BY ot.created_at DESC
+        "#
+    )
+    .bind(marca)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error (filtrar por marca): {}", e))?;
+
+    Ok(ordenes)
+}
