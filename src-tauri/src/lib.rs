@@ -78,6 +78,8 @@ pub fn run() {
             commands::equipos::transfer_equipo_to_cliente,            commands::ordenes_trabajo::get_ordenes_trabajo,
             commands::ordenes_trabajo::get_ordenes_trabajo_por_fecha,
             commands::ordenes_trabajo::get_ordenes_trabajo_by_prioridades,
+            commands::ordenes_trabajo::get_marcas_equipos,
+            commands::ordenes_trabajo::get_ordenes_trabajo_por_marca,
             commands::ordenes_trabajo::get_orden_trabajo_by_id,
             commands::ordenes_trabajo::get_orden_trabajo_by_codigo,
             commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo,
