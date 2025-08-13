@@ -858,3 +858,76 @@ pub async fn get_ordenes_trabajo_por_marcas(marcas: Vec<String>) -> Result<Vec<O
 
     Ok(ordenes)
 }
+// Listar modelos únicos
+#[tauri::command]
+pub async fn get_modelos_equipos() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let modelos = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT DISTINCT equipo_modelo
+        FROM EQUIPO
+        WHERE equipo_modelo IS NOT NULL
+          AND equipo_modelo <> ''
+        ORDER BY equipo_modelo ASC
+        "#
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error (modelos): {}", e))?;
+
+    Ok(modelos)
+}
+
+// Filtrar órdenes por múltiples modelos (selección múltiple)
+#[tauri::command]
+pub async fn get_ordenes_trabajo_por_modelos(modelos: Vec<String>) -> Result<Vec<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+
+    if modelos.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Normalizamos para comparación case-insensitive
+    let modelos_norm: Vec<String> = modelos
+        .into_iter()
+        .map(|m| m.trim().to_lowercase())
+        .filter(|m| !m.is_empty())
+        .collect();
+
+    if modelos_norm.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Placeholders dinámicos (?, ?, ?)
+    let placeholders = std::iter::repeat("?")
+        .take(modelos_norm.len())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let query = format!(
+        r#"
+        SELECT 
+            ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
+            ot.has_garantia, ot.equipo_id, ot.created_by, ot.cotizacion_id, 
+            ot.informe_id, ot.pre_informe, ot.created_at, ot.finished_at
+        FROM ORDEN_TRABAJO ot
+        INNER JOIN EQUIPO e ON e.equipo_id = ot.equipo_id
+        WHERE LOWER(e.equipo_modelo) IN ({})
+        ORDER BY ot.created_at DESC
+        "#,
+        placeholders
+    );
+
+    let mut q = sqlx::query_as::<_, OrdenTrabajo>(&query);
+    for m in modelos_norm {
+        q = q.bind(m);
+    }
+
+    let ordenes = q
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error (filtrar por modelos): {}", e))?;
+
+    Ok(ordenes)
+}
