@@ -18,6 +18,7 @@ import InformeFormDialog from "./InformeFormDialog";
 import { FiltrarOrdenesPorFecha } from "./FiltrarOrdenesPorFecha";
 import { FiltrarOrdenesPorPrioridad } from "./FiltrarOrdenesPorPrioridad";
 import { FiltrarOrdenesPorMarca } from "./FiltrarOrdenesPorMarca";
+import { FiltrarOrdenesPorModelo } from "./FiltrarOrdenesPorModelo";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -381,6 +382,9 @@ export function OrdenesTrabajoView() {
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
         <FiltrarOrdenesPorMarca
+          onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
+        />
+        <FiltrarOrdenesPorModelo
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
       </div>

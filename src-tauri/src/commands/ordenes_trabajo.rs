@@ -823,10 +823,16 @@ pub async fn get_marcas_equipos() -> Result<Vec<String>, String> {
 }
 //Filtrar órdenes por marca de EQUIPO 
 #[tauri::command]
-pub async fn get_ordenes_trabajo_por_marca(marca: String) -> Result<Vec<OrdenTrabajo>, String> {
+pub async fn get_ordenes_trabajo_por_marcas(marcas: Vec<String>) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
+    if marcas.is_empty() {
+        return Ok(vec![]);
+    }
 
-    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+    // Generar placeholders (?, ?, ?) según el número de marcas
+    let placeholders = marcas.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+    let query = format!(
         r#"
         SELECT 
             ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
@@ -834,14 +840,21 @@ pub async fn get_ordenes_trabajo_por_marca(marca: String) -> Result<Vec<OrdenTra
             ot.informe_id, ot.pre_informe, ot.created_at, ot.finished_at
         FROM ORDEN_TRABAJO ot
         INNER JOIN EQUIPO e ON e.equipo_id = ot.equipo_id
-        WHERE LOWER(e.equipo_marca) = LOWER(?)
+        WHERE LOWER(e.equipo_marca) IN ({})
         ORDER BY ot.created_at DESC
-        "#
-    )
-    .bind(marca)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Database error (filtrar por marca): {}", e))?;
+        "#,
+        placeholders
+    );
+
+    let mut sql = sqlx::query_as::<_, OrdenTrabajo>(&query);
+    for marca in marcas {
+        sql = sql.bind(marca);
+    }
+
+    let ordenes = sql
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error (filtrar por marcas): {}", e))?;
 
     Ok(ordenes)
 }

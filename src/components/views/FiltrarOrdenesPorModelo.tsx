@@ -23,53 +23,54 @@ interface Props {
   onFiltrar: (ordenes: OrdenTrabajo[]) => void;
 }
 
-export function FiltrarOrdenesPorMarca({ onFiltrar }: Props) {
-  const [marcas, setMarcas] = useState<string[]>([]);
-  const [marcasSeleccionadas, setMarcasSeleccionadas] = useState<string[]>([]);
+export function FiltrarOrdenesPorModelo({ onFiltrar }: Props) {
+  const [modelos, setModelos] = useState<string[]>([]);
+  const [modelosSeleccionados, setModelosSeleccionados] = useState<string[]>(
+    []
+  );
   const [open, setOpen] = useState(false);
 
-  // Cargar marcas cuando se abre el modal
+  // Cargar modelos cuando se abre el modal
   useEffect(() => {
     if (!open) return;
     (async () => {
       try {
-        const data = await invoke<string[]>("get_marcas_equipos");
-        setMarcas(data);
+        const data = await invoke<string[]>("get_modelos_equipos");
+        setModelos(data);
       } catch (err) {
-        console.error("Error cargando marcas:", err);
-        setMarcas([]);
+        console.error("Error cargando modelos:", err);
+        setModelos([]);
       }
     })();
   }, [open]);
 
-  // Alternar selección de una marca
-  const toggleMarca = (marca: string) => {
-    setMarcasSeleccionadas((prev) =>
-      prev.includes(marca) ? prev.filter((m) => m !== marca) : [...prev, marca]
+  const toggleModelo = (modelo: string) => {
+    setModelosSeleccionados((prev) =>
+      prev.includes(modelo)
+        ? prev.filter((m) => m !== modelo)
+        : [...prev, modelo]
     );
   };
 
-  // Aplicar filtro con varias marcas
   const aplicarFiltro = async () => {
-    if (marcasSeleccionadas.length === 0) return;
+    if (modelosSeleccionados.length === 0) return;
     try {
       const ordenes = await invoke<OrdenTrabajo[]>(
-        "get_ordenes_trabajo_por_marcas",
-        { marcas: marcasSeleccionadas }
+        "get_ordenes_trabajo_por_modelos",
+        { modelos: modelosSeleccionados }
       );
       onFiltrar(ordenes);
       setOpen(false);
     } catch (err) {
-      console.error("Error filtrando por marcas:", err);
+      console.error("Error filtrando por modelos:", err);
     }
   };
 
-  // Quitar filtro
   const quitarFiltro = async () => {
     try {
       const ordenes = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
       onFiltrar(ordenes);
-      setMarcasSeleccionadas([]);
+      setModelosSeleccionados([]);
       setOpen(false);
     } catch (err) {
       console.error("Error quitando filtro:", err);
@@ -79,31 +80,31 @@ export function FiltrarOrdenesPorMarca({ onFiltrar }: Props) {
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
-        Filtrar por Marca
+        Filtrar por Modelo
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Filtrar por Marca</DialogTitle>
+            <DialogTitle>Filtrar por Modelo</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 mt-2">
-            {marcas.length === 0 ? (
+          <div className="space-y-3 mt-2 max-h-72 overflow-auto pr-2">
+            {modelos.length === 0 ? (
               <p className="text-sm text-gray-500">
-                No hay marcas registradas.
+                No hay modelos registrados.
               </p>
             ) : (
               <div className="space-y-2">
-                {marcas.map((m) => (
+                {modelos.map((m) => (
                   <label key={m} className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       value={m}
-                      checked={marcasSeleccionadas.includes(m)}
-                      onChange={() => toggleMarca(m)}
+                      checked={modelosSeleccionados.includes(m)}
+                      onChange={() => toggleModelo(m)}
                     />
-                    <span>{m}</span>
+                    <span className="truncate">{m}</span>
                   </label>
                 ))}
               </div>
@@ -113,7 +114,7 @@ export function FiltrarOrdenesPorMarca({ onFiltrar }: Props) {
           <DialogFooter className="mt-4">
             <Button
               onClick={aplicarFiltro}
-              disabled={marcasSeleccionadas.length === 0}
+              disabled={modelosSeleccionados.length === 0}
             >
               Aplicar
             </Button>
