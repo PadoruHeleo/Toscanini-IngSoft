@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -7,73 +7,25 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { invoke } from "@tauri-apps/api/core";
-
-interface OrdenTrabajo {
-  orden_id: number;
-  orden_codigo?: string;
-  orden_desc?: string;
-  prioridad?: string;
-  estado?: string;
-  has_garantia?: boolean;
-  created_at?: string;
-}
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
+  onChange: (marcas: string[]) => void;
 }
 
-export function FiltrarOrdenesPorMarca({ onFiltrar }: Props) {
-  const [marcas, setMarcas] = useState<string[]>([]);
-  const [marcasSeleccionadas, setMarcasSeleccionadas] = useState<string[]>([]);
+export function FiltrarOrdenesPorMarca({ onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
+  const marcas = ["Marca1", "Marca2", "Marca3"]; // Reemplazar con tus marcas reales
 
-  // Cargar marcas cuando se abre el modal
-  useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const data = await invoke<string[]>("get_marcas_equipos");
-        setMarcas(data);
-      } catch (err) {
-        console.error("Error cargando marcas:", err);
-        setMarcas([]);
-      }
-    })();
-  }, [open]);
-
-  // Alternar selección de una marca
-  const toggleMarca = (marca: string) => {
-    setMarcasSeleccionadas((prev) =>
-      prev.includes(marca) ? prev.filter((m) => m !== marca) : [...prev, marca]
+  const toggleMarca = (m: string) => {
+    setSeleccionadas((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
     );
   };
 
-  // Aplicar filtro con varias marcas
-  const aplicarFiltro = async () => {
-    if (marcasSeleccionadas.length === 0) return;
-    try {
-      const ordenes = await invoke<OrdenTrabajo[]>(
-        "get_ordenes_trabajo_por_marcas",
-        { marcas: marcasSeleccionadas }
-      );
-      onFiltrar(ordenes);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error filtrando por marcas:", err);
-    }
-  };
-
-  // Quitar filtro
-  const quitarFiltro = async () => {
-    try {
-      const ordenes = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
-      onFiltrar(ordenes);
-      setMarcasSeleccionadas([]);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error quitando filtro:", err);
-    }
+  const aplicar = () => {
+    onChange(seleccionadas);
+    setOpen(false);
   };
 
   return (
@@ -81,43 +33,33 @@ export function FiltrarOrdenesPorMarca({ onFiltrar }: Props) {
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Marca
       </Button>
-
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Filtrar por Marca</DialogTitle>
+            <DialogTitle>Selecciona Marcas</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-3 mt-2">
-            {marcas.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No hay marcas registradas.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {marcas.map((m) => (
-                  <label key={m} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      value={m}
-                      checked={marcasSeleccionadas.includes(m)}
-                      onChange={() => toggleMarca(m)}
-                    />
-                    <span>{m}</span>
-                  </label>
-                ))}
-              </div>
-            )}
+          <div className="space-y-2 mt-2">
+            {marcas.map((m) => (
+              <label key={m} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={seleccionadas.includes(m)}
+                  onChange={() => toggleMarca(m)}
+                />
+                <span>{m}</span>
+              </label>
+            ))}
           </div>
-
-          <DialogFooter className="mt-4">
+          <DialogFooter>
+            <Button onClick={aplicar}>Aplicar</Button>
             <Button
-              onClick={aplicarFiltro}
-              disabled={marcasSeleccionadas.length === 0}
+              variant="outline"
+              onClick={() => {
+                setSeleccionadas([]);
+                onChange([]);
+                setOpen(false);
+              }}
             >
-              Aplicar
-            </Button>
-            <Button variant="outline" onClick={quitarFiltro}>
               Quitar
             </Button>
           </DialogFooter>

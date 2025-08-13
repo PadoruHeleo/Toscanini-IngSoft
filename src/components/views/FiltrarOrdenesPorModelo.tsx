@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Dialog,
   DialogContent,
@@ -7,119 +8,115 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { invoke } from "@tauri-apps/api/core";
-
-interface OrdenTrabajo {
-  orden_id: number;
-  orden_codigo?: string;
-  orden_desc?: string;
-  prioridad?: string;
-  estado?: string;
-  has_garantia?: boolean;
-  created_at?: string;
-}
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
+  onChange: (modelos: string[]) => void;
 }
 
-export function FiltrarOrdenesPorModelo({ onFiltrar }: Props) {
-  const [modelos, setModelos] = useState<string[]>([]);
-  const [modelosSeleccionados, setModelosSeleccionados] = useState<string[]>(
-    []
-  );
+export function FiltrarOrdenesPorModelo({ onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
+  const [modelosDisponibles, setModelosDisponibles] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Cargar modelos cuando se abre el modal
+  // Cargar modelos cuando se abre el diálogo
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const data = await invoke<string[]>("get_modelos_equipos");
-        setModelos(data);
-      } catch (err) {
-        console.error("Error cargando modelos:", err);
-        setModelos([]);
-      }
-    })();
+    if (open) {
+      cargarModelos();
+    }
   }, [open]);
 
-  const toggleModelo = (modelo: string) => {
-    setModelosSeleccionados((prev) =>
-      prev.includes(modelo)
-        ? prev.filter((m) => m !== modelo)
-        : [...prev, modelo]
+  const cargarModelos = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log("🔄 Cargando modelos disponibles...");
+      const modelos = await invoke<string[]>("get_modelos_disponibles");
+      console.log("📱 Modelos cargados:", modelos);
+      setModelosDisponibles(modelos);
+    } catch (err) {
+      console.error("❌ Error cargando modelos:", err);
+      setError("Error al cargar los modelos");
+      // Fallback a datos de ejemplo si no se puede cargar desde BD
+      setModelosDisponibles(["Modelo1", "Modelo2", "Modelo3"]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleModelo = (m: string) => {
+    setSeleccionadas((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
     );
   };
 
-  const aplicarFiltro = async () => {
-    if (modelosSeleccionados.length === 0) return;
-    try {
-      const ordenes = await invoke<OrdenTrabajo[]>(
-        "get_ordenes_trabajo_por_modelos",
-        { modelos: modelosSeleccionados }
-      );
-      onFiltrar(ordenes);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error filtrando por modelos:", err);
-    }
+  const aplicar = () => {
+    console.log("📱 Aplicando filtro de modelos:", seleccionadas);
+    onChange(seleccionadas);
+    setOpen(false);
   };
 
-  const quitarFiltro = async () => {
-    try {
-      const ordenes = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
-      onFiltrar(ordenes);
-      setModelosSeleccionados([]);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error quitando filtro:", err);
-    }
+  const limpiar = () => {
+    console.log("🧹 Limpiando filtro de modelos");
+    setSeleccionadas([]);
+    onChange([]);
+    setOpen(false);
   };
 
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Modelo
+        {seleccionadas.length > 0 && (
+          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs">
+            {seleccionadas.length}
+          </span>
+        )}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Filtrar por Modelo</DialogTitle>
+            <DialogTitle>Selecciona Modelos</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 mt-2 max-h-72 overflow-auto pr-2">
-            {modelos.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No hay modelos registrados.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {modelos.map((m) => (
-                  <label key={m} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      value={m}
-                      checked={modelosSeleccionados.includes(m)}
-                      onChange={() => toggleModelo(m)}
-                    />
-                    <span className="truncate">{m}</span>
-                  </label>
-                ))}
+          <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-4">
+                <span className="text-gray-500">Cargando modelos...</span>
               </div>
+            ) : error ? (
+              <div className="text-red-500 text-sm py-2">⚠️ {error}</div>
+            ) : modelosDisponibles.length === 0 ? (
+              <div className="text-gray-500 text-sm py-2">
+                No se encontraron modelos
+              </div>
+            ) : (
+              modelosDisponibles.map((m) => (
+                <label
+                  key={m}
+                  className="flex items-center gap-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={seleccionadas.includes(m)}
+                    onChange={() => toggleModelo(m)}
+                    className="rounded"
+                  />
+                  <span>{m}</span>
+                </label>
+              ))
             )}
           </div>
 
-          <DialogFooter className="mt-4">
-            <Button
-              onClick={aplicarFiltro}
-              disabled={modelosSeleccionados.length === 0}
-            >
-              Aplicar
+          <DialogFooter>
+            <Button onClick={aplicar} disabled={loading}>
+              Aplicar {seleccionadas.length > 0 && `(${seleccionadas.length})`}
             </Button>
-            <Button variant="outline" onClick={quitarFiltro}>
-              Quitar
+            <Button variant="outline" onClick={limpiar} disabled={loading}>
+              Limpiar
             </Button>
           </DialogFooter>
         </DialogContent>

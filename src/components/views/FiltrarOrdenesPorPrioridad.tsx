@@ -1,4 +1,3 @@
-// src/components/FiltrarOrdenesPorPrioridad.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,27 +7,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { invoke } from "@tauri-apps/api/core";
-
-interface OrdenTrabajo {
-  orden_id: number;
-  orden_codigo?: string;
-  orden_desc?: string;
-  prioridad?: string;
-  estado?: string;
-  has_garantia?: boolean;
-  created_at?: string;
-}
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
+  onChange: (prioridades: string[]) => void;
 }
 
-export function FiltrarOrdenesPorPrioridad({ onFiltrar }: Props) {
+export function FiltrarOrdenesPorPrioridad({ onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
 
-  // Labels visibles; convertiremos a minúsculas antes de enviar al backend
   const prioridades = ["Alta", "Media", "Baja"];
 
   const togglePrioridad = (p: string) => {
@@ -37,32 +24,9 @@ export function FiltrarOrdenesPorPrioridad({ onFiltrar }: Props) {
     );
   };
 
-  const aplicarFiltro = async () => {
-    try {
-      // mapear etiquetas a los valores de BD (ej: "Alta" -> "alta")
-      const prioridadesBd = seleccionadas.map((p) => p.toLowerCase());
-
-      // Llamada al backend
-      const ordenes = await invoke<OrdenTrabajo[]>(
-        "get_ordenes_trabajo_by_prioridades",
-        { prioridades: prioridadesBd }
-      );
-      onFiltrar(ordenes);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error aplicando filtro por prioridad:", err);
-    }
-  };
-
-  const quitarFiltro = async () => {
-    try {
-      const ordenes = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
-      onFiltrar(ordenes);
-      setSeleccionadas([]);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error quitando filtro por prioridad:", err);
-    }
+  const aplicar = () => {
+    onChange(seleccionadas.map((p) => p.toLowerCase()));
+    setOpen(false);
   };
 
   return (
@@ -70,13 +34,11 @@ export function FiltrarOrdenesPorPrioridad({ onFiltrar }: Props) {
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Prioridad
       </Button>
-
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Selecciona Prioridades</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-2 mt-2">
             {prioridades.map((p) => (
               <label key={p} className="flex items-center gap-2">
@@ -89,15 +51,18 @@ export function FiltrarOrdenesPorPrioridad({ onFiltrar }: Props) {
               </label>
             ))}
           </div>
-
-          <DialogFooter className="mt-4">
-            <Button
-              onClick={aplicarFiltro}
-              disabled={seleccionadas.length === 0}
-            >
+          <DialogFooter>
+            <Button onClick={aplicar} disabled={seleccionadas.length === 0}>
               Aplicar
             </Button>
-            <Button variant="outline" onClick={quitarFiltro}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSeleccionadas([]);
+                onChange([]);
+                setOpen(false);
+              }}
+            >
               Quitar
             </Button>
           </DialogFooter>
