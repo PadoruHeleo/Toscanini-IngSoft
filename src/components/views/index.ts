@@ -13,3 +13,5 @@ export * from "./PiezasView";
 export * from "./FiltrarOrdenesPorFecha";
 export * from "./FiltrarOrdenesPorPrioridad";
 export * from "./FiltrarOrdenesPorMarca";
+export * from "./FiltrarOrdenesPorModelo";
+export * from "./UnificarFiltros.tsx";

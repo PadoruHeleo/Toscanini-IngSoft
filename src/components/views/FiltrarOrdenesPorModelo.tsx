@@ -10,56 +10,56 @@ import {
 } from "@/components/ui/dialog";
 
 interface Props {
-  onChange: (marcas: string[]) => void;
+  onChange: (modelos: string[]) => void;
 }
 
-export function FiltrarOrdenesPorMarca({ onChange }: Props) {
+export function FiltrarOrdenesPorModelo({ onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
-  const [marcasDisponibles, setMarcasDisponibles] = useState<string[]>([]);
+  const [modelosDisponibles, setModelosDisponibles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar marcas cuando se abre el diálogo
+  // Cargar modelos cuando se abre el diálogo
   useEffect(() => {
     if (open) {
-      cargarMarcas();
+      cargarModelos();
     }
   }, [open]);
 
-  const cargarMarcas = async () => {
+  const cargarModelos = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log("🔄 Cargando marcas disponibles...");
-      const marcas = await invoke<string[]>("get_marcas_disponibles");
-      console.log("🏭 Marcas cargadas:", marcas);
-      setMarcasDisponibles(marcas);
+      console.log("🔄 Cargando modelos disponibles...");
+      const modelos = await invoke<string[]>("get_modelos_disponibles");
+      console.log("📱 Modelos cargados:", modelos);
+      setModelosDisponibles(modelos);
     } catch (err) {
-      console.error("❌ Error cargando marcas:", err);
-      setError("Error al cargar las marcas");
+      console.error("❌ Error cargando modelos:", err);
+      setError("Error al cargar los modelos");
       // Fallback a datos de ejemplo si no se puede cargar desde BD
-      setMarcasDisponibles(["Marca1", "Marca2", "Marca3"]);
+      setModelosDisponibles(["Modelo1", "Modelo2", "Modelo3"]);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleMarca = (m: string) => {
+  const toggleModelo = (m: string) => {
     setSeleccionadas((prev) =>
       prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
     );
   };
 
   const aplicar = () => {
-    console.log("🏭 Aplicando filtro de marcas:", seleccionadas);
+    console.log("📱 Aplicando filtro de modelos:", seleccionadas);
     onChange(seleccionadas);
     setOpen(false);
   };
 
   const limpiar = () => {
-    console.log("🧹 Limpiando filtro de marcas");
+    console.log("🧹 Limpiando filtro de modelos");
     setSeleccionadas([]);
     onChange([]);
     setOpen(false);
@@ -68,7 +68,7 @@ export function FiltrarOrdenesPorMarca({ onChange }: Props) {
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
-        Filtrar por Marca
+        Filtrar por Modelo
         {seleccionadas.length > 0 && (
           <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs">
             {seleccionadas.length}
@@ -79,22 +79,22 @@ export function FiltrarOrdenesPorMarca({ onChange }: Props) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Selecciona Marcas</DialogTitle>
+            <DialogTitle>Selecciona Modelos</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-4">
-                <span className="text-gray-500">Cargando marcas...</span>
+                <span className="text-gray-500">Cargando modelos...</span>
               </div>
             ) : error ? (
               <div className="text-red-500 text-sm py-2">⚠️ {error}</div>
-            ) : marcasDisponibles.length === 0 ? (
+            ) : modelosDisponibles.length === 0 ? (
               <div className="text-gray-500 text-sm py-2">
-                No se encontraron marcas
+                No se encontraron modelos
               </div>
             ) : (
-              marcasDisponibles.map((m) => (
+              modelosDisponibles.map((m) => (
                 <label
                   key={m}
                   className="flex items-center gap-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
@@ -102,7 +102,7 @@ export function FiltrarOrdenesPorMarca({ onChange }: Props) {
                   <input
                     type="checkbox"
                     checked={seleccionadas.includes(m)}
-                    onChange={() => toggleMarca(m)}
+                    onChange={() => toggleModelo(m)}
                     className="rounded"
                   />
                   <span>{m}</span>

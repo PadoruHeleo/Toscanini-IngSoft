@@ -7,93 +7,100 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { invoke } from "@tauri-apps/api/core";
-
-interface OrdenTrabajo {
-  orden_id: number;
-  orden_codigo?: string;
-  orden_desc?: string;
-  prioridad?: string;
-  estado?: string;
-  has_garantia?: boolean;
-  created_at?: string;
-}
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
+  onChange: (fechas: {
+    fechaInicio: string | null;
+    fechaFin: string | null;
+  }) => void;
 }
 
-export function FiltrarOrdenesPorFecha({ onFiltrar }: Props) {
+export function FiltrarOrdenesPorFecha({ onChange }: Props) {
+  const [open, setOpen] = useState(false);
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
 
-  const aplicarFiltro = async () => {
-    if (!fechaInicio || !fechaFin) return;
-    try {
-      const ordenesFiltradas = await invoke<OrdenTrabajo[]>(
-        "get_ordenes_trabajo_por_fecha",
-        { fechaInicio, fechaFin }
-      );
-      onFiltrar(ordenesFiltradas);
-      setIsOpen(false);
-    } catch (error) {
-      console.error("Error filtrando órdenes por fecha:", error);
-    }
+  const aplicar = () => {
+    onChange({
+      fechaInicio: fechaInicio || null,
+      fechaFin: fechaFin || null,
+    });
+    setOpen(false);
   };
 
-  const limpiarFiltro = async () => {
-    try {
-      const todas = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
-      onFiltrar(todas);
-      setFechaInicio("");
-      setFechaFin("");
-      setIsOpen(false);
-    } catch (error) {
-      console.error("Error cargando todas las órdenes:", error);
+  const limpiar = () => {
+    setFechaInicio("");
+    setFechaFin("");
+    onChange({
+      fechaInicio: null,
+      fechaFin: null,
+    });
+    setOpen(false);
+  };
+
+  // Validar que la fecha de inicio no sea posterior a la fecha de fin
+  const validarFechas = () => {
+    if (fechaInicio && fechaFin) {
+      return new Date(fechaInicio) <= new Date(fechaFin);
     }
+    return true;
   };
 
   return (
     <>
-      {/* Botón que abre el modal */}
-      <Button variant="outline" onClick={() => setIsOpen(true)}>
-        Filtrar por Fecha
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        Filtrar por Fechas
       </Button>
-
-      {/* Modal */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Filtrar por Fecha</DialogTitle>
+            <DialogTitle>Seleccionar Intervalo de Fechas</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium">Desde</label>
+              <label
+                htmlFor="fechaInicio"
+                className="block text-sm font-medium mb-1"
+              >
+                Fecha Inicio:
+              </label>
               <input
+                id="fechaInicio"
                 type="date"
                 value={fechaInicio}
                 onChange={(e) => setFechaInicio(e.target.value)}
-                className="border rounded p-1 w-full"
+                className="border p-2 w-full rounded"
+                max={fechaFin || undefined}
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium">Hasta</label>
+              <label
+                htmlFor="fechaFin"
+                className="block text-sm font-medium mb-1"
+              >
+                Fecha Fin:
+              </label>
               <input
+                id="fechaFin"
                 type="date"
                 value={fechaFin}
                 onChange={(e) => setFechaFin(e.target.value)}
-                className="border rounded p-1 w-full"
+                className="border p-2 w-full rounded"
+                min={fechaInicio || undefined}
               />
             </div>
+            {!validarFechas() && (
+              <p className="text-red-500 text-sm">
+                La fecha de inicio debe ser anterior o igual a la fecha de fin
+              </p>
+            )}
           </div>
-
-          <DialogFooter className="mt-4">
-            <Button onClick={aplicarFiltro}>Aplicar</Button>
-            <Button variant="outline" onClick={limpiarFiltro}>
-              Quitar
+          <DialogFooter>
+            <Button onClick={aplicar} disabled={!validarFechas()}>
+              Aplicar
+            </Button>
+            <Button variant="outline" onClick={limpiar}>
+              Limpiar
             </Button>
           </DialogFooter>
         </DialogContent>

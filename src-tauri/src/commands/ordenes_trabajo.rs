@@ -81,6 +81,14 @@ pub struct OrdenTrabajoDetallada {
     // Información de informe
     pub informe_codigo: Option<String>,
 }
+#[derive(Debug, Deserialize)]
+pub struct Filtros {
+    pub fecha_inicio: Option<String>,
+    pub fecha_fin: Option<String>,
+    pub marcas: Option<Vec<String>>,
+    pub modelos: Option<Vec<String>>, 
+    pub prioridades: Option<Vec<String>>,
+}
 
 /// Obtener todas las órdenes de trabajo
 #[tauri::command]
@@ -739,109 +747,109 @@ pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<O
     
     Ok(orden)
 }
-
-/// Obtener órdenes de trabajo filtradas por rango de fechas
+//Fltros Unificados
+/// Obtener órdenes de trabajo con filtros unificados
 #[tauri::command]
-pub async fn get_ordenes_trabajo_por_fecha(
-    fecha_inicio: String,
-    fecha_fin: String,
-) -> Result<Vec<OrdenTrabajo>, String> {
-    // Obtener el pool (usa la función que ya tienes en database.rs)
-    let pool = crate::database::get_db_pool_safe()?; // ya usada en otras funciones
+pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<OrdenTrabajoDetallada>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let mut query = String::from(
+        "SELECT 
+            ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
+            ot.has_garantia, ot.equipo_id, ot.created_by, ot.cotizacion_id, ot.informe_id, 
+            ot.pre_informe, ot.created_at, ot.finished_at,
+            e.numero_serie, e.equipo_marca, e.equipo_modelo, e.equipo_tipo,
+            c.cliente_id, c.cliente_nombre,
+            u.usuario_nombre as creador_nombre,
+            cot.cotizacion_codigo, cot.costo_total,
+            inf.informe_codigo
+         FROM ORDEN_TRABAJO ot
+         LEFT JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
+         LEFT JOIN CLIENTE c ON e.cliente_id = c.cliente_id
+         LEFT JOIN USUARIO u ON ot.created_by = u.usuario_id
+         LEFT JOIN COTIZACION cot ON ot.cotizacion_id = cot.cotizacion_id
+         LEFT JOIN INFORME inf ON ot.informe_id = inf.informe_id
+         WHERE 1=1"
+    );
+    
+    let mut params: Vec<String> = Vec::new();
 
-    // Consulta: filtra por DATE(created_at) entre ambas fechas
-    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
-        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
-                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at 
-         FROM ORDEN_TRABAJO 
-         WHERE DATE(created_at) BETWEEN DATE(?) AND DATE(?)
-         ORDER BY created_at DESC"
+    if let Some(fecha_inicio) = filtros.fecha_inicio {
+        query.push_str(" AND date(ot.created_at) >= date(?)");
+        params.push(fecha_inicio);
+    }
+    
+    if let Some(fecha_fin) = filtros.fecha_fin {
+        query.push_str(" AND date(ot.created_at) <= date(?)");
+        params.push(fecha_fin);
+    }
+    
+    if let Some(marcas) = filtros.marcas {
+        if !marcas.is_empty() {
+            let placeholders = vec!["?"; marcas.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_marca IN ({})", placeholders));
+            for marca in marcas {
+                params.push(marca);
+            }
+        }
+    }
+    
+    if let Some(modelos) = filtros.modelos {
+        if !modelos.is_empty() {
+            let placeholders = vec!["?"; modelos.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_modelo IN ({})", placeholders));
+            for modelo in modelos {
+                params.push(modelo);
+            }
+        }
+    }
+    
+    if let Some(prioridades) = filtros.prioridades {
+        if !prioridades.is_empty() {
+            let placeholders = vec!["?"; prioridades.len()].join(",");
+            query.push_str(&format!(" AND LOWER(ot.prioridad) IN ({})", placeholders));
+            for p in prioridades {
+                params.push(p.to_lowercase());
+            }
+        }
+    }
+    
+    query.push_str(" ORDER BY ot.created_at DESC");
+
+    let mut sqlx_query = sqlx::query_as::<_, OrdenTrabajoDetallada>(&query);
+
+    for param in &params {
+        sqlx_query = sqlx_query.bind(param);
+    }
+
+    sqlx_query
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))
+}
+#[tauri::command]
+pub async fn get_modelos_disponibles() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let modelos = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT equipo_modelo FROM EQUIPO WHERE equipo_modelo IS NOT NULL AND equipo_modelo != '' ORDER BY equipo_modelo"
     )
-    .bind(&fecha_inicio)
-    .bind(&fecha_fin)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-
-    Ok(ordenes)
+    
+    Ok(modelos)
 }
-
-/// Obtener órdenes de trabajo por un conjunto de prioridades
 #[tauri::command]
-pub async fn get_ordenes_trabajo_by_prioridades(
-    prioridades: Vec<String>
-) -> Result<Vec<OrdenTrabajo>, String> {
-    let pool = crate::database::get_db_pool_safe()?;
-
-    // Si no se envían prioridades, devolver lista vacía (o podrías devolver todas)
-    if prioridades.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // Construir placeholders: "?, ?, ?" según cantidad
-    let placeholders = prioridades.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-    let query = format!(
-        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, \
-                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at \
-         FROM ORDEN_TRABAJO \
-         WHERE prioridad IN ({}) \
-         ORDER BY created_at DESC",
-        placeholders
-    );
-
-    let mut q = sqlx::query_as::<_, OrdenTrabajo>(&query);
-    for p in &prioridades {
-        q = q.bind(p);
-    }
-
-    let ordenes = q
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-
-    Ok(ordenes)
-}
-// Obtener marcas de equipos
-#[tauri::command]
-pub async fn get_marcas_equipos() -> Result<Vec<String>, String> {
+pub async fn get_marcas_disponibles() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
-
-    // Usamos EQUIPO y columna equipo_marca, ignorando vacíos/nulos.
+    
     let marcas = sqlx::query_scalar::<_, String>(
-        r#"
-        SELECT DISTINCT equipo_marca
-        FROM EQUIPO
-        WHERE equipo_marca IS NOT NULL AND equipo_marca <> ''
-        ORDER BY equipo_marca ASC
-        "#
+        "SELECT DISTINCT equipo_marca FROM EQUIPO WHERE equipo_marca IS NOT NULL AND equipo_marca != '' ORDER BY equipo_marca"
     )
     .fetch_all(pool)
     .await
-    .map_err(|e| format!("Database error (marcas): {}", e))?;
-
+    .map_err(|e| format!("Database error: {}", e))?;
+    
     Ok(marcas)
-}
-//Filtrar órdenes por marca de EQUIPO 
-#[tauri::command]
-pub async fn get_ordenes_trabajo_por_marca(marca: String) -> Result<Vec<OrdenTrabajo>, String> {
-    let pool = get_db_pool_safe()?;
-
-    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
-        r#"
-        SELECT 
-            ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
-            ot.has_garantia, ot.equipo_id, ot.created_by, ot.cotizacion_id, 
-            ot.informe_id, ot.pre_informe, ot.created_at, ot.finished_at
-        FROM ORDEN_TRABAJO ot
-        INNER JOIN EQUIPO e ON e.equipo_id = ot.equipo_id
-        WHERE LOWER(e.equipo_marca) = LOWER(?)
-        ORDER BY ot.created_at DESC
-        "#
-    )
-    .bind(marca)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Database error (filtrar por marca): {}", e))?;
-
-    Ok(ordenes)
 }

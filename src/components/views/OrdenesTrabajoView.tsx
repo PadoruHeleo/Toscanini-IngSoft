@@ -15,9 +15,7 @@ import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
-import { FiltrarOrdenesPorFecha } from "./FiltrarOrdenesPorFecha";
-import { FiltrarOrdenesPorPrioridad } from "./FiltrarOrdenesPorPrioridad";
-import { FiltrarOrdenesPorMarca } from "./FiltrarOrdenesPorMarca";
+import { UnificarFiltros } from "./UnificarFiltros";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -374,13 +372,7 @@ export function OrdenesTrabajoView() {
           </Button>
         )}
         {/* boton para los filtos */}
-        <FiltrarOrdenesPorFecha
-          onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
-        />
-        <FiltrarOrdenesPorPrioridad
-          onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
-        />
-        <FiltrarOrdenesPorMarca
+        <UnificarFiltros
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
       </div>

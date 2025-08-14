@@ -1,4 +1,3 @@
-// src/components/FiltrarOrdenesPorPrioridad.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,28 +7,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { invoke } from "@tauri-apps/api/core";
-
-interface OrdenTrabajo {
-  orden_id: number;
-  orden_codigo?: string;
-  orden_desc?: string;
-  prioridad?: string;
-  estado?: string;
-  has_garantia?: boolean;
-  created_at?: string;
-}
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
+  onChange: (prioridades: string[]) => void;
 }
 
-export function FiltrarOrdenesPorPrioridad({ onFiltrar }: Props) {
+export function FiltrarOrdenesPorPrioridad({ onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
-
-  // Labels visibles; convertiremos a minúsculas antes de enviar al backend
-  const prioridades = ["Alta", "Media", "Baja"];
+  const prioridadesDisponibles = ["Alta", "Media", "Baja"];
 
   const togglePrioridad = (p: string) => {
     setSeleccionadas((prev) =>
@@ -37,68 +23,58 @@ export function FiltrarOrdenesPorPrioridad({ onFiltrar }: Props) {
     );
   };
 
-  const aplicarFiltro = async () => {
-    try {
-      // mapear etiquetas a los valores de BD (ej: "Alta" -> "alta")
-      const prioridadesBd = seleccionadas.map((p) => p.toLowerCase());
-
-      // Llamada al backend
-      const ordenes = await invoke<OrdenTrabajo[]>(
-        "get_ordenes_trabajo_by_prioridades",
-        { prioridades: prioridadesBd }
-      );
-      onFiltrar(ordenes);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error aplicando filtro por prioridad:", err);
-    }
+  const aplicar = () => {
+    const prioridadesParaBackend = seleccionadas.map((p) => p.toLowerCase());
+    onChange(prioridadesParaBackend);
+    setOpen(false);
   };
 
-  const quitarFiltro = async () => {
-    try {
-      const ordenes = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
-      onFiltrar(ordenes);
-      setSeleccionadas([]);
-      setOpen(false);
-    } catch (err) {
-      console.error("Error quitando filtro por prioridad:", err);
-    }
+  const limpiar = () => {
+    setSeleccionadas([]);
+    onChange([]);
+    setOpen(false);
   };
 
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Prioridad
+        {seleccionadas.length > 0 && (
+          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs">
+            {seleccionadas.length}
+          </span>
+        )}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Selecciona Prioridades</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-2 mt-2">
-            {prioridades.map((p) => (
-              <label key={p} className="flex items-center gap-2">
+          <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+            {prioridadesDisponibles.map((p) => (
+              <label
+                key={p}
+                className="flex items-center gap-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
+              >
                 <input
                   type="checkbox"
                   checked={seleccionadas.includes(p)}
                   onChange={() => togglePrioridad(p)}
+                  className="rounded"
                 />
                 <span className="capitalize">{p}</span>
               </label>
             ))}
           </div>
 
-          <DialogFooter className="mt-4">
-            <Button
-              onClick={aplicarFiltro}
-              disabled={seleccionadas.length === 0}
-            >
-              Aplicar
+          <DialogFooter>
+            <Button onClick={aplicar}>
+              Aplicar {seleccionadas.length > 0 && `(${seleccionadas.length})`}
             </Button>
-            <Button variant="outline" onClick={quitarFiltro}>
-              Quitar
+            <Button variant="outline" onClick={limpiar}>
+              Limpiar
             </Button>
           </DialogFooter>
         </DialogContent>
