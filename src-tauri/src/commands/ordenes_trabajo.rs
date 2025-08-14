@@ -88,6 +88,7 @@ pub struct Filtros {
     pub marcas: Option<Vec<String>>,
     pub modelos: Option<Vec<String>>, 
     pub prioridades: Option<Vec<String>>,
+    pub clientes: Option<Vec<String>>,
 }
 
 /// Obtener todas las órdenes de trabajo
@@ -814,6 +815,17 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
         }
     }
     
+    // Nuevo filtro por clientes
+    if let Some(clientes) = filtros.clientes {
+        if !clientes.is_empty() {
+            let placeholders = vec!["?"; clientes.len()].join(",");
+            query.push_str(&format!(" AND c.cliente_nombre IN ({})", placeholders));
+            for cliente in clientes {
+                params.push(cliente);
+            }
+        }
+    }
+    
     query.push_str(" ORDER BY ot.created_at DESC");
 
     let mut sqlx_query = sqlx::query_as::<_, OrdenTrabajoDetallada>(&query);
@@ -852,4 +864,22 @@ pub async fn get_marcas_disponibles() -> Result<Vec<String>, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(marcas)
+}
+#[tauri::command]
+pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let clientes = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT c.cliente_nombre 
+         FROM CLIENTE c
+         INNER JOIN EQUIPO e ON c.cliente_id = e.cliente_id
+         INNER JOIN ORDEN_TRABAJO ot ON e.equipo_id = ot.equipo_id
+         WHERE c.cliente_nombre IS NOT NULL AND c.cliente_nombre != '' 
+         ORDER BY c.cliente_nombre"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(clientes)
 }

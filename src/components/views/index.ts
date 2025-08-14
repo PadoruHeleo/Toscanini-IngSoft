@@ -14,4 +14,5 @@ export * from "./FiltrarOrdenesPorFecha";
 export * from "./FiltrarOrdenesPorPrioridad";
 export * from "./FiltrarOrdenesPorMarca";
 export * from "./FiltrarOrdenesPorModelo";
+export * from "./FiltrarOrdenesPorCliente";
 export * from "./UnificarFiltros.tsx";

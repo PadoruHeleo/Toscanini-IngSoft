@@ -79,6 +79,7 @@ pub fn run() {
             commands::ordenes_trabajo::get_ordenes_trabajo_filtradas,
             commands::ordenes_trabajo::get_modelos_disponibles,
             commands::ordenes_trabajo::get_marcas_disponibles,
+            commands::ordenes_trabajo::get_clientes_disponibles,
             commands::ordenes_trabajo::get_orden_trabajo_by_id,
             commands::ordenes_trabajo::get_orden_trabajo_by_codigo,
             commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo,
