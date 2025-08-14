@@ -11,16 +11,23 @@ import {
 
 interface Props {
   onChange: (modelos: string[]) => void;
+  resetKey?: number; // 🔹 Nueva prop para reiniciar desde fuera
 }
 
-export function FiltrarOrdenesPorModelo({ onChange }: Props) {
+export function FiltrarOrdenesPorModelo({ onChange, resetKey }: Props) {
   const [open, setOpen] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const [modelosDisponibles, setModelosDisponibles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar modelos cuando se abre el diálogo
+  // 🔹 Cuando cambie resetKey, limpiar selección
+  useEffect(() => {
+    if (resetKey !== undefined) {
+      setSeleccionadas([]);
+    }
+  }, [resetKey]);
+
   useEffect(() => {
     if (open) {
       cargarModelos();
@@ -39,7 +46,6 @@ export function FiltrarOrdenesPorModelo({ onChange }: Props) {
     } catch (err) {
       console.error("❌ Error cargando modelos:", err);
       setError("Error al cargar los modelos");
-      // Fallback a datos de ejemplo si no se puede cargar desde BD
       setModelosDisponibles(["Modelo1", "Modelo2", "Modelo3"]);
     } finally {
       setLoading(false);
@@ -70,8 +76,17 @@ export function FiltrarOrdenesPorModelo({ onChange }: Props) {
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Modelo
         {seleccionadas.length > 0 && (
-          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs">
+          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs flex items-center gap-1">
             {seleccionadas.length}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                limpiar();
+              }}
+              className="ml-1 text-red-500 hover:text-red-700 font-bold text-lg leading-none hover:bg-red-200 rounded-full px-1"
+            >
+              ×
+            </button>
           </span>
         )}
       </Button>
