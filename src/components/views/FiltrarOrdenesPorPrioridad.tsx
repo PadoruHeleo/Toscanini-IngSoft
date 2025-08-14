@@ -87,14 +87,11 @@ export function FiltrarOrdenesPorPrioridad({ onChange, resetKey }: Props) {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button onClick={aplicar} disabled={seleccionadas.length === 0}>
+            {/* 🔹 Quitamos disabled para que siempre se pueda aplicar */}
+            <Button onClick={aplicar}>
               Aplicar {seleccionadas.length > 0 && `(${seleccionadas.length})`}
             </Button>
-            <Button
-              variant="outline"
-              onClick={limpiar}
-              disabled={seleccionadas.length === 0}
-            >
+            <Button variant="outline" onClick={limpiar}>
               Limpiar
             </Button>
           </DialogFooter>

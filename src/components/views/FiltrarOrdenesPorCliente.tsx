@@ -110,7 +110,7 @@ export function FiltrarOrdenesPorCliente({ onChange, resetKey }: Props) {
       >
         Filtrar por Cliente
         {seleccionadas.length > 0 && (
-          <span className="ml-1 flex items-center bg-green-100 text-green-800 px-1 rounded text-xs">
+          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs flex items-center gap-1">
             {seleccionadas.length}
             <button
               onClick={limpiarDirecto}

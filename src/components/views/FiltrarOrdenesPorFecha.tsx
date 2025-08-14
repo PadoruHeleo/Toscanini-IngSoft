@@ -13,7 +13,7 @@ interface Props {
     fechaInicio: string | null;
     fechaFin: string | null;
   }) => void;
-  resetKey?: number;
+  resetKey?: number; // nueva prop para reiniciar
 }
 
 export function FiltrarOrdenesPorFecha({ onChange, resetKey }: Props) {
@@ -39,11 +39,13 @@ export function FiltrarOrdenesPorFecha({ onChange, resetKey }: Props) {
     setOpen(false);
   };
 
+  // 🔹 Reset automático cuando cambia resetKey
   useEffect(() => {
     setFechaInicio("");
     setFechaFin("");
   }, [resetKey]);
 
+  // Validar que la fecha de inicio no sea posterior a la fecha de fin
   const validarFechas = () => {
     if (fechaInicio && fechaFin) {
       return new Date(fechaInicio) <= new Date(fechaFin);
@@ -51,25 +53,24 @@ export function FiltrarOrdenesPorFecha({ onChange, resetKey }: Props) {
     return true;
   };
 
-  const hayFechas = Boolean(fechaInicio || fechaFin);
-
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Fechas
-        {hayFechas && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              limpiar();
-            }}
-            className="ml-2 text-red-500 font-bold text-lg leading-none"
-          >
-            ×
-          </button>
+        {(fechaInicio || fechaFin) && (
+          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                limpiar();
+              }}
+              className="text-red-500 font-bold text-lg leading-none"
+            >
+              ×
+            </button>
+          </span>
         )}
       </Button>
-
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
