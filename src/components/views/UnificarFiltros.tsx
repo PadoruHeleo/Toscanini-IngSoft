@@ -5,6 +5,7 @@ import { FiltrarOrdenesPorFecha } from "./FiltrarOrdenesPorFecha";
 import { FiltrarOrdenesPorMarca } from "./FiltrarOrdenesPorMarca";
 import { FiltrarOrdenesPorModelo } from "./FiltrarOrdenesPorModelo";
 import { FiltrarOrdenesPorPrioridad } from "./FiltrarOrdenesPorPrioridad";
+import { FiltrarOrdenesPorCliente } from "./FiltrarOrdenesPorCliente";
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -24,9 +25,10 @@ export function UnificarFiltros({ onFiltrar }: Props) {
   const [filtros, setFiltros] = useState({
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
-    marca: null as string | null,
+    marcas: [] as string[],
     modelos: [] as string[],
     prioridades: [] as string[],
+    clientes: [] as string[], // Nuevo filtro de clientes
   });
 
   const actualizarFiltro = (nuevoFiltro: Partial<typeof filtros>) => {
@@ -41,13 +43,15 @@ export function UnificarFiltros({ onFiltrar }: Props) {
         fecha_inicio: filtrosActuales.fecha_inicio,
         fecha_fin: filtrosActuales.fecha_fin,
         marcas:
-          filtrosActuales.marcas?.length > 0 ? filtrosActuales.marcas : null,
+          filtrosActuales.marcas.length > 0 ? filtrosActuales.marcas : null,
         modelos:
           filtrosActuales.modelos.length > 0 ? filtrosActuales.modelos : null,
         prioridades:
           filtrosActuales.prioridades.length > 0
             ? filtrosActuales.prioridades
             : null,
+        clientes:
+          filtrosActuales.clientes.length > 0 ? filtrosActuales.clientes : null,
       };
 
       console.log("📤 Enviando al backend:", filtrosParaBackend);
@@ -73,31 +77,30 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     <div className="flex gap-2 flex-wrap items-center">
       <FiltrarOrdenesPorFecha
         onChange={({ fechaInicio, fechaFin }) => {
-          console.log("📅 Filtro de fecha cambiado:", {
-            fechaInicio,
-            fechaFin,
-          });
           actualizarFiltro({ fecha_inicio: fechaInicio, fecha_fin: fechaFin });
+        }}
+      />
+
+      <FiltrarOrdenesPorCliente
+        onChange={(clientes) => {
+          actualizarFiltro({ clientes });
         }}
       />
 
       <FiltrarOrdenesPorMarca
         onChange={(marcas) => {
-          console.log("🏭 Filtro de marca cambiado:", marcas);
           actualizarFiltro({ marcas });
         }}
       />
 
       <FiltrarOrdenesPorModelo
         onChange={(modelos) => {
-          console.log("📱 Filtro de modelo cambiado:", modelos);
           actualizarFiltro({ modelos });
         }}
       />
 
       <FiltrarOrdenesPorPrioridad
         onChange={(prioridades) => {
-          console.log("⚡ Filtro de prioridad cambiado:", prioridades);
           actualizarFiltro({ prioridades });
         }}
       />
