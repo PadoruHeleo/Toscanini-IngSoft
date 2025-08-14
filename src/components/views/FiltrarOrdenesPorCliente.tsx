@@ -12,9 +12,10 @@ import {
 
 interface Props {
   onChange: (clientes: string[]) => void;
+  resetKey?: number; // 🔹 para resetear desde el padre
 }
 
-export function FiltrarOrdenesPorCliente({ onChange }: Props) {
+export function FiltrarOrdenesPorCliente({ onChange, resetKey }: Props) {
   const [open, setOpen] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const [clientesDisponibles, setClientesDisponibles] = useState<string[]>([]);
@@ -23,14 +24,18 @@ export function FiltrarOrdenesPorCliente({ onChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar clientes cuando se abre el diálogo
+  // 🔹 Limpia selección cuando cambia resetKey
+  useEffect(() => {
+    setSeleccionadas([]);
+    onChange([]);
+  }, [resetKey]);
+
   useEffect(() => {
     if (open) {
       cargarClientes();
     }
   }, [open]);
 
-  // Filtrar clientes según el texto de búsqueda
   useEffect(() => {
     if (textoBusqueda.trim() === "") {
       setClientesFiltrados(clientesDisponibles);
@@ -45,17 +50,13 @@ export function FiltrarOrdenesPorCliente({ onChange }: Props) {
   const cargarClientes = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      console.log("🔄 Cargando clientes disponibles...");
       const clientes = await invoke<string[]>("get_clientes_disponibles");
-      console.log("👥 Clientes cargados:", clientes);
       setClientesDisponibles(clientes);
       setClientesFiltrados(clientes);
     } catch (err) {
       console.error("❌ Error cargando clientes:", err);
       setError("Error al cargar los clientes");
-      // Fallback a datos de ejemplo
       const clientesEjemplo = [
         "Laboratorio ABC",
         "Clínica XYZ",
@@ -77,33 +78,47 @@ export function FiltrarOrdenesPorCliente({ onChange }: Props) {
   };
 
   const aplicar = () => {
-    console.log("👥 Aplicando filtro de clientes:", seleccionadas);
     onChange(seleccionadas);
     setOpen(false);
   };
 
   const limpiar = () => {
-    console.log("🧹 Limpiando filtro de clientes");
     setSeleccionadas([]);
     onChange([]);
     setOpen(false);
   };
 
+  const limpiarDirecto = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSeleccionadas([]);
+    onChange([]);
+  };
+
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
-      // Limpiar búsqueda al cerrar
       setTextoBusqueda("");
     }
   };
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="flex items-center"
+      >
         Filtrar por Cliente
         {seleccionadas.length > 0 && (
-          <span className="ml-1 bg-green-100 text-green-800 px-1 rounded text-xs">
+          <span className="ml-1 flex items-center bg-green-100 text-green-800 px-1 rounded text-xs">
             {seleccionadas.length}
+            <button
+              onClick={limpiarDirecto}
+              className="ml-1 text-red-500 hover:text-red-700 font-bold text-lg leading-none"
+              title="Limpiar filtro"
+            >
+              ×
+            </button>
           </span>
         )}
       </Button>
@@ -115,7 +130,6 @@ export function FiltrarOrdenesPorCliente({ onChange }: Props) {
           </DialogHeader>
 
           <div className="space-y-3 mt-2">
-            {/* Campo de búsqueda */}
             <div>
               <Input
                 placeholder="Buscar cliente..."
@@ -126,7 +140,6 @@ export function FiltrarOrdenesPorCliente({ onChange }: Props) {
               />
             </div>
 
-            {/* Lista de clientes */}
             <div className="max-h-60 overflow-y-auto border rounded p-2">
               {loading ? (
                 <div className="flex items-center justify-center py-4">
@@ -160,7 +173,6 @@ export function FiltrarOrdenesPorCliente({ onChange }: Props) {
               )}
             </div>
 
-            {/* Mostrar seleccionados */}
             {seleccionadas.length > 0 && (
               <div className="text-sm text-gray-600">
                 <strong>Seleccionados:</strong> {seleccionadas.join(", ")}

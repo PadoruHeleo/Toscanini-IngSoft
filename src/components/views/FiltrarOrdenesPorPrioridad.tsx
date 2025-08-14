@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,12 +10,20 @@ import {
 
 interface Props {
   onChange: (prioridades: string[]) => void;
+  resetKey?: number; // 🔹 Nueva prop para reiniciar desde fuera
 }
 
-export function FiltrarOrdenesPorPrioridad({ onChange }: Props) {
+export function FiltrarOrdenesPorPrioridad({ onChange, resetKey }: Props) {
   const [open, setOpen] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const prioridadesDisponibles = ["Alta", "Media", "Baja"];
+
+  // 🔹 Cuando cambie resetKey, limpiar selección
+  useEffect(() => {
+    if (resetKey !== undefined) {
+      setSeleccionadas([]);
+    }
+  }, [resetKey]);
 
   const togglePrioridad = (p: string) => {
     setSeleccionadas((prev) =>
@@ -40,8 +48,17 @@ export function FiltrarOrdenesPorPrioridad({ onChange }: Props) {
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Prioridad
         {seleccionadas.length > 0 && (
-          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs">
+          <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs flex items-center gap-1">
             {seleccionadas.length}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                limpiar();
+              }}
+              className="ml-1 text-red-500 hover:text-red-700 font-bold text-lg leading-none hover:bg-red-200 rounded-full px-1"
+            >
+              ×
+            </button>
           </span>
         )}
       </Button>
@@ -69,11 +86,15 @@ export function FiltrarOrdenesPorPrioridad({ onChange }: Props) {
             ))}
           </div>
 
-          <DialogFooter>
-            <Button onClick={aplicar}>
+          <DialogFooter className="gap-2">
+            <Button onClick={aplicar} disabled={seleccionadas.length === 0}>
               Aplicar {seleccionadas.length > 0 && `(${seleccionadas.length})`}
             </Button>
-            <Button variant="outline" onClick={limpiar}>
+            <Button
+              variant="outline"
+              onClick={limpiar}
+              disabled={seleccionadas.length === 0}
+            >
               Limpiar
             </Button>
           </DialogFooter>

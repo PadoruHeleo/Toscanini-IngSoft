@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,9 +13,10 @@ interface Props {
     fechaInicio: string | null;
     fechaFin: string | null;
   }) => void;
+  resetKey?: number;
 }
 
-export function FiltrarOrdenesPorFecha({ onChange }: Props) {
+export function FiltrarOrdenesPorFecha({ onChange, resetKey }: Props) {
   const [open, setOpen] = useState(false);
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
@@ -38,7 +39,11 @@ export function FiltrarOrdenesPorFecha({ onChange }: Props) {
     setOpen(false);
   };
 
-  // Validar que la fecha de inicio no sea posterior a la fecha de fin
+  useEffect(() => {
+    setFechaInicio("");
+    setFechaFin("");
+  }, [resetKey]);
+
   const validarFechas = () => {
     if (fechaInicio && fechaFin) {
       return new Date(fechaInicio) <= new Date(fechaFin);
@@ -46,11 +51,25 @@ export function FiltrarOrdenesPorFecha({ onChange }: Props) {
     return true;
   };
 
+  const hayFechas = Boolean(fechaInicio || fechaFin);
+
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
         Filtrar por Fechas
+        {hayFechas && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              limpiar();
+            }}
+            className="ml-2 text-red-500 font-bold text-lg leading-none"
+          >
+            ×
+          </button>
+        )}
       </Button>
+
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
