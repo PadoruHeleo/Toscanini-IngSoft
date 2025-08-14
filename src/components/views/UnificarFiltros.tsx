@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { invoke } from "@tauri-apps/api/core";
 
 import { FiltrarOrdenesPorFecha } from "./FiltrarOrdenesPorFecha";
@@ -26,7 +25,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
     marca: null as string | null,
-    modelos: [] as string[], // ← Cambiar a array
+    modelos: [] as string[],
     prioridades: [] as string[],
   });
 
@@ -38,13 +37,13 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     try {
       console.log("🔍 Aplicando filtros automáticamente:", filtrosActuales);
 
-      // Transformar el formato para el backend
       const filtrosParaBackend = {
         fecha_inicio: filtrosActuales.fecha_inicio,
         fecha_fin: filtrosActuales.fecha_fin,
-        marca: filtrosActuales.marca,
+        marcas:
+          filtrosActuales.marcas?.length > 0 ? filtrosActuales.marcas : null,
         modelos:
-          filtrosActuales.modelos.length > 0 ? filtrosActuales.modelos : null, // ← Cambiar a modelos (plural)
+          filtrosActuales.modelos.length > 0 ? filtrosActuales.modelos : null,
         prioridades:
           filtrosActuales.prioridades.length > 0
             ? filtrosActuales.prioridades
@@ -55,7 +54,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
 
       const ordenes = await invoke<OrdenTrabajo[]>(
         "get_ordenes_trabajo_filtradas",
-        { filtros: filtrosParaBackend } // ✅ Envolver en objeto con key "filtros"
+        { filtros: filtrosParaBackend }
       );
 
       console.log("📨 Órdenes filtradas recibidas:", ordenes.length);
@@ -65,42 +64,10 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     }
   };
 
-  // Aplicar filtros automáticamente cuando cambian
   useEffect(() => {
     console.log("🔄 useEffect disparado - filtros cambiaron:", filtros);
     aplicarFiltros(filtros);
   }, [filtros]);
-
-  const limpiarTodosFiltros = async () => {
-    try {
-      console.log("🧹 Limpiando todos los filtros");
-
-      // Resetear el estado de filtros
-      const filtrosLimpios = {
-        fecha_inicio: null,
-        fecha_fin: null,
-        marca: null,
-        modelos: [], // ← Cambiar a array vacío
-        prioridades: [],
-      };
-
-      setFiltros(filtrosLimpios);
-
-      // Cargar todas las órdenes sin filtros
-      const ordenes = await invoke<OrdenTrabajo[]>("get_ordenes_trabajo");
-      onFiltrar(ordenes);
-    } catch (err) {
-      console.error("❌ Error limpiando filtros:", err);
-    }
-  };
-
-  // Verificar si hay algún filtro activo
-  const hayFiltrosActivos =
-    filtros.fecha_inicio ||
-    filtros.fecha_fin ||
-    filtros.marca ||
-    filtros.modelos ||
-    filtros.prioridades.length > 0;
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -117,16 +84,14 @@ export function UnificarFiltros({ onFiltrar }: Props) {
       <FiltrarOrdenesPorMarca
         onChange={(marcas) => {
           console.log("🏭 Filtro de marca cambiado:", marcas);
-          // Tomar solo la primera marca seleccionada ya que el backend espera un string
-          const marca = marcas.length > 0 ? marcas[0] : null;
-          actualizarFiltro({ marca });
+          actualizarFiltro({ marcas });
         }}
       />
 
       <FiltrarOrdenesPorModelo
         onChange={(modelos) => {
           console.log("📱 Filtro de modelo cambiado:", modelos);
-          actualizarFiltro({ modelos }); // ← Enviar array completo
+          actualizarFiltro({ modelos });
         }}
       />
 
@@ -136,28 +101,6 @@ export function UnificarFiltros({ onFiltrar }: Props) {
           actualizarFiltro({ prioridades });
         }}
       />
-
-      {/* Mostrar botón de limpiar solo si hay filtros activos */}
-      {hayFiltrosActivos && (
-        <>
-          <div className="h-6 w-px bg-gray-300 mx-1" /> {/* Separador visual */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={limpiarTodosFiltros}
-            className="text-gray-600 hover:text-gray-800"
-          >
-            🧹 Limpiar filtros
-          </Button>
-        </>
-      )}
-
-      {/* Indicador de filtros activos */}
-      {hayFiltrosActivos && (
-        <span className="text-xs text-blue-600 font-medium">
-          Filtros activos
-        </span>
-      )}
     </div>
   );
 }

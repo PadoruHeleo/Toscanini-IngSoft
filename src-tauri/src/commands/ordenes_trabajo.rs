@@ -85,7 +85,7 @@ pub struct OrdenTrabajoDetallada {
 pub struct Filtros {
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
-    pub marca: Option<String>,
+    pub marcas: Option<Vec<String>>,
     pub modelos: Option<Vec<String>>, 
     pub prioridades: Option<Vec<String>>,
 }
@@ -784,9 +784,14 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
         params.push(fecha_fin);
     }
     
-    if let Some(marca) = filtros.marca {
-        query.push_str(" AND e.equipo_marca LIKE ?");
-        params.push(format!("%{}%", marca));
+    if let Some(marcas) = filtros.marcas {
+        if !marcas.is_empty() {
+            let placeholders = vec!["?"; marcas.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_marca IN ({})", placeholders));
+            for marca in marcas {
+                params.push(marca);
+            }
+        }
     }
     
     if let Some(modelos) = filtros.modelos {
@@ -834,4 +839,17 @@ pub async fn get_modelos_disponibles() -> Result<Vec<String>, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(modelos)
+}
+#[tauri::command]
+pub async fn get_marcas_disponibles() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let marcas = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT equipo_marca FROM EQUIPO WHERE equipo_marca IS NOT NULL AND equipo_marca != '' ORDER BY equipo_marca"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(marcas)
 }
