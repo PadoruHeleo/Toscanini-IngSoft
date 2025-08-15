@@ -30,7 +30,22 @@ interface OrdenTrabajo {
   created_at: string;
   finished_at: string | null;
   estado: string;
-  informe_id?: number
+  informe_id?: number;
+}
+
+interface Informe {
+  id: number;
+  informe_codigo: string;
+  diagnostico: string[];
+  created_at: string;
+  solucion_aplicada: string;
+  tecnico_responsable: string;
+}
+
+function formatChileanDate(dateString: string) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return date.toLocaleString("es-CL", { timeZone: "America/Santiago" });
 }
 
 function capitalize(str: string) {
@@ -49,27 +64,35 @@ export function EquipoHistorialDialog({
 }) {
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [informe, setInforme] = useState<any>(null);
+  const [informe, setInforme] = useState<Informe | null>(null);
+
+  // Estado para el segundo dialog
+  const [openSubDialog, setOpenSubDialog] = useState(false);
 
   useEffect(() => {
     if (open && equipo) {
       setLoading(true);
-      invoke<OrdenTrabajo[]>("get_ordenes_trabajo_by_equipo", { equipoId: equipo.equipo_id })
+      invoke<OrdenTrabajo[]>("get_ordenes_trabajo_by_equipo", {
+        equipoId: equipo.equipo_id,
+      })
         .then((data) => {
           console.log("Ordenes recibidas:", data);
           setOrdenes(data);
         })
-        .catch(() => { setOrdenes([]) })
+        .catch(() => {
+          setOrdenes([]);
+        })
         .finally(() => setLoading(false));
     } else {
       setOrdenes([]);
     }
   }, [open, equipo]);
 
-
   useEffect(() => {
     if (ordenes.length > 0 && ordenes[0].informe_id) {
-      invoke<any>("get_informe_by_id", { informe_id: ordenes[0].informe_id })
+      invoke<any>("get_informe_by_id", {
+        informeId: ordenes[0].informe_id,
+      })
         .then((data) => {
           console.log("Informe recibido:", data);
           setInforme(data);
@@ -84,60 +107,101 @@ export function EquipoHistorialDialog({
   if (!equipo) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Historial de Equipo</DialogTitle>
-          <DialogDescription>
-            Permite revisar el historial del equipo seleccionado.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4">
-          <div>
-            <strong>Número de Serie:</strong> {equipo.numero_serie || "N/A"}
-            <br />
-            <strong>ID del equipo:</strong> {equipo.equipo_id || "N/A"}
-          </div>
-          <Table>
-            <TableCaption>Órdenes de trabajo asociadas</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID Orden</TableHead>
-                <TableHead>Fecha de Ingreso</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha de Finalizacion</TableHead>
-                <TableHead>ID Informe</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+    <>
+      {/* Dialog principal */}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent style={{ minWidth: "800px" }}>
+          <DialogHeader>
+            <DialogTitle>Historial de Equipo</DialogTitle>
+            <DialogDescription>
+              Permite revisar el historial del equipo seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <strong>Número de Serie:</strong>{" "}
+              {equipo.numero_serie || "N/A"}
+              <br />
+              <strong>ID del equipo:</strong> {equipo.equipo_id || "N/A"}
+            </div>
+            <Table>
+              <TableCaption>Órdenes de trabajo asociadas</TableCaption>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={3}>Cargando...</TableCell>
+                  <TableHead>ID Orden</TableHead>
+                  <TableHead>Fecha de Ingreso</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha de Finalizacion</TableHead>
+                  <TableHead>Ver informe</TableHead>
                 </TableRow>
-              ) : ordenes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3}>No hay órdenes de trabajo.</TableCell>
-                </TableRow>
-              ) : (
-                ordenes.map((orden) => (
-                  <TableRow key={orden.id}>
-                    <TableCell>{orden.id ?? orden.orden_id}</TableCell>
-                    <TableCell>{orden.created_at}</TableCell>
-                    <TableCell>{capitalize(orden.estado ?? "")}</TableCell>
-                    <TableCell>{orden.finished_at || "En progreso"}</TableCell>
-                    <TableCell>{orden.informe_id ?? "No Aplica"}</TableCell>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={9}>Cargando...</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          <DialogFooter>
-            <Button onClick={() => onOpenChange(false)} variant="outline">
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
+                ) : ordenes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9}>
+                      No hay órdenes de trabajo.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ordenes.map((orden) => (
+                    <TableRow key={orden.id}>
+                      <TableCell>{orden.id ?? orden.orden_id}</TableCell>
+                      <TableCell>
+                        {formatChileanDate(orden.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        {capitalize(orden.estado ?? "")}
+                      </TableCell>
+                      <TableCell>
+                        {formatChileanDate(orden.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          onClick={() => setOpenSubDialog(true)}
+                          disabled={!orden.informe_id}
+                        >
+                          Ver informe
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)} variant="outline">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openSubDialog} onOpenChange={setOpenSubDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Informe de Orden de Trabajo</DialogTitle>
+          </DialogHeader>
+          <div>
+            {informe ? (
+              <div>
+                <p><strong>Código:</strong> {informe.informe_codigo}</p>
+                <p><strong>Diagnóstico:</strong> {informe.diagnostico}</p>
+                <p><strong>Técnico Responsable:</strong> {informe.tecnico_responsable}</p>
+                <p><strong>Solución Aplicada:</strong> {informe.solucion_aplicada}</p>
+                <p><strong>Fecha de Creación:</strong> {formatChileanDate(informe.created_at)}</p>
+              </div>
+            ) : (
+              <p>No hay informe disponible.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
