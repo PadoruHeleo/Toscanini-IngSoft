@@ -26,6 +26,7 @@ interface Equipo {
 
 interface OrdenTrabajo {
   id?: number;
+  orden_codigo: string;
   orden_id?: number;
   created_at: string;
   finished_at: string | null;
@@ -149,7 +150,7 @@ export function EquipoHistorialDialog({
                 ) : (
                   ordenes.map((orden) => (
                     <TableRow key={orden.id}>
-                      <TableCell>{orden.id ?? orden.orden_id}</TableCell>
+                      <TableCell>{orden.orden_codigo ?? orden.orden_codigo}</TableCell>
                       <TableCell>
                         {formatChileanDate(orden.created_at)}
                       </TableCell>
