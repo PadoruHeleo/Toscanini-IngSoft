@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Edit } from "lucide-react";
 import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
+import { EquipoHistorialDialog } from "@/components/views/EquipoHistorialDialog";
 
 interface Equipo {
   equipo_id: number;
@@ -35,6 +36,7 @@ export function EquiposView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingEquipo, setEditingEquipo] = useState<Equipo | null>(null);
+  const [historialEquipo, setHistorialEquipo] = useState<Equipo | null>(null);
   const loadEquipos = async () => {
     try {
       setLoading(true);
@@ -73,6 +75,7 @@ export function EquiposView() {
     setEditingEquipo(equipo);
     setShowAddForm(true); // Use the same form for editing
   };
+
 
   if (loading) {
     return (
@@ -154,6 +157,15 @@ export function EquiposView() {
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistorialEquipo(equipo)}
+                        className="text-gray-600 hover:text-gray-700"
+                        title="Ver historial del equipo"
+                      >
+                        Ver Historial Del Equipo
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -179,6 +191,12 @@ export function EquiposView() {
         equipo={editingEquipo || undefined}
         isEditing={editingEquipo !== null}
       />
+      <EquipoHistorialDialog
+        open={historialEquipo !== null}
+        onOpenChange={(open) => !open && setHistorialEquipo(null)}
+        equipo={historialEquipo}
+      />
     </div>
   );
 }
+
