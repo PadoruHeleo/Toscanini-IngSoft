@@ -56,6 +56,8 @@ const getEstadoStyles = (estado?: string) => {
       return "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200";
     default:
       return "bg-gray-100 text-gray-600 border border-gray-200";
+    case "cotizacion_rechazada":
+      return "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200";
   }
 };
 
@@ -82,6 +84,7 @@ const formatEstadoText = (estado?: string) => {
     entregado: "Entregado",
     abandonado: "Abandonado",
     equipo_no_reparable: "Equipo No Reparable",
+    cotizacion_rechazada: "Cotización Rechazada",
   };
   return estadoMap[estado || ""] || "N/A";
 };
@@ -311,6 +314,9 @@ export function OrdenesTrabajoView() {
         cotizacionId: orden.cotizacion_id,
       });
 
+      // Log para depuración
+      console.log("Abriendo CotizacionFormDialog, ordenTrabajoId:", orden.orden_id);
+
       // Abrir el formulario de cotización en modo edición
       setSelectedOrdenForCotizacion(orden);
       setEditingCotizacion(cotizacion);
@@ -334,6 +340,8 @@ export function OrdenesTrabajoView() {
     // Abrir el formulario para crear nueva cotización directamente, sin confirmación
     try {
       setLoadingCotizacion(orden.orden_id);
+      // Log para depuración
+      console.log("Abriendo CotizacionFormDialog, ordenTrabajoId:", orden.orden_id);
 
       setSelectedOrdenForCotizacion(orden);
       setEditingCotizacion(null);

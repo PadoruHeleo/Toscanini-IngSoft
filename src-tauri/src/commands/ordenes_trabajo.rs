@@ -456,7 +456,8 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
         "espera_de_retiro",
         "entregado",
         "abandonado",
-        "equipo_no_reparable"
+        "equipo_no_reparable",
+        "cotizacion_rechazada"
     ];
     if !estados_validos.contains(&nuevo_estado.as_str()) {
         return Err("Estado no válido".to_string());

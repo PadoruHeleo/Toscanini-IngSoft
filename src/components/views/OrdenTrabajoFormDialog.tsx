@@ -86,6 +86,7 @@ const estadoOptions = [
   { value: "entregado", label: "Entregado" },
   { value: "abandonado", label: "Abandonado" },
   { value: "equipo_no_reparable", label: "Equipo No Reparable" },
+  { value: "cotizacion_rechazada", label: "Cotización Rechazada" },
 ];
 
 export default function OrdenTrabajoFormDialog({
