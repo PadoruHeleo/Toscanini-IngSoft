@@ -21,7 +21,7 @@ import { Toaster } from "@/components/ui/toaster";
 // Componente de las notificaciones periodicas, actualmente maneja las notificaciones a laboratorio por atraso
 // El valor es el tiempo en minutos
 function PeriodicNotifications() {
-  usePeriodicNotification(0.2); // 0.2 debido a testeo
+  usePeriodicNotification(5); // 0.2 debido a testeo
   return null;
 }
 
