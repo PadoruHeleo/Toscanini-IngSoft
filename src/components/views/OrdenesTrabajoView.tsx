@@ -32,6 +32,7 @@ interface OrdenTrabajo {
   pre_informe?: string;
   created_at?: string;
   finished_at?: string;
+  estado_updated_at?: string;
 }
 
 const getEstadoStyles = (estado?: string) => {
@@ -118,6 +119,21 @@ const getCotizacionButtonInfo = (orden: OrdenTrabajo) => {
   };
 };
 
+const getTiempoEnEstado = (createdAt?: string) => {
+  if (!createdAt) return "N/A";
+  const created = new Date(createdAt);
+  const now = new Date();
+  let diffMs = now.getTime() - created.getTime();
+
+  const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  diffMs -= dias * (1000 * 60 * 60 * 24);
+  const horas = Math.floor(diffMs / (1000 * 60 * 60));
+  diffMs -= horas * (1000 * 60 * 60);
+  const minutos = Math.floor(diffMs / (1000 * 60));
+
+  return `${dias}d ${horas}h ${minutos}m`;
+};
+
 export function OrdenesTrabajoView() {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
@@ -137,6 +153,15 @@ export function OrdenesTrabajoView() {
   const [selectedOrdenForInforme, setSelectedOrdenForInforme] =
     useState<OrdenTrabajo | null>(null);
   const [editingInforme, setEditingInforme] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
+
+  // Actualizar el tiempo cada minuto
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 60 * 1000);  
+    return () => clearInterval(interval);
+  }, []);
 
   const loadOrdenes = async () => {
     try {
@@ -167,6 +192,42 @@ export function OrdenesTrabajoView() {
       orden.estado?.toLowerCase().includes(searchLower) ||
       orden.prioridad?.toLowerCase().includes(searchLower)
     );
+  });
+
+  const prioridadOrder = { alta: 0, media: 1, baja: 2 };
+  const estadoOrder = {
+    recibido: 0,
+    cotizacion_enviada: 1,
+    aprobacion_pendiente: 2,
+    en_reparacion: 3,
+    espera_de_retiro: 4,
+    entregado: 5,
+    abandonado: 6,
+    equipo_no_reparable: 7,
+  };
+
+  const isTiempoEnEstadoCritico = (orden: OrdenTrabajo) => {
+    if (orden.estado !== "en_reparacion" && orden.estado !== "recibido") return false;
+    const base = orden.estado_updated_at || orden.created_at;
+    if (!base) return false;
+    const baseDate = new Date(base);
+    const now = new Date();
+    const diffMs = now.getTime() - baseDate.getTime(); 
+    return diffMs > 60 * 60 * 1000;
+  };
+
+  const ordenesOrdenadas = [...filteredOrdenes].sort((a, b) => {
+    const critA = isTiempoEnEstadoCritico(a) ? 0 : 1;
+    const critB = isTiempoEnEstadoCritico(b) ? 0 : 1;
+    if (critA !== critB) return critA - critB;
+
+    const pa = prioridadOrder[a.prioridad as keyof typeof prioridadOrder] ?? 3;
+    const pb = prioridadOrder[b.prioridad as keyof typeof prioridadOrder] ?? 3;
+    if (pa !== pb) return pa - pb;
+
+    const ea = estadoOrder[a.estado as keyof typeof estadoOrder] ?? 99;
+    const eb = estadoOrder[b.estado as keyof typeof estadoOrder] ?? 99;
+    return ea - eb;
   });
 
   const handleOrdenAdded = () => {
@@ -348,7 +409,7 @@ export function OrdenesTrabajoView() {
   return (
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
-        <ViewTitle />
+        <ViewTitle onRefresh={loadOrdenes} />
         <Button onClick={() => setShowAddForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Crear Orden de Trabajo
@@ -378,6 +439,7 @@ export function OrdenesTrabajoView() {
               <TableHead>Código</TableHead>
               <TableHead>Descripción</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Duración</TableHead>
               <TableHead>Prioridad</TableHead>
               <TableHead>Garantía</TableHead>
               <TableHead>Fecha Creación</TableHead>
@@ -385,7 +447,7 @@ export function OrdenesTrabajoView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrdenes.length === 0 ? (
+            {ordenesOrdenadas.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={7}
@@ -397,7 +459,7 @@ export function OrdenesTrabajoView() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredOrdenes.map((orden) => (
+              ordenesOrdenadas.map((orden) => (
                 <TableRow key={orden.orden_id}>
                   <TableCell className="font-medium">
                     {orden.orden_codigo || "N/A"}
@@ -413,6 +475,14 @@ export function OrdenesTrabajoView() {
                     >
                       {formatEstadoText(orden.estado)}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    {getTiempoEnEstado(orden.estado_updated_at || orden.created_at)}
+                    {isTiempoEnEstadoCritico(orden) && (
+                      <span style={{ color: "#dc2626", fontWeight: "bold", marginLeft: 8 }}>
+                        Atrasado
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span
@@ -559,7 +629,6 @@ export function OrdenesTrabajoView() {
           try {
             if (!user || !selectedOrdenForCotizacion) return;
 
-            // Actualizar el estado de la orden a "cotizacion_enviada" cuando se envíe la cotización
             await invoke("cambiar_estado_orden_trabajo", {
               ordenId: selectedOrdenForCotizacion.orden_id,
               nuevoEstado: "cotizacion_enviada",
@@ -571,15 +640,16 @@ export function OrdenesTrabajoView() {
               "La cotización ha sido enviada al cliente exitosamente."
             );
 
-            console.log(`Cotización ${cotizacionId} enviada al cliente`);
-            loadOrdenes(); // Recargar la lista para ver el cambio de estado
+            loadOrdenes();
+            setNow(Date.now()); // actualizar el tiempo
           } catch (error) {
             console.error("Error actualizando estado de orden:", error);
             showError(
               "Advertencia",
               "La cotización se envió pero no se pudo actualizar el estado de la orden."
             );
-            loadOrdenes(); // Recargar de todas formas
+            loadOrdenes();
+            setNow(Date.now());
           }
         }}
       />
