@@ -8,6 +8,7 @@ import {
   HelpView,
   PiezasView,
 } from "@/components/views";
+import { usePeriodicNotification } from "@/hooks/use-periodic-notification";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -16,6 +17,13 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SessionExpirationWarning } from "@/components/SessionExpirationWarning";
 import { DatabaseConnectionBanner } from "@/components/DatabaseConnectionBanner";
 import { Toaster } from "@/components/ui/toaster";
+
+// Componente de las notificaciones periodicas, actualmente maneja las notificaciones a laboratorio por atraso
+// El valor es el tiempo en minutos
+function PeriodicNotifications() {
+  usePeriodicNotification(5); // 0.2 debido a testeo
+  return null;
+}
 
 // Componente para renderizar la vista activa
 function ViewRenderer() {
@@ -50,6 +58,7 @@ export default function App() {
         <ViewProvider>
           <ProtectedRoute>
             <SidebarProvider>
+              <PeriodicNotifications /> {/* Componente de notificaciones periodicas, insertado aqui, evaluar cambiar su posicion */}
               <AppSidebar variant="inset" />{" "}
               <SidebarInset>
                 <div className="flex flex-1 flex-col">
