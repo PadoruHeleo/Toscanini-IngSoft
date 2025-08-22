@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS ORDEN_TRABAJO (
         'espera_de_retiro',
         'entregado',
         'abandonado',
-        'equipo_no_reparable'
+        'equipo_no_reparable',
+        'cotizacion_rechazada'
     ) NOT NULL,
     has_garantia BOOLEAN,
     equipo_id INT,

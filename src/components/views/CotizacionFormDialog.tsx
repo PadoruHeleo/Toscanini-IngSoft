@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -110,6 +109,13 @@ export default function CotizacionFormDialog({
   const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
   const [cantidad, setCantidad] = useState<string>("1");
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  const [estadoOrden, setEstadoOrden] = useState<string>("");
+  const [showAprobarConfirmDialog, setShowAprobarConfirmDialog] = useState(false);
+  const [showRechazarConfirmDialog, setShowRechazarConfirmDialog] = useState(false);
+  const [showNoReparableConfirmDialog, setShowNoReparableConfirmDialog] = useState(false);
+  const [comentarioNoReparable, setComentarioNoReparable] = useState("");
+  const [showAbandonoConfirmDialog, setShowAbandonoConfirmDialog] = useState(false);
+  const [abandonoComentario, setAbandonoComentario] = useState("");
   const [formData, setFormData] = useState<FormData>({
     costo_revision: "25000",
     costo_reparacion: "0",
@@ -136,6 +142,18 @@ export default function CotizacionFormDialog({
       loadPiezas();
       if (isEditing && cotizacion) {
         loadCotizacionPiezas();
+      }
+      // Si hay ordenTrabajoId, obtener el estado de la orden
+      console.log("ordenTrabajoId:", ordenTrabajoId);
+      if (ordenTrabajoId) {
+        invoke<{ estado: string }>("get_orden_trabajo_by_id", { ordenId: ordenTrabajoId })
+          .then((orden) => { 
+            setEstadoOrden(orden.estado);
+            console.log("Estado de la orden:", orden.estado);
+          })
+          .catch((err) => {
+            console.error("Error obteniendo estado de orden:", err);
+          });
       }
     }
   }, [open]);
@@ -354,6 +372,7 @@ export default function CotizacionFormDialog({
         const result = await invoke<boolean>("update_cotizacion", {
           cotizacionId: cotizacion.cotizacion_id,
           request: updateData,
+          updatedBy: user.usuario_id,
         });
 
         if (result) {
@@ -496,6 +515,7 @@ export default function CotizacionFormDialog({
       const result = await invoke<boolean>("update_cotizacion", {
         cotizacionId: cotizacion.cotizacion_id,
         request: { is_borrador: false },
+        updatedBy: user.usuario_id,
       });
 
       if (result) {
@@ -523,6 +543,146 @@ export default function CotizacionFormDialog({
       setLoading(false);
     }
   };
+  
+  // Función para aprobar la cotización
+  const handleAprobarCotizacion = async () => {
+  if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+    showError("Error de autenticación", "Usuario no autenticado");
+    return;
+  }
+  try {
+    setLoading(true);
+    // Aprobar la cotización
+    const result = await invoke<boolean>("update_cotizacion", {
+      cotizacionId: cotizacion.cotizacion_id,
+      request: { is_aprobada: true },
+      updatedBy: user.usuario_id,
+    });
+    if (result) {
+      // Cambiar estado de la orden a "en_reparacion"
+      await invoke("cambiar_estado_orden_trabajo", {
+        ordenId: ordenTrabajoId,
+        nuevoEstado: "en_reparacion",
+        updatedBy: user.usuario_id,
+      });
+      success("Cotización aprobada", "La cotización ha sido aprobada y la orden está en reparación.");
+      onCotizacionAdded();
+      onOpenChange(false);
+    } else {
+      showError("Error", "No se pudo aprobar la cotización.");
+    }
+  } catch (error) {
+    console.error(error);
+    showError("Error", "Ocurrió un error al aprobar la cotización.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handleRechazarCotizacion = async () => {
+    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+    try {
+      setLoading(true);
+      // Rechazar la cotización
+      const result = await invoke<boolean>("update_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        request: { is_aprobada: false },
+        updatedBy: user.usuario_id,
+      });
+      if (result) {
+        // Cambiar estado de la orden a "aprobacion_pendiente"
+        await invoke("cambiar_estado_orden_trabajo", {
+          ordenId: ordenTrabajoId,
+          nuevoEstado: "cotizacion_rechazada",
+          updatedBy: user.usuario_id,
+        });
+        success("Cotización rechazada", "La cotización ha sido rechazada y la orden está cotizacion rechazada.");
+        onCotizacionAdded();
+        onOpenChange(false);
+      } else {
+        showError("Error", "No se pudo rechazar la cotización.");
+      }
+    } catch (error) {
+      console.error(error);
+      showError("Error", "Ocurrió un error al rechazar la cotización.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNoReparable = async () => {
+    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+      showError("Error", "No se puede declarar como no reparable.");
+      return;
+    }
+
+    if (!comentarioNoReparable.trim()) {
+      showError("Error", "Debe ingresar un comentario para justificar el estado.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Cambiar estado de la orden a "no_reparable"
+      await invoke("cambiar_estado_orden_trabajo", {
+        ordenId: ordenTrabajoId,
+        nuevoEstado: "equipo_no_reparable",
+        updatedBy: user.usuario_id,
+        comentario: comentarioNoReparable, // Enviar comentario
+      });
+
+      success(
+        "Equipo declarado No Reparable",
+        "La orden ha sido actualizada correctamente."
+      );
+
+      onCotizacionAdded();
+      onOpenChange(false);
+    } catch (error) {
+      console.error(error);
+      showError("Error", "Ocurrió un error al declarar como no reparable.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAbandonarEquipo = async () => {
+    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+      showError("Error", "No se puede declarar el equipo como abandono.");
+      return;
+    }
+    if (!abandonoComentario.trim()) {
+      showError("Error", "Debe ingresar un comentario de justificación.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // Cambiar estado de la orden a "abandonado"
+      await invoke("cambiar_estado_orden_trabajo", {
+        ordenId: ordenTrabajoId,
+        nuevoEstado: "abandonado",
+        comentario: abandonoComentario,
+        updatedBy: user.usuario_id,
+      });
+
+      success("Equipo declarado como abandono", "El equipo fue marcado como abandonado exitosamente.");
+      onCotizacionAdded();
+      onOpenChange(false);
+    } catch (error) {
+      console.error(error);
+      showError("Error", "Ocurrió un error al declarar el equipo como abandono.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  console.log("Render CotizacionFormDialog, ordenTrabajoId:", ordenTrabajoId);
+  console.log("Render CotizacionFormDialog, estadoOrden:", estadoOrden);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -612,19 +772,7 @@ export default function CotizacionFormDialog({
               )}
             </div>
           </div>{" "}
-          {/* Checkboxes */}
-          <div className="flex gap-6">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is_aprobada"
-                checked={formData.is_aprobada}
-                onCheckedChange={(checked) =>
-                  handleInputChange("is_aprobada", !!checked)
-                }
-              />
-              <Label htmlFor="is_aprobada">Está aprobada</Label>
-            </div>
-          </div>
+
           {/* Informe */}
           <div className="col-span-2 space-y-2">
             <Label htmlFor="informe">Informe *</Label>
@@ -757,6 +905,7 @@ export default function CotizacionFormDialog({
               Por favor, corrija los errores antes de continuar.
             </div>
           )}{" "}
+
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -776,6 +925,65 @@ export default function CotizacionFormDialog({
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 {loading ? "Enviando..." : "Enviar al Cliente"}
+              </Button>
+            )}
+
+            {isEditing &&
+              estadoOrden &&
+              estadoOrden
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/\s+/g, " ")
+                .trim() ===
+                "cotizacion_enviada" && (
+                <>
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={() => setShowAprobarConfirmDialog(true)}
+                    disabled={loading}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {loading ? "Aprobando..." : "Aprobar Cotización"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setShowRechazarConfirmDialog(true)}
+                    disabled={loading}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {loading ? "Rechazando..." : "Rechazar Cotización"}
+                  </Button>
+                </>
+            )}
+
+            {isEditing &&
+              estadoOrden &&
+              estadoOrden.toLowerCase().trim() === "recibido" && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setShowNoReparableConfirmDialog(true)}
+                disabled={loading}
+                className="bg-gray-800 hover:bg-gray-900"
+              >
+                {loading ? "Procesando..." : "No Reparable"}
+              </Button>
+            )}
+
+            {isEditing && 
+              estadoOrden.toLowerCase() !== "recibido" &&
+              estadoOrden.toLowerCase() !== "abandonado" && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setShowAbandonoConfirmDialog(true)}
+                disabled={loading}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                Declarar Abandono
               </Button>
             )}
 
@@ -854,6 +1062,180 @@ export default function CotizacionFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de confirmación de aprobación */}
+      <Dialog
+        open={showAprobarConfirmDialog}
+        onOpenChange={setShowAprobarConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar aprobación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea aprobar esta cotización?<br />
+              El estado de la orden cambiará a <b>En reparación</b>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowAprobarConfirmDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                setShowAprobarConfirmDialog(false);
+                await handleAprobarCotizacion();
+              }}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading ? "Aprobando..." : "Confirmar aprobación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación de rechazo */}
+      <Dialog
+        open={showRechazarConfirmDialog}
+        onOpenChange={setShowRechazarConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar rechazo</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea <b>rechazar</b> esta cotización?<br />
+              El estado de la orden cambiará a <b>Aprobación Pendiente</b>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowRechazarConfirmDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                setShowRechazarConfirmDialog(false);
+                await handleRechazarCotizacion();
+              }}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {loading ? "Rechazando..." : "Confirmar rechazo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal de confirmación de No Reparable */}
+      <Dialog
+        open={showNoReparableConfirmDialog}
+        onOpenChange={setShowNoReparableConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar No Reparable</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea declarar este equipo como <b>No Reparable</b>?
+              <br />
+              Debe justificar su decisión en el campo de comentario.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Label htmlFor="comentario">Comentario *</Label>
+            <Textarea
+              id="comentario"
+              value={comentarioNoReparable}
+              onChange={(e) => setComentarioNoReparable(e.target.value)}
+              placeholder="Explique por qué el equipo no es reparable..."
+              rows={4}
+              required
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowNoReparableConfirmDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                setShowNoReparableConfirmDialog(false);
+                await handleNoReparable();
+              }}
+              disabled={loading}
+              className="bg-gray-800 hover:bg-gray-900"
+            >
+              {loading ? "Procesando..." : "Confirmar No Reparable"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showAbandonoConfirmDialog}
+        onOpenChange={setShowAbandonoConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Abandono</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea declarar este equipo como <b>Abandonado</b>?  
+              Por favor, ingrese un comentario justificando esta acción.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="abandono_comentario">Comentario *</Label>
+            <Textarea
+              id="abandono_comentario"
+              value={abandonoComentario}
+              onChange={(e) => setAbandonoComentario(e.target.value)}
+              placeholder="Ingrese la justificación del abandono"
+              rows={4}
+              className="border-red-500 focus:border-red-600"
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowAbandonoConfirmDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                setShowAbandonoConfirmDialog(false);
+                await handleAbandonarEquipo();
+              }}
+              disabled={loading}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {loading ? "Procesando..." : "Confirmar Abandono"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
+
