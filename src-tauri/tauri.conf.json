@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "Toscanini-app",
   "version": "0.1.0",
   "identifier": "com.tauri-app.app",
   "build": {
@@ -30,6 +30,7 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": ["migrations/*"]
   }
 }
