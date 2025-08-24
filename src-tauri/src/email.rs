@@ -1,6 +1,5 @@
 use resend_rs::{Resend, types::CreateEmailBaseOptions};
 use std::env;
-use chrono::{DateTime, Utc};
 
 pub struct EmailService {
     resend: Resend,
