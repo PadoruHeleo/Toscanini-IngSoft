@@ -1,0 +1,46 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0" version="27.0.9">
+  <diagram name="Página-1" id="ZfuYBb1uDBB9Q9XqHdRm">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="kV3_Yy7MnByPjowpty7V-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="kV3_Yy7MnByPjowpty7V-23" target="kV3_Yy7MnByPjowpty7V-24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-23" value="Técnico de Laboratorio" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="455" width="30" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-24" value="Gestionar Equipos" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="170" y="450" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-25" value="Visualizando información principal de los equipos" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="370" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-26" value="Visualizando historial de equipo" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="450" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-27" value="Declarando equipo como no reparable" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="530" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-34" value="Extends" style="endArrow=block;endSize=16;endFill=0;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="kV3_Yy7MnByPjowpty7V-24" target="kV3_Yy7MnByPjowpty7V-25">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="340" y="600" as="sourcePoint" />
+            <mxPoint x="500" y="600" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-41" value="Extends" style="endArrow=block;endSize=16;endFill=0;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="kV3_Yy7MnByPjowpty7V-24" target="kV3_Yy7MnByPjowpty7V-27">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="170" y="180" as="sourcePoint" />
+            <mxPoint x="330" y="180" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="kV3_Yy7MnByPjowpty7V-42" value="Extends" style="endArrow=block;endSize=16;endFill=0;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="kV3_Yy7MnByPjowpty7V-24" target="kV3_Yy7MnByPjowpty7V-26">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="180" y="210" as="sourcePoint" />
+            <mxPoint x="340" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
