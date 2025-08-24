@@ -1,6 +1,8 @@
 import { useView } from "@/contexts/ViewContext";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export function ViewTitle() {
+export function ViewTitle({ onRefresh }: { onRefresh?: () => void } = {}) {
   const { currentView } = useView();
 
   // Convertir la primera letra a mayúscula y separar palabras si están en camelCase
@@ -17,6 +19,17 @@ export function ViewTitle() {
       <div className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-md">
         Active Section
       </div>
+      {onRefresh && (
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onRefresh}
+          title="Refrescar"
+          className="ml-2"
+        >
+          <RefreshCw className="h-5 w-5" />
+        </Button>
+      )}
     </div>
   );
 }

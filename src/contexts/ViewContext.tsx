@@ -10,7 +10,7 @@ type ViewContextType = {
 const ViewContext = createContext<ViewContextType | null>(null);
 
 export function ViewProvider({ children }: { children: React.ReactNode }) {
-  const [currentView, setCurrentView] = useState<string>("dashboard");
+  const [currentView, setCurrentView] = useState<string>("inicio");
 
   return (
     <ViewContext.Provider value={{ currentView, setCurrentView }}>
