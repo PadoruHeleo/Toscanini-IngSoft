@@ -57,6 +57,7 @@ pub fn run() {
             commands::clientes::delete_cliente,
             commands::clientes::count_clientes,
             commands::clientes::get_clientes_with_pagination,
+            commands::clientes::get_clientes_filtrados,
             commands::equipos::get_equipos,
             commands::equipos::get_equipo_by_id,
             commands::equipos::get_equipo_by_numero_serie,

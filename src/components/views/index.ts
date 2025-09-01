@@ -16,3 +16,5 @@ export * from "./FiltrarOrdenesPorMarca";
 export * from "./FiltrarOrdenesPorModelo";
 export * from "./FiltrarOrdenesPorCliente";
 export * from "./UnificarFiltros.tsx";
+export * from "./FiltrarOrdenesPorFechaClientes.tsx";
+export * from "./UnificarFiltrosClientes.tsx";

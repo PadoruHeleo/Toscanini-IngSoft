@@ -35,6 +35,17 @@ pub struct UpdateClienteRequest {
     pub cliente_direccion: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct FiltrosClientes {
+    pub fecha_inicio: Option<String>,
+    pub fecha_fin: Option<String>,
+
+    // Filtros que se pueden activar más adelante
+    // pub nombres: Option<Vec<String>>,
+    // pub correos: Option<Vec<String>>,
+    // pub ruts: Option<Vec<String>>,
+}
+
 #[tauri::command]
 pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
@@ -300,5 +311,83 @@ pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
+    Ok(clientes)
+}
+
+
+    // Unificar Filtros
+#[tauri::command]
+pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Cliente>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let mut query = String::from(
+        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at 
+         FROM CLIENTE 
+         WHERE 1=1"
+    );
+
+    let mut params: Vec<String> = Vec::new();
+
+    // 📅 Filtro por fecha
+    if let Some(fecha_inicio) = filtros.fecha_inicio {
+        query.push_str(" AND date(created_at) >= date(?)");
+        params.push(fecha_inicio);
+    }
+
+    if let Some(fecha_fin) = filtros.fecha_fin {
+        query.push_str(" AND date(created_at) <= date(?)");
+        params.push(fecha_fin);
+    }
+
+    // 👤 Filtro por nombres (desactivado por ahora)
+    /*
+    if let Some(nombres) = filtros.nombres {
+        if !nombres.is_empty() {
+            let placeholders = vec!["?"; nombres.len()].join(",");
+            query.push_str(&format!(" AND cliente_nombre IN ({})", placeholders));
+            for n in nombres {
+                params.push(n);
+            }
+        }
+    }
+    */
+
+    // 📧 Filtro por correos (desactivado por ahora)
+    /*
+    if let Some(correos) = filtros.correos {
+        if !correos.is_empty() {
+            let placeholders = vec!["?"; correos.len()].join(",");
+            query.push_str(&format!(" AND cliente_correo IN ({})", placeholders));
+            for mail in correos {
+                params.push(mail);
+            }
+        }
+    }
+    */
+
+    // 🆔 Filtro por RUTs (desactivado por ahora)
+    /*
+    if let Some(ruts) = filtros.ruts {
+        if !ruts.is_empty() {
+            let placeholders = vec!["?"; ruts.len()].join(",");
+            query.push_str(&format!(" AND cliente_rut IN ({})", placeholders));
+            for rut in ruts {
+                params.push(rut);
+            }
+        }
+    }
+    */
+
+    // Ejecutar consulta
+    let mut q = sqlx::query_as::<_, Cliente>(&query);
+    for p in params {
+        q = q.bind(p);
+    }
+
+    let clientes = q
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
+
     Ok(clientes)
 }

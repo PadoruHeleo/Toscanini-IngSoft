@@ -15,6 +15,7 @@ import { Search, Edit, Trash2 } from "lucide-react";
 import { ClienteFormDialog } from "./ClienteFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
 
 interface Cliente {
   cliente_id: number;
@@ -206,6 +207,12 @@ export function ClientesView() {
             Limpiar
           </Button>
         )}
+        {/*Unificar Filtros */}
+        <div className="flex-shrink-0">
+          <UnificarFiltrosClientes
+            onFiltrar={(clientesFiltrados) => setClientes(clientesFiltrados)}
+          />
+        </div>
       </div>
 
       <div className="rounded-md border">
