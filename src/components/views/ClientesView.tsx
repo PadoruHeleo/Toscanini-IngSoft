@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Table,
@@ -35,15 +35,22 @@ export function ClientesView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoadRef = useRef(true);
 
-  const loadClientes = async () => {
+  const loadClientes = async (searchQuery: string = "") => {
     try {
-      setLoading(true);
+      // Solo mostrar loading en la carga inicial
+      if (isInitialLoadRef.current) {
+        setLoading(true);
+      }
+
       let clientesData: Cliente[];
 
-      if (searchTerm.trim()) {
+      if (searchQuery.trim()) {
         clientesData = await invoke<Cliente[]>("search_clientes", {
-          searchTerm: searchTerm.trim(),
+          searchTerm: searchQuery.trim(),
         });
       } else {
         clientesData = await invoke<Cliente[]>("get_clientes");
@@ -57,21 +64,68 @@ export function ClientesView() {
         "No se pudieron cargar los clientes."
       );
     } finally {
-      setLoading(false);
+      if (isInitialLoadRef.current) {
+        setLoading(false);
+        isInitialLoadRef.current = false;
+      }
     }
   };
 
+  // Carga inicial
   useEffect(() => {
     loadClientes();
+  }, []);
+
+  // Búsqueda con debounce optimizado
+  useEffect(() => {
+    // Limpiar timeout anterior
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Si no hay término de búsqueda, cargar inmediatamente
+    if (!searchTerm.trim()) {
+      loadClientes("");
+      return;
+    }
+
+    // Debounce más corto para mejor UX
+    searchTimeoutRef.current = setTimeout(() => {
+      loadClientes(searchTerm);
+    }, 150); // Reducido de 300ms a 150ms
+
+    // Cleanup
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [searchTerm]);
 
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    // Removemos el setTimeout que causaba problemas de foco
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    // Mantener foco en el input después de limpiar
+    setTimeout(() => {
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
+    }, 0);
+  };
+
   const handleClienteAdded = () => {
-    loadClientes();
+    // Recargar con el término de búsqueda actual
+    loadClientes(searchTerm);
     setShowAddForm(false);
   };
 
   const handleClienteUpdated = () => {
-    loadClientes();
+    // Recargar con el término de búsqueda actual
+    loadClientes(searchTerm);
     setEditingCliente(null);
   };
 
@@ -99,7 +153,8 @@ export function ClientesView() {
           "Cliente eliminado",
           `${cliente.cliente_nombre} ha sido eliminado exitosamente.`
         );
-        loadClientes();
+        // Recargar con el término de búsqueda actual
+        loadClientes(searchTerm);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
       }
@@ -132,23 +187,27 @@ export function ClientesView() {
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
       </div>
-      {/* Barra de búsqueda */}
+
+      {/* Barra de búsqueda optimizada */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             placeholder="Buscar clientes..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="pl-8"
+            autoComplete="off"
           />
         </div>
         {searchTerm && (
-          <Button variant="outline" onClick={() => setSearchTerm("")}>
+          <Button variant="outline" onClick={handleClearSearch}>
             Limpiar
           </Button>
         )}
       </div>
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -186,7 +245,7 @@ export function ClientesView() {
                   <TableCell className="max-w-xs truncate">
                     {cliente.cliente_direccion || "N/A"}
                   </TableCell>
-                  <TableCell>{formatDate(cliente.created_at)}</TableCell>{" "}
+                  <TableCell>{formatDate(cliente.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
@@ -215,16 +274,24 @@ export function ClientesView() {
           </TableBody>
         </Table>
       </div>
+
       {/* Total de clientes */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {clientes.length} cliente{clientes.length !== 1 ? "s" : ""}
+        {searchTerm && (
+          <span className="ml-2 text-blue-600">
+            (filtrado por: "{searchTerm}")
+          </span>
+        )}
       </div>
+
       {/* Dialog para agregar cliente */}
       <ClienteFormDialog
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onClienteAdded={handleClienteAdded}
-      />{" "}
+      />
+
       {/* Dialog para editar cliente */}
       {editingCliente && (
         <ClienteFormDialog
