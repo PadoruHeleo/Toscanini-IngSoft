@@ -39,10 +39,9 @@ pub struct UpdateClienteRequest {
 pub struct FiltrosClientes {
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
-
+    pub correo: Option<Vec<String>>,    
     // Filtros que se pueden activar más adelante
     // pub nombres: Option<Vec<String>>,
-    // pub correos: Option<Vec<String>>,
     // pub ruts: Option<Vec<String>>,
 }
 
@@ -315,7 +314,7 @@ pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec
 }
 
 
-    // Unificar Filtros
+// Unificar Filtros
 #[tauri::command]
 pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
@@ -339,31 +338,16 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         params.push(fecha_fin);
     }
 
-    // 👤 Filtro por nombres (desactivado por ahora)
-    /*
-    if let Some(nombres) = filtros.nombres {
-        if !nombres.is_empty() {
-            let placeholders = vec!["?"; nombres.len()].join(",");
-            query.push_str(&format!(" AND cliente_nombre IN ({})", placeholders));
-            for n in nombres {
-                params.push(n);
-            }
-        }
-    }
-    */
-
-    // 📧 Filtro por correos (desactivado por ahora)
-    /*
-    if let Some(correos) = filtros.correos {
+    // 📧 Filtro por correos (selección múltiple)
+    if let Some(correos) = filtros.correo { // ✅ Usar 'correo' para coincidir con la estructura
         if !correos.is_empty() {
             let placeholders = vec!["?"; correos.len()].join(",");
-            query.push_str(&format!(" AND cliente_correo IN ({})", placeholders));
-            for mail in correos {
-                params.push(mail);
+            query.push_str(&format!(" AND LOWER(cliente_correo) IN ({})", placeholders));
+            for c in correos {
+                params.push(c.to_lowercase());
             }
         }
     }
-    */
 
     // 🆔 Filtro por RUTs (desactivado por ahora)
     /*
@@ -390,4 +374,29 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
 
     Ok(clientes)
+}
+
+// Nuevo comando para obtener correos únicos
+#[derive(Debug, FromRow)]
+struct CorreoResult {
+    cliente_correo: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let correos = sqlx::query_as::<_, CorreoResult>(
+        "SELECT DISTINCT cliente_correo FROM CLIENTE WHERE cliente_correo IS NOT NULL"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error en get_correos_clientes: {}", e))?;
+
+    let lista: Vec<String> = correos
+        .into_iter()
+        .filter_map(|r| r.cliente_correo)
+        .collect();
+
+    Ok(lista)
 }

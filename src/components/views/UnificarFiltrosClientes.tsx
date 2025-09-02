@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { FiltrarOrdenesPorFechaClientes } from "./FiltrarOrdenesPorFechaClientes";
+import { FiltrarClientesPorCorreo } from "./FiltrarClientesPorCorreo";
 
 interface Cliente {
   cliente_id: number;
@@ -22,6 +23,7 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
   const filtrosIniciales = {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
+    correo: null as string[] | null, // 🔹 Cambiado de 'correos' a 'correo'
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -38,6 +40,7 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
       const filtrosParaBackend = {
         fecha_inicio: filtrosActuales.fecha_inicio,
         fecha_fin: filtrosActuales.fecha_fin,
+        correo: filtrosActuales.correo, // 🔹 Cambiado de 'correos' a 'correo'
       };
 
       console.log("📤 Enviando al backend:", filtrosParaBackend);
@@ -58,7 +61,9 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
   }, [filtros]);
 
   const hayFiltrosActivos =
-    filtros.fecha_inicio !== null || filtros.fecha_fin !== null;
+    filtros.fecha_inicio !== null ||
+    filtros.fecha_fin !== null ||
+    filtros.correo !== null; // 🔹 Cambiado de 'correos' a 'correo'
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -67,6 +72,11 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
         onChange={({ fechaInicio, fechaFin }) => {
           actualizarFiltro({ fecha_inicio: fechaInicio, fecha_fin: fechaFin });
         }}
+      />
+
+      <FiltrarClientesPorCorreo
+        resetKey={resetKey}
+        onChange={(correos) => actualizarFiltro({ correo: correos })} // 🔹 Cambiado de 'correos' a 'correo'
       />
 
       {hayFiltrosActivos && (
