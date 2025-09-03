@@ -41,9 +41,7 @@ pub struct FiltrosClientes {
     pub fecha_fin: Option<String>,
     pub correo: Option<Vec<String>>,
     pub rut: Option<Vec<String>>,    
-    // Filtros que se pueden activar más adelante
-    // pub nombres: Option<Vec<String>>,
-   
+    pub ciudad: Option<Vec<String>>, 
 }
 
 #[tauri::command]
@@ -328,7 +326,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
 
     let mut params: Vec<String> = Vec::new();
 
-    //  Filtro por fecha
+    // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
         query.push_str(" AND date(created_at) >= date(?)");
         params.push(fecha_inicio);
@@ -339,7 +337,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         params.push(fecha_fin);
     }
 
-    //  Filtro por correos 
+    // Filtro por correos 
     if let Some(correos) = filtros.correo {
         if !correos.is_empty() {
             let placeholders = vec!["?"; correos.len()].join(",");
@@ -361,6 +359,17 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
+    // Filtro por ciudades
+    if let Some(ciudades) = filtros.ciudad {
+        if !ciudades.is_empty() {
+            let placeholders = vec!["?"; ciudades.len()].join(",");
+            query.push_str(&format!(" AND cliente_direccion IN ({})", placeholders));
+            for ciudad in ciudades {
+                params.push(ciudad);
+            }
+        }
+    }
+
     query.push_str(" ORDER BY cliente_nombre");
 
     // Ejecutar consulta
@@ -377,7 +386,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
     Ok(clientes)
 }
 
-// 3. función para obtener RUTs únicos
+// Función para obtener RUTs únicos
 #[derive(Debug, FromRow)]
 struct RutResult {
     cliente_rut: Option<String>,
@@ -401,6 +410,8 @@ pub async fn get_ruts_clientes() -> Result<Vec<String>, String> {
 
     Ok(lista)
 }
+
+// Función para obtener correos únicos
 #[derive(Debug, FromRow)]
 struct CorreoResult {
     cliente_correo: Option<String>,
@@ -420,6 +431,31 @@ pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
     let lista: Vec<String> = correos
         .into_iter()
         .filter_map(|r| r.cliente_correo)
+        .collect();
+
+    Ok(lista)
+}
+
+// Función para obtener ciudades únicas
+#[derive(Debug, FromRow)]
+struct CiudadResult {
+    cliente_direccion: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_ciudades_clientes() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let ciudades = sqlx::query_as::<_, CiudadResult>(
+        "SELECT DISTINCT cliente_direccion FROM CLIENTE WHERE cliente_direccion IS NOT NULL ORDER BY cliente_direccion"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error en get_ciudades_clientes: {}", e))?;
+
+    let lista: Vec<String> = ciudades
+        .into_iter()
+        .filter_map(|r| r.cliente_direccion)
         .collect();
 
     Ok(lista)

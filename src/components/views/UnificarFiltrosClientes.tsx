@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { FiltrarOrdenesPorFechaClientes } from "./FiltrarOrdenesPorFechaClientes";
 import { FiltrarClientesPorCorreo } from "./FiltrarClientesPorCorreo";
 import { FiltrarClientesPorRuts } from "./FiltrarClientesPorRuts";
+import { FiltrarClientesPorCiudad } from "./FiltrarClientesPorCiudad";
 
 interface Cliente {
   cliente_id: number;
@@ -25,7 +26,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
     correo: null as string[] | null,
-    rut: null as string[] | null, // 🔹 Nuevo filtro por RUT
+    rut: null as string[] | null,
+    ciudad: null as string[] | null, // Nuevo filtro por ciudad
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -43,7 +45,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
         fecha_inicio: filtrosActuales.fecha_inicio,
         fecha_fin: filtrosActuales.fecha_fin,
         correo: filtrosActuales.correo,
-        rut: filtrosActuales.rut, // 🔹 Incluir filtro por RUT
+        rut: filtrosActuales.rut,
+        ciudad: filtrosActuales.ciudad, // Incluir filtro por ciudad
       };
 
       console.log("📤 Enviando al backend:", filtrosParaBackend);
@@ -67,7 +70,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
     filtros.fecha_inicio !== null ||
     filtros.fecha_fin !== null ||
     filtros.correo !== null ||
-    filtros.rut !== null; // 🔹 Incluir verificación del filtro por RUT
+    filtros.rut !== null ||
+    filtros.ciudad !== null; // Incluir verificación del filtro por ciudad
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -85,7 +89,12 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
 
       <FiltrarClientesPorRuts
         resetKey={resetKey}
-        onChange={(ruts) => actualizarFiltro({ rut: ruts })} // 🔹 Nuevo filtro por RUT
+        onChange={(ruts) => actualizarFiltro({ rut: ruts })}
+      />
+
+      <FiltrarClientesPorCiudad
+        resetKey={resetKey}
+        onChange={(ciudades) => actualizarFiltro({ ciudad: ciudades })}
       />
 
       {hayFiltrosActivos && (

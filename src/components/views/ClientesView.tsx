@@ -40,6 +40,9 @@ export function ClientesView() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef(true);
 
+  // Estado para forzar actualización de filtros
+  const [refreshFilters, setRefreshFilters] = useState(0);
+
   const loadClientes = async (searchQuery: string = "") => {
     try {
       // Solo mostrar loading en la carga inicial
@@ -122,12 +125,14 @@ export function ClientesView() {
     // Recargar con el término de búsqueda actual
     loadClientes(searchTerm);
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleClienteUpdated = () => {
     // Recargar con el término de búsqueda actual
     loadClientes(searchTerm);
     setEditingCliente(null);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleEditCliente = (cliente: Cliente) => {
@@ -156,6 +161,7 @@ export function ClientesView() {
         );
         // Recargar con el término de búsqueda actual
         loadClientes(searchTerm);
+        setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
       }
@@ -210,6 +216,7 @@ export function ClientesView() {
         {/*Unificar Filtros */}
         <div className="flex-shrink-0">
           <UnificarFiltrosClientes
+            key={refreshFilters}
             onFiltrar={(clientesFiltrados) => setClientes(clientesFiltrados)}
           />
         </div>
