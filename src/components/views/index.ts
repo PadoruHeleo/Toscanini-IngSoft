@@ -19,3 +19,4 @@ export * from "./UnificarFiltros.tsx";
 export * from "./FiltrarOrdenesPorFechaClientes.tsx";
 export * from "./UnificarFiltrosClientes.tsx";
 export * from "./FiltrarClientesPorCorreo.tsx";
+export * from "./FiltrarClientesPorRuts.tsx";

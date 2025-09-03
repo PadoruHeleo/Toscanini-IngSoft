@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { FiltrarOrdenesPorFechaClientes } from "./FiltrarOrdenesPorFechaClientes";
 import { FiltrarClientesPorCorreo } from "./FiltrarClientesPorCorreo";
+import { FiltrarClientesPorRuts } from "./FiltrarClientesPorRuts";
 
 interface Cliente {
   cliente_id: number;
@@ -23,7 +24,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
   const filtrosIniciales = {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
-    correo: null as string[] | null, // 🔹 Cambiado de 'correos' a 'correo'
+    correo: null as string[] | null,
+    rut: null as string[] | null, // 🔹 Nuevo filtro por RUT
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -40,7 +42,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
       const filtrosParaBackend = {
         fecha_inicio: filtrosActuales.fecha_inicio,
         fecha_fin: filtrosActuales.fecha_fin,
-        correo: filtrosActuales.correo, // 🔹 Cambiado de 'correos' a 'correo'
+        correo: filtrosActuales.correo,
+        rut: filtrosActuales.rut, // 🔹 Incluir filtro por RUT
       };
 
       console.log("📤 Enviando al backend:", filtrosParaBackend);
@@ -63,7 +66,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
   const hayFiltrosActivos =
     filtros.fecha_inicio !== null ||
     filtros.fecha_fin !== null ||
-    filtros.correo !== null; // 🔹 Cambiado de 'correos' a 'correo'
+    filtros.correo !== null ||
+    filtros.rut !== null; // 🔹 Incluir verificación del filtro por RUT
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -76,7 +80,12 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
 
       <FiltrarClientesPorCorreo
         resetKey={resetKey}
-        onChange={(correos) => actualizarFiltro({ correo: correos })} // 🔹 Cambiado de 'correos' a 'correo'
+        onChange={(correos) => actualizarFiltro({ correo: correos })}
+      />
+
+      <FiltrarClientesPorRuts
+        resetKey={resetKey}
+        onChange={(ruts) => actualizarFiltro({ rut: ruts })} // 🔹 Nuevo filtro por RUT
       />
 
       {hayFiltrosActivos && (

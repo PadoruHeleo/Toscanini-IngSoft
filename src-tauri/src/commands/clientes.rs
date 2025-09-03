@@ -39,10 +39,11 @@ pub struct UpdateClienteRequest {
 pub struct FiltrosClientes {
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
-    pub correo: Option<Vec<String>>,    
+    pub correo: Option<Vec<String>>,
+    pub rut: Option<Vec<String>>,    
     // Filtros que se pueden activar más adelante
     // pub nombres: Option<Vec<String>>,
-    // pub ruts: Option<Vec<String>>,
+   
 }
 
 #[tauri::command]
@@ -327,7 +328,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
 
     let mut params: Vec<String> = Vec::new();
 
-    // 📅 Filtro por fecha
+    //  Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
         query.push_str(" AND date(created_at) >= date(?)");
         params.push(fecha_inicio);
@@ -338,8 +339,8 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         params.push(fecha_fin);
     }
 
-    // 📧 Filtro por correos (selección múltiple)
-    if let Some(correos) = filtros.correo { // ✅ Usar 'correo' para coincidir con la estructura
+    //  Filtro por correos 
+    if let Some(correos) = filtros.correo {
         if !correos.is_empty() {
             let placeholders = vec!["?"; correos.len()].join(",");
             query.push_str(&format!(" AND LOWER(cliente_correo) IN ({})", placeholders));
@@ -349,9 +350,8 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
-    // 🆔 Filtro por RUTs (desactivado por ahora)
-    /*
-    if let Some(ruts) = filtros.ruts {
+    // Filtro por RUTs 
+    if let Some(ruts) = filtros.rut {
         if !ruts.is_empty() {
             let placeholders = vec!["?"; ruts.len()].join(",");
             query.push_str(&format!(" AND cliente_rut IN ({})", placeholders));
@@ -360,7 +360,8 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
             }
         }
     }
-    */
+
+    query.push_str(" ORDER BY cliente_nombre");
 
     // Ejecutar consulta
     let mut q = sqlx::query_as::<_, Cliente>(&query);
@@ -376,7 +377,30 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
     Ok(clientes)
 }
 
-// Nuevo comando para obtener correos únicos
+// 3. función para obtener RUTs únicos
+#[derive(Debug, FromRow)]
+struct RutResult {
+    cliente_rut: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_ruts_clientes() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let ruts = sqlx::query_as::<_, RutResult>(
+        "SELECT DISTINCT cliente_rut FROM CLIENTE WHERE cliente_rut IS NOT NULL ORDER BY cliente_rut"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error en get_ruts_clientes: {}", e))?;
+
+    let lista: Vec<String> = ruts
+        .into_iter()
+        .filter_map(|r| r.cliente_rut)
+        .collect();
+
+    Ok(lista)
+}
 #[derive(Debug, FromRow)]
 struct CorreoResult {
     cliente_correo: Option<String>,
@@ -387,7 +411,7 @@ pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
 
     let correos = sqlx::query_as::<_, CorreoResult>(
-        "SELECT DISTINCT cliente_correo FROM CLIENTE WHERE cliente_correo IS NOT NULL"
+        "SELECT DISTINCT cliente_correo FROM CLIENTE WHERE cliente_correo IS NOT NULL ORDER BY cliente_correo"
     )
     .fetch_all(pool)
     .await
