@@ -15,6 +15,7 @@ import { Search, Edit, Trash2 } from "lucide-react";
 import { ClienteFormDialog } from "./ClienteFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
 
 interface Cliente {
   cliente_id: number;
@@ -38,6 +39,9 @@ export function ClientesView() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef(true);
+
+  // Estado para forzar actualización de filtros
+  const [refreshFilters, setRefreshFilters] = useState(0);
 
   const loadClientes = async (searchQuery: string = "") => {
     try {
@@ -121,12 +125,14 @@ export function ClientesView() {
     // Recargar con el término de búsqueda actual
     loadClientes(searchTerm);
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleClienteUpdated = () => {
     // Recargar con el término de búsqueda actual
     loadClientes(searchTerm);
     setEditingCliente(null);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleEditCliente = (cliente: Cliente) => {
@@ -155,6 +161,7 @@ export function ClientesView() {
         );
         // Recargar con el término de búsqueda actual
         loadClientes(searchTerm);
+        setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
       }
@@ -206,6 +213,13 @@ export function ClientesView() {
             Limpiar
           </Button>
         )}
+        {/*Unificar Filtros */}
+        <div className="flex-shrink-0">
+          <UnificarFiltrosClientes
+            key={refreshFilters}
+            onFiltrar={(clientesFiltrados) => setClientes(clientesFiltrados)}
+          />
+        </div>
       </div>
 
       <div className="rounded-md border">

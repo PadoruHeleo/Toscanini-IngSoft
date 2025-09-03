@@ -35,6 +35,15 @@ pub struct UpdateClienteRequest {
     pub cliente_direccion: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct FiltrosClientes {
+    pub fecha_inicio: Option<String>,
+    pub fecha_fin: Option<String>,
+    pub correo: Option<Vec<String>>,
+    pub rut: Option<Vec<String>>,    
+    pub ciudad: Option<Vec<String>>, 
+}
+
 #[tauri::command]
 pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
@@ -301,4 +310,153 @@ pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(clientes)
+}
+
+
+// Unificar Filtros
+#[tauri::command]
+pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Cliente>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let mut query = String::from(
+        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at 
+         FROM CLIENTE 
+         WHERE 1=1"
+    );
+
+    let mut params: Vec<String> = Vec::new();
+
+    // Filtro por fecha
+    if let Some(fecha_inicio) = filtros.fecha_inicio {
+        query.push_str(" AND date(created_at) >= date(?)");
+        params.push(fecha_inicio);
+    }
+
+    if let Some(fecha_fin) = filtros.fecha_fin {
+        query.push_str(" AND date(created_at) <= date(?)");
+        params.push(fecha_fin);
+    }
+
+    // Filtro por correos 
+    if let Some(correos) = filtros.correo {
+        if !correos.is_empty() {
+            let placeholders = vec!["?"; correos.len()].join(",");
+            query.push_str(&format!(" AND LOWER(cliente_correo) IN ({})", placeholders));
+            for c in correos {
+                params.push(c.to_lowercase());
+            }
+        }
+    }
+
+    // Filtro por RUTs 
+    if let Some(ruts) = filtros.rut {
+        if !ruts.is_empty() {
+            let placeholders = vec!["?"; ruts.len()].join(",");
+            query.push_str(&format!(" AND cliente_rut IN ({})", placeholders));
+            for rut in ruts {
+                params.push(rut);
+            }
+        }
+    }
+
+    // Filtro por ciudades
+    if let Some(ciudades) = filtros.ciudad {
+        if !ciudades.is_empty() {
+            let placeholders = vec!["?"; ciudades.len()].join(",");
+            query.push_str(&format!(" AND cliente_direccion IN ({})", placeholders));
+            for ciudad in ciudades {
+                params.push(ciudad);
+            }
+        }
+    }
+
+    query.push_str(" ORDER BY cliente_nombre");
+
+    // Ejecutar consulta
+    let mut q = sqlx::query_as::<_, Cliente>(&query);
+    for p in params {
+        q = q.bind(p);
+    }
+
+    let clientes = q
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
+
+    Ok(clientes)
+}
+
+// Función para obtener RUTs únicos
+#[derive(Debug, FromRow)]
+struct RutResult {
+    cliente_rut: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_ruts_clientes() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let ruts = sqlx::query_as::<_, RutResult>(
+        "SELECT DISTINCT cliente_rut FROM CLIENTE WHERE cliente_rut IS NOT NULL ORDER BY cliente_rut"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error en get_ruts_clientes: {}", e))?;
+
+    let lista: Vec<String> = ruts
+        .into_iter()
+        .filter_map(|r| r.cliente_rut)
+        .collect();
+
+    Ok(lista)
+}
+
+// Función para obtener correos únicos
+#[derive(Debug, FromRow)]
+struct CorreoResult {
+    cliente_correo: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let correos = sqlx::query_as::<_, CorreoResult>(
+        "SELECT DISTINCT cliente_correo FROM CLIENTE WHERE cliente_correo IS NOT NULL ORDER BY cliente_correo"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error en get_correos_clientes: {}", e))?;
+
+    let lista: Vec<String> = correos
+        .into_iter()
+        .filter_map(|r| r.cliente_correo)
+        .collect();
+
+    Ok(lista)
+}
+
+// Función para obtener ciudades únicas
+#[derive(Debug, FromRow)]
+struct CiudadResult {
+    cliente_direccion: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_ciudades_clientes() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let ciudades = sqlx::query_as::<_, CiudadResult>(
+        "SELECT DISTINCT cliente_direccion FROM CLIENTE WHERE cliente_direccion IS NOT NULL ORDER BY cliente_direccion"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error en get_ciudades_clientes: {}", e))?;
+
+    let lista: Vec<String> = ciudades
+        .into_iter()
+        .filter_map(|r| r.cliente_direccion)
+        .collect();
+
+    Ok(lista)
 }
