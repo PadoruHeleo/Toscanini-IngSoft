@@ -42,14 +42,14 @@ export function ClientesView() {
   // Estado para forzar actualización de filtros
   const [refreshFilters, setRefreshFilters] = useState(0);
 
-  // 🔥 Función para validar que solo contenga texto (sin números)
+  //  Función para validar que solo contenga texto (sin números)
   const isValidText = (text: string): boolean => {
     // Solo permite: letras (con acentos), espacios, apostrofes, guiones
     const textOnlyRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/;
     return textOnlyRegex.test(text);
   };
 
-  // 🔥 Manejar cambios en el input de búsqueda (solo texto)
+  //  Manejar cambios en el input de búsqueda (solo texto)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
 
@@ -59,7 +59,7 @@ export function ClientesView() {
     }
   };
 
-  // 🔥 Prevenir entrada de números al escribir
+  //  Prevenir entrada de números al escribir
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Prevenir números (0-9)
     if (/[0-9]/.test(e.key)) {
@@ -67,7 +67,7 @@ export function ClientesView() {
     }
   };
 
-  // ✅ Carga inicial de clientes (sin filtros)
+  //  Carga inicial de clientes (sin filtros)
   useEffect(() => {
     const loadInitialClientes = async () => {
       try {
@@ -88,7 +88,7 @@ export function ClientesView() {
     loadInitialClientes();
   }, []);
 
-  // ✅ Manejo del término de búsqueda con debounce (sin cargar clientes directamente)
+  //  Manejo del término de búsqueda con debounce (sin cargar clientes directamente)
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -159,7 +159,7 @@ export function ClientesView() {
     return new Date(dateString).toLocaleDateString("es-CL");
   };
 
-  // ✅ Función que recibe los clientes filtrados desde UnificarFiltrosClientes
+  //  Función que recibe los clientes filtrados desde UnificarFiltrosClientes
   const handleClientesFiltrados = (clientesFiltrados: Cliente[]) => {
     setClientes(clientesFiltrados);
     setLoading(false);
@@ -196,7 +196,7 @@ export function ClientesView() {
           />
         </div>
 
-        {/* ✅ Filtros unificados - pasamos searchTerm y función para recibir resultados */}
+        {/*  Filtros unificados - pasamos searchTerm y función para recibir resultados */}
         <div className="flex-shrink-0">
           <UnificarFiltrosClientes
             key={refreshFilters}
