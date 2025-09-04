@@ -42,7 +42,16 @@ pub struct FiltrosClientes {
     pub correo: Option<Vec<String>>,
     pub rut: Option<Vec<String>>,    
     pub ciudad: Option<Vec<String>>,
-    pub search: Option<String>, 
+    pub search: Option<String>,
+    pub ordenamiento: Option<String>,
+}
+
+fn build_order_by_clause(ordenamiento: &Option<String>) -> String {
+    match ordenamiento.as_deref() {
+        Some("asc") => " ORDER BY LOWER(cliente_nombre) ASC".to_string(),
+        Some("desc") => " ORDER BY LOWER(cliente_nombre) DESC".to_string(),
+        _ => " ORDER BY cliente_nombre".to_string(), // Por defecto
+    }
 }
 
 #[tauri::command]
@@ -383,10 +392,9 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
-    query.push_str(" ORDER BY cliente_nombre");
+    // NUEVO: Agregar cláusula ORDER BY según el ordenamiento solicitado
+    query.push_str(&build_order_by_clause(&filtros.ordenamiento));
 
-    println!("🔍 Query SQL: {}", query);
-    println!("📝 Parámetros: {:?}", params);
 
     // Ejecutar consulta
     let mut q = sqlx::query_as::<_, Cliente>(&query);
@@ -398,8 +406,6 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         .fetch_all(pool)
         .await
         .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
-
-    println!("📊 Clientes encontrados: {}", clientes.len());
     Ok(clientes)
 }
 
