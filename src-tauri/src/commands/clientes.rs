@@ -336,18 +336,14 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
 
     let mut params: Vec<String> = Vec::new();
 
-    // ✅ Filtro por búsqueda de texto (nombre, RUT, correo, teléfono, dirección)
+    //  Filtro por búsqueda de texto 
     if let Some(search_term) = filtros.search {
         if !search_term.trim().is_empty() {
             let search_pattern = format!("%{}%", search_term.trim());
-            query.push_str(" AND (cliente_nombre LIKE ? OR cliente_rut LIKE ? OR cliente_correo LIKE ? OR cliente_telefono LIKE ? OR cliente_direccion LIKE ?)");
-            // Añadir el mismo patrón 5 veces para los 5 campos
-            for _ in 0..5 {
-                params.push(search_pattern.clone());
-            }
+            query.push_str(" AND cliente_nombre LIKE ?");
+            params.push(search_pattern);
         }
     }
-
     // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
         query.push_str(" AND date(created_at) >= date(?)");

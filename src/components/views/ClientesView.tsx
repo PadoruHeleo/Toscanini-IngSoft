@@ -42,6 +42,31 @@ export function ClientesView() {
   // Estado para forzar actualización de filtros
   const [refreshFilters, setRefreshFilters] = useState(0);
 
+  // 🔥 Función para validar que solo contenga texto (sin números)
+  const isValidText = (text: string): boolean => {
+    // Solo permite: letras (con acentos), espacios, apostrofes, guiones
+    const textOnlyRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/;
+    return textOnlyRegex.test(text);
+  };
+
+  // 🔥 Manejar cambios en el input de búsqueda (solo texto)
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+
+    // Solo actualizar si es texto válido (sin números)
+    if (isValidText(value)) {
+      setSearchTerm(value);
+    }
+  };
+
+  // 🔥 Prevenir entrada de números al escribir
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Prevenir números (0-9)
+    if (/[0-9]/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
   // ✅ Carga inicial de clientes (sin filtros)
   useEffect(() => {
     const loadInitialClientes = async () => {
@@ -162,10 +187,12 @@ export function ClientesView() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
-            placeholder="Buscar clientes..."
+            placeholder="Buscar por nombre..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
+            onKeyPress={handleKeyPress}
             className="pl-8"
+            title="Solo se permiten letras y espacios"
           />
         </div>
 
