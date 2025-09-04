@@ -41,7 +41,8 @@ pub struct FiltrosClientes {
     pub fecha_fin: Option<String>,
     pub correo: Option<Vec<String>>,
     pub rut: Option<Vec<String>>,    
-    pub ciudad: Option<Vec<String>>, 
+    pub ciudad: Option<Vec<String>>,
+    pub search: Option<String>, 
 }
 
 #[tauri::command]
@@ -326,6 +327,18 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
 
     let mut params: Vec<String> = Vec::new();
 
+    // ✅ Filtro por búsqueda de texto (nombre, RUT, correo, teléfono, dirección)
+    if let Some(search_term) = filtros.search {
+        if !search_term.trim().is_empty() {
+            let search_pattern = format!("%{}%", search_term.trim());
+            query.push_str(" AND (cliente_nombre LIKE ? OR cliente_rut LIKE ? OR cliente_correo LIKE ? OR cliente_telefono LIKE ? OR cliente_direccion LIKE ?)");
+            // Añadir el mismo patrón 5 veces para los 5 campos
+            for _ in 0..5 {
+                params.push(search_pattern.clone());
+            }
+        }
+    }
+
     // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
         query.push_str(" AND date(created_at) >= date(?)");
@@ -359,7 +372,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
-    // Filtro por ciudades
+    // Filtro por ciudades (direcciones)
     if let Some(ciudades) = filtros.ciudad {
         if !ciudades.is_empty() {
             let placeholders = vec!["?"; ciudades.len()].join(",");
@@ -372,6 +385,9 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
 
     query.push_str(" ORDER BY cliente_nombre");
 
+    println!("🔍 Query SQL: {}", query);
+    println!("📝 Parámetros: {:?}", params);
+
     // Ejecutar consulta
     let mut q = sqlx::query_as::<_, Cliente>(&query);
     for p in params {
@@ -383,6 +399,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         .await
         .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
 
+    println!("📊 Clientes encontrados: {}", clientes.len());
     Ok(clientes)
 }
 

@@ -19,59 +19,117 @@ interface Cliente {
 
 interface Props {
   onFiltrar: (clientes: Cliente[]) => void;
+  searchTerm?: string;
 }
 
-export function UnificarFiltrosClientes({ onFiltrar }: Props) {
+export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
   const filtrosIniciales = {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
     correo: null as string[] | null,
     rut: null as string[] | null,
-    ciudad: null as string[] | null, // Nuevo filtro por ciudad
+    ciudad: null as string[] | null,
+    search: null as string | null,
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
   const [resetKey, setResetKey] = useState(0);
 
+  // ✅ Sincronizar searchTerm con filtros de forma más eficiente
+  useEffect(() => {
+    const searchValue = searchTerm?.trim() || null;
+
+    // Solo actualizar si realmente cambió para evitar re-renders innecesarios
+    setFiltros((prev) => {
+      if (prev.search !== searchValue) {
+        return { ...prev, search: searchValue };
+      }
+      return prev;
+    });
+  }, [searchTerm]);
+
+  // ✅ Función para actualizar filtros (sin afectar search)
   const actualizarFiltro = (nuevoFiltro: Partial<typeof filtros>) => {
-    setFiltros((prev) => ({ ...prev, ...nuevoFiltro }));
+    setFiltros((prev) => ({
+      ...prev,
+      ...nuevoFiltro,
+    }));
   };
 
-  const aplicarFiltros = async (filtrosActuales = filtros) => {
+  // ✅ Aplicar filtros al backend
+  const aplicarFiltros = async () => {
     try {
-      console.log("🔍 Aplicando filtros de clientes:", filtrosActuales);
+      console.log("🔍 Aplicando filtros de clientes:", filtros);
 
-      const filtrosParaBackend = {
-        fecha_inicio: filtrosActuales.fecha_inicio,
-        fecha_fin: filtrosActuales.fecha_fin,
-        correo: filtrosActuales.correo,
-        rut: filtrosActuales.rut,
-        ciudad: filtrosActuales.ciudad, // Incluir filtro por ciudad
-      };
+      // Si no hay ningún filtro activo, obtener todos los clientes
+      const hayFiltrosActivos =
+        filtros.fecha_inicio !== null ||
+        filtros.fecha_fin !== null ||
+        filtros.correo !== null ||
+        filtros.rut !== null ||
+        filtros.ciudad !== null ||
+        filtros.search !== null;
 
-      console.log("📤 Enviando al backend:", filtrosParaBackend);
+      let clientes: Cliente[];
 
-      const clientes = await invoke<Cliente[]>("get_clientes_filtrados", {
-        filtros: filtrosParaBackend,
-      });
+      if (!hayFiltrosActivos) {
+        // Sin filtros, obtener todos los clientes
+        clientes = await invoke<Cliente[]>("get_clientes");
+      } else {
+        // Con filtros, usar el endpoint de filtrado
+        const filtrosParaBackend = {
+          fecha_inicio: filtros.fecha_inicio,
+          fecha_fin: filtros.fecha_fin,
+          correo: filtros.correo,
+          rut: filtros.rut,
+          ciudad: filtros.ciudad,
+          search: filtros.search,
+        };
 
-      console.log("📨 Clientes filtrados recibidos:", clientes.length);
+        console.log("📤 Enviando al backend:", filtrosParaBackend);
+        clientes = await invoke<Cliente[]>("get_clientes_filtrados", {
+          filtros: filtrosParaBackend,
+        });
+      }
+
+      console.log("📨 Clientes recibidos:", clientes.length);
       onFiltrar(clientes);
     } catch (err) {
       console.error("❌ Error aplicando filtros:", err);
+      // En caso de error, intentar cargar todos los clientes
+      try {
+        const clientesBackup = await invoke<Cliente[]>("get_clientes");
+        onFiltrar(clientesBackup);
+      } catch (backupErr) {
+        console.error("❌ Error en carga de respaldo:", backupErr);
+        onFiltrar([]);
+      }
     }
   };
 
+  // ✅ Aplicar filtros cuando cambien
   useEffect(() => {
-    aplicarFiltros(filtros);
+    aplicarFiltros();
   }, [filtros]);
 
+  // ✅ Verificar si hay filtros activos (incluyendo búsqueda)
   const hayFiltrosActivos =
     filtros.fecha_inicio !== null ||
     filtros.fecha_fin !== null ||
     filtros.correo !== null ||
     filtros.rut !== null ||
-    filtros.ciudad !== null; // Incluir verificación del filtro por ciudad
+    filtros.ciudad !== null ||
+    filtros.search !== null;
+
+  // ✅ Limpiar todos los filtros (incluyendo búsqueda)
+  const limpiarFiltros = () => {
+    setFiltros(filtrosIniciales);
+    setResetKey((prev) => prev + 1);
+
+    // Opcional: También limpiar el input de búsqueda en el componente padre
+    // Esto requeriría una prop adicional como onClearSearch
+    // onClearSearch?.();
+  };
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -98,14 +156,8 @@ export function UnificarFiltrosClientes({ onFiltrar }: Props) {
       />
 
       {hayFiltrosActivos && (
-        <Button
-          variant="outline"
-          onClick={() => {
-            setFiltros(filtrosIniciales);
-            setResetKey((prev) => prev + 1);
-          }}
-        >
-          Limpiar
+        <Button variant="outline" onClick={limpiarFiltros} className="text-sm">
+          Limpiar Filtros
         </Button>
       )}
     </div>

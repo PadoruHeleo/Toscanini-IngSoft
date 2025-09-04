@@ -38,67 +38,43 @@ export function ClientesView() {
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialLoadRef = useRef(true);
 
   // Estado para forzar actualización de filtros
   const [refreshFilters, setRefreshFilters] = useState(0);
 
-  const loadClientes = async (searchQuery: string = "") => {
-    try {
-      // Solo mostrar loading en la carga inicial
-      if (isInitialLoadRef.current) {
-        setLoading(true);
-      }
-
-      let clientesData: Cliente[];
-
-      if (searchQuery.trim()) {
-        clientesData = await invoke<Cliente[]>("search_clientes", {
-          searchTerm: searchQuery.trim(),
-        });
-      } else {
-        clientesData = await invoke<Cliente[]>("get_clientes");
-      }
-
-      setClientes(clientesData);
-    } catch (error) {
-      console.error("Error cargando clientes:", error);
-      showError(
-        "Error al cargar clientes",
-        "No se pudieron cargar los clientes."
-      );
-    } finally {
-      if (isInitialLoadRef.current) {
-        setLoading(false);
-        isInitialLoadRef.current = false;
-      }
-    }
-  };
-
-  // Carga inicial
+  // ✅ Carga inicial de clientes (sin filtros)
   useEffect(() => {
-    loadClientes();
+    const loadInitialClientes = async () => {
+      try {
+        setLoading(true);
+        const clientesData = await invoke<Cliente[]>("get_clientes");
+        setClientes(clientesData);
+      } catch (error) {
+        console.error("Error cargando clientes:", error);
+        showError(
+          "Error al cargar clientes",
+          "No se pudieron cargar los clientes."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialClientes();
   }, []);
 
-  // Búsqueda con debounce optimizado
+  // ✅ Manejo del término de búsqueda con debounce (sin cargar clientes directamente)
   useEffect(() => {
-    // Limpiar timeout anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Si no hay término de búsqueda, cargar inmediatamente
-    if (!searchTerm.trim()) {
-      loadClientes("");
-      return;
-    }
-
-    // Debounce más corto para mejor UX
+    // El debounce solo actualiza el estado, no carga clientes
+    // UnificarFiltrosClientes se encarga de aplicar el filtro
     searchTimeoutRef.current = setTimeout(() => {
-      loadClientes(searchTerm);
-    }, 150); // Reducido de 300ms a 150ms
+      // El searchTerm se pasa como prop a UnificarFiltrosClientes
+    }, 150);
 
-    // Cleanup
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -106,31 +82,12 @@ export function ClientesView() {
     };
   }, [searchTerm]);
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    // Removemos el setTimeout que causaba problemas de foco
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    // Mantener foco en el input después de limpiar
-    setTimeout(() => {
-      if (searchInputRef.current) {
-        searchInputRef.current.focus();
-      }
-    }, 0);
-  };
-
   const handleClienteAdded = () => {
-    // Recargar con el término de búsqueda actual
-    loadClientes(searchTerm);
     setShowAddForm(false);
     setRefreshFilters((prev) => prev + 1);
   };
 
   const handleClienteUpdated = () => {
-    // Recargar con el término de búsqueda actual
-    loadClientes(searchTerm);
     setEditingCliente(null);
     setRefreshFilters((prev) => prev + 1);
   };
@@ -159,8 +116,6 @@ export function ClientesView() {
           "Cliente eliminado",
           `${cliente.cliente_nombre} ha sido eliminado exitosamente.`
         );
-        // Recargar con el término de búsqueda actual
-        loadClientes(searchTerm);
         setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
@@ -179,6 +134,12 @@ export function ClientesView() {
     return new Date(dateString).toLocaleDateString("es-CL");
   };
 
+  // ✅ Función que recibe los clientes filtrados desde UnificarFiltrosClientes
+  const handleClientesFiltrados = (clientesFiltrados: Cliente[]) => {
+    setClientes(clientesFiltrados);
+    setLoading(false);
+  };
+
   if (loading) {
     return (
       <div className="p-4">
@@ -195,7 +156,7 @@ export function ClientesView() {
         <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
       </div>
 
-      {/* Barra de búsqueda optimizada */}
+      {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -203,21 +164,17 @@ export function ClientesView() {
             ref={searchInputRef}
             placeholder="Buscar clientes..."
             value={searchTerm}
-            onChange={handleSearchChange}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8"
-            autoComplete="off"
           />
         </div>
-        {searchTerm && (
-          <Button variant="outline" onClick={handleClearSearch}>
-            Limpiar
-          </Button>
-        )}
-        {/*Unificar Filtros */}
+
+        {/* ✅ Filtros unificados - pasamos searchTerm y función para recibir resultados */}
         <div className="flex-shrink-0">
           <UnificarFiltrosClientes
             key={refreshFilters}
-            onFiltrar={(clientesFiltrados) => setClientes(clientesFiltrados)}
+            searchTerm={searchTerm}
+            onFiltrar={handleClientesFiltrados}
           />
         </div>
       </div>
