@@ -41,7 +41,17 @@ pub struct FiltrosClientes {
     pub fecha_fin: Option<String>,
     pub correo: Option<Vec<String>>,
     pub rut: Option<Vec<String>>,    
-    pub ciudad: Option<Vec<String>>, 
+    pub ciudad: Option<Vec<String>>,
+    pub search: Option<String>,
+    pub ordenamiento: Option<String>,
+}
+
+fn build_order_by_clause(ordenamiento: &Option<String>) -> String {
+    match ordenamiento.as_deref() {
+        Some("asc") => " ORDER BY LOWER(cliente_nombre) ASC".to_string(),
+        Some("desc") => " ORDER BY LOWER(cliente_nombre) DESC".to_string(),
+        _ => " ORDER BY cliente_nombre".to_string(), // Por defecto
+    }
 }
 
 #[tauri::command]
@@ -326,6 +336,14 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
 
     let mut params: Vec<String> = Vec::new();
 
+    //  Filtro por búsqueda de texto 
+    if let Some(search_term) = filtros.search {
+        if !search_term.trim().is_empty() {
+            let search_pattern = format!("%{}%", search_term.trim());
+            query.push_str(" AND cliente_nombre LIKE ?");
+            params.push(search_pattern);
+        }
+    }
     // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
         query.push_str(" AND date(created_at) >= date(?)");
@@ -359,7 +377,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
-    // Filtro por ciudades
+    // Filtro por ciudades (direcciones)
     if let Some(ciudades) = filtros.ciudad {
         if !ciudades.is_empty() {
             let placeholders = vec!["?"; ciudades.len()].join(",");
@@ -370,7 +388,9 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
-    query.push_str(" ORDER BY cliente_nombre");
+    // NUEVO: Agregar cláusula ORDER BY según el ordenamiento solicitado
+    query.push_str(&build_order_by_clause(&filtros.ordenamiento));
+
 
     // Ejecutar consulta
     let mut q = sqlx::query_as::<_, Cliente>(&query);
@@ -382,7 +402,6 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         .fetch_all(pool)
         .await
         .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
-
     Ok(clientes)
 }
 
