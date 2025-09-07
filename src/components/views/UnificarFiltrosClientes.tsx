@@ -5,6 +5,7 @@ import { FiltrarOrdenesPorFechaClientes } from "./FiltrarOrdenesPorFechaClientes
 import { FiltrarClientesPorCorreo } from "./FiltrarClientesPorCorreo";
 import { FiltrarClientesPorRuts } from "./FiltrarClientesPorRuts";
 import { FiltrarClientesPorCiudad } from "./FiltrarClientesPorCiudad";
+import { FiltrarClienteActivoeInactivos } from "./FiltrarClientesActivoseInactivos.tsx";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 interface Cliente {
@@ -14,6 +15,7 @@ interface Cliente {
   cliente_correo?: string;
   cliente_telefono?: string;
   cliente_direccion?: string;
+  is_active?: boolean;
   created_by?: number;
   created_at?: string;
 }
@@ -23,9 +25,14 @@ type OrdenTipo = "ninguno" | "asc" | "desc";
 interface Props {
   onFiltrar: (clientes: Cliente[]) => void;
   searchTerm?: string;
+  onClearSearch?: () => void; // Nueva prop para limpiar la búsqueda
 }
 
-export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
+export function UnificarFiltrosClientes({
+  onFiltrar,
+  searchTerm,
+  onClearSearch,
+}: Props) {
   const filtrosIniciales = {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
@@ -33,6 +40,7 @@ export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
     rut: null as string[] | null,
     ciudad: null as string[] | null,
     search: null as string | null,
+    estado: null as boolean[] | null, // ← NUEVO CAMPO
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -113,12 +121,13 @@ export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
         filtros.correo !== null ||
         filtros.rut !== null ||
         filtros.ciudad !== null ||
-        filtros.search !== null;
+        filtros.search !== null ||
+        filtros.estado !== null;
 
       let clientes: Cliente[];
 
       if (!hayFiltrosActivos) {
-        // Sin filtros, obtener todos los clientes
+        // Sin filtros, obtener todos los clientes activos por defecto
         clientes = await invoke<Cliente[]>("get_clientes");
       } else {
         // Con filtros, usar el endpoint de filtrado
@@ -129,6 +138,7 @@ export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
           rut: filtros.rut,
           ciudad: filtros.ciudad,
           search: filtros.search,
+          estado: filtros.estado,
         };
 
         console.log("📤 Enviando al backend:", filtrosParaBackend);
@@ -166,20 +176,26 @@ export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
     aplicarFiltros();
   }, [filtros]);
 
-  //  Verificar si hay filtros activos (incluyendo búsqueda)
+  //  Verificar si hay filtros activos (incluyendo búsqueda y estado)
   const hayFiltrosActivos =
     filtros.fecha_inicio !== null ||
     filtros.fecha_fin !== null ||
     filtros.correo !== null ||
     filtros.rut !== null ||
     filtros.ciudad !== null ||
-    filtros.search !== null;
+    filtros.search !== null ||
+    filtros.estado !== null; //
 
-  //  Limpiar todos los filtros (incluyendo búsqueda y ordenamiento)
+  //  Limpiar todos los filtros (incluyendo búsqueda, estado y ordenamiento)
   const limpiarFiltros = () => {
     setFiltros(filtrosIniciales);
     setOrdenamiento("ninguno");
     setResetKey((prev) => prev + 1);
+
+    // Limpiar la búsqueda en el componente padre
+    if (onClearSearch) {
+      onClearSearch();
+    }
   };
 
   //  Función para obtener el icono del botón de ordenamiento
@@ -230,6 +246,11 @@ export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
         onChange={(ciudades) => actualizarFiltro({ ciudad: ciudades })}
       />
 
+      <FiltrarClienteActivoeInactivos
+        resetKey={resetKey}
+        onChange={(estados) => actualizarFiltro({ estado: estados })}
+      />
+
       {/* Botón de ordenamiento alfabético */}
       <Button
         variant={ordenamiento !== "ninguno" ? "default" : "outline"}
@@ -249,7 +270,7 @@ export function UnificarFiltrosClientes({ onFiltrar, searchTerm }: Props) {
 
       {(hayFiltrosActivos || ordenamiento !== "ninguno") && (
         <Button variant="outline" onClick={limpiarFiltros} className="text-sm">
-          Limpiar Todo
+          Limpiar
         </Button>
       )}
     </div>

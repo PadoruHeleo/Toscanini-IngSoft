@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS CLIENTE (
     cliente_correo VARCHAR(256),
     cliente_telefono VARCHAR(16),
     cliente_direccion VARCHAR(512),
+    is_active BOOLEAN DEFAULT true,
     created_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES USUARIO(usuario_id)

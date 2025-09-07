@@ -59,6 +59,10 @@ export function ClientesView() {
     }
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm("");
+  };
+
   //  Prevenir entrada de números al escribir
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Prevenir números (0-9)
@@ -183,7 +187,7 @@ export function ClientesView() {
 
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
@@ -197,11 +201,12 @@ export function ClientesView() {
         </div>
 
         {/*  Filtros unificados - pasamos searchTerm y función para recibir resultados */}
-        <div className="flex-shrink-0">
+        <div className="flex-grow min-w-0">
           <UnificarFiltrosClientes
             key={refreshFilters}
             searchTerm={searchTerm}
             onFiltrar={handleClientesFiltrados}
+            onClearSearch={handleClearSearch}
           />
         </div>
       </div>

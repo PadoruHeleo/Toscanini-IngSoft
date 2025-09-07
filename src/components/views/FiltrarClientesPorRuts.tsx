@@ -117,9 +117,12 @@ export function FiltrarClientesPorRuts({ resetKey, onChange }: Props) {
             ))}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2">
             <Button onClick={aplicarFiltro}>
               Aplicar {seleccionados.length > 0 && `(${seleccionados.length})`}
+            </Button>
+            <Button variant="outline" onClick={limpiar}>
+              Limpiar
             </Button>
           </DialogFooter>
         </DialogContent>
