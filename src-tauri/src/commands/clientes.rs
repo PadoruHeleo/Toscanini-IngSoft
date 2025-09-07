@@ -12,6 +12,7 @@ pub struct Cliente {
     pub cliente_correo: Option<String>,
     pub cliente_telefono: Option<String>,
     pub cliente_direccion: Option<String>,
+    pub is_active: Option<bool>,
     pub created_by: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
 }
@@ -43,6 +44,7 @@ pub struct FiltrosClientes {
     pub rut: Option<Vec<String>>,    
     pub ciudad: Option<Vec<String>>,
     pub search: Option<String>,
+    pub estado: Option<Vec<bool>>,    
     pub ordenamiento: Option<String>,
 }
 
@@ -54,11 +56,15 @@ fn build_order_by_clause(ordenamiento: &Option<String>) -> String {
     }
 }
 
+// Consulta base actualizada para incluir is_active
+const BASE_SELECT: &str = "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, is_active, created_by, created_at FROM CLIENTE";
+
+
 #[tauri::command]
 pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE ORDER BY cliente_nombre"
+        &format!("{} WHERE is_active = 1 ORDER BY cliente_nombre", BASE_SELECT)
     )
     .fetch_all(pool)
     .await
@@ -67,11 +73,12 @@ pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
     Ok(clientes)
 }
 
+
 #[tauri::command]
 pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let cliente = sqlx::query_as::<_, Cliente>(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE WHERE cliente_id = ?"
+        &format!("{} WHERE cliente_id = ?", BASE_SELECT)
     )
     .bind(cliente_id)
     .fetch_optional(pool)
@@ -85,7 +92,7 @@ pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, Strin
 pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let cliente = sqlx::query_as::<_, Cliente>(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE WHERE cliente_rut = ?"
+        &format!("{} WHERE cliente_rut = ?", BASE_SELECT)
     )
     .bind(cliente_rut)
     .fetch_optional(pool)
@@ -99,7 +106,7 @@ pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, 
 pub async fn get_clientes_by_created_by(created_by: i32) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at FROM CLIENTE WHERE created_by = ? ORDER BY cliente_nombre"
+        &format!("{} WHERE created_by = ? AND is_active = 1 ORDER BY cliente_nombre", BASE_SELECT)
     )
     .bind(created_by)
     .fetch_all(pool)
@@ -115,10 +122,7 @@ pub async fn search_clientes(search_term: String) -> Result<Vec<Cliente>, String
     let search_pattern = format!("%{}%", search_term);
     
     let clientes = sqlx::query_as::<_, Cliente>(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at 
-         FROM CLIENTE 
-         WHERE cliente_nombre LIKE ? OR cliente_rut LIKE ? OR cliente_correo LIKE ?
-         ORDER BY cliente_nombre"
+        &format!("{} WHERE (cliente_nombre LIKE ? OR cliente_rut LIKE ? OR cliente_correo LIKE ?) AND is_active = 1 ORDER BY cliente_nombre", BASE_SELECT)
     )
     .bind(&search_pattern)
     .bind(&search_pattern)
@@ -140,7 +144,7 @@ pub async fn create_cliente(request: CreateClienteRequest) -> Result<Cliente, St
     }
     
     let result = sqlx::query(
-        "INSERT INTO CLIENTE (cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO CLIENTE (cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, ?)"
     )
     .bind(&request.cliente_rut)
     .bind(&request.cliente_nombre)
@@ -241,47 +245,53 @@ pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, upda
 pub async fn delete_cliente(cliente_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    // Obtener el cliente antes de eliminarlo para logging
+    // Obtener el cliente antes de inactivarlo para logging
     let cliente_to_delete = get_cliente_by_id(cliente_id).await?;
     
-    // Verificar si el cliente tiene cotizaciones, informes u órdenes de trabajo asociadas
-    let has_dependencies = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM (
-            SELECT 1 FROM COTIZACION WHERE cliente_id = ?
-            UNION ALL
-            SELECT 1 FROM INFORME WHERE cliente_id = ?
-            UNION ALL
-            SELECT 1 FROM ORDEN_TRABAJO WHERE cliente_id = ?
-        ) as dependencies"
+    // Verificar si el cliente existe y está activo
+    let cliente_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ? AND is_active = 1"
     )
     .bind(cliente_id)
-    .bind(cliente_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Database error checking client existence: {}", e))?;
+    
+    if cliente_exists == 0 {
+        return Err("No se puede inactivar el cliente porque no existe o ya está inactivo".to_string());
+    }
+    
+    // Verificar si el cliente tiene equipos asociados
+    let has_dependencies = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM EQUIPO WHERE cliente_id = ?"
+    )
     .bind(cliente_id)
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
-    
+
     if has_dependencies > 0 {
-        return Err("No se puede eliminar el cliente porque tiene cotizaciones, informes u órdenes de trabajo asociadas".to_string());
+        return Err("No se puede inactivar el cliente porque tiene equipos asociados".to_string());
     }
     
-    let result = sqlx::query("DELETE FROM CLIENTE WHERE cliente_id = ?")
+    // Marcar el cliente como inactivo en lugar de eliminarlo
+    let result = sqlx::query("UPDATE CLIENTE SET is_active = 0 WHERE cliente_id = ?")
         .bind(cliente_id)
         .execute(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
-    let was_deleted = result.rows_affected() > 0;
+    let was_inactivated = result.rows_affected() > 0;
     
     // Registrar la acción en el log de auditoría
-    if was_deleted {
+    if was_inactivated {
         if let Some(ref cliente) = cliente_to_delete {
             let _ = log_action(
-                "DELETE_CLIENTE",
+                "INACTIVATE_CLIENTE",
                 Some(deleted_by),
                 "CLIENTE",
                 Some(cliente_id),
-                Some(&format!("Cliente eliminado: {} ({})", 
+                Some(&format!("Cliente inactivado: {} ({})", 
                     cliente.cliente_nombre.as_deref().unwrap_or("N/A"),
                     cliente.cliente_correo.as_deref().unwrap_or("N/A")
                 )),
@@ -290,13 +300,63 @@ pub async fn delete_cliente(cliente_id: i32, deleted_by: i32) -> Result<bool, St
         }
     }
     
-    Ok(was_deleted)
+    Ok(was_inactivated)
+}
+
+// NUEVA FUNCIÓN: Reactivar cliente
+#[tauri::command]
+pub async fn reactivate_cliente(cliente_id: i32, reactivated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el cliente antes de reactivarlo para logging
+    let cliente_to_reactivate = get_cliente_by_id(cliente_id).await?;
+    
+    // Verificar si el cliente existe y está inactivo
+    let cliente_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ? AND is_active = 0"
+    )
+    .bind(cliente_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Database error checking client existence: {}", e))?;
+    
+    if cliente_exists == 0 {
+        return Err("No se puede reactivar el cliente porque no existe o ya está activo".to_string());
+    }
+    
+    // Marcar el cliente como activo
+    let result = sqlx::query("UPDATE CLIENTE SET is_active = 1 WHERE cliente_id = ?")
+        .bind(cliente_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    let was_reactivated = result.rows_affected() > 0;
+    
+    // Registrar la acción en el log de auditoría
+    if was_reactivated {
+        if let Some(ref cliente) = cliente_to_reactivate {
+            let _ = log_action(
+                "REACTIVATE_CLIENTE",
+                Some(reactivated_by),
+                "CLIENTE",
+                Some(cliente_id),
+                Some(&format!("Cliente reactivado: {} ({})", 
+                    cliente.cliente_nombre.as_deref().unwrap_or("N/A"),
+                    cliente.cliente_correo.as_deref().unwrap_or("N/A")
+                )),
+                None
+            ).await;
+        }
+    }
+    
+    Ok(was_reactivated)
 }
 
 #[tauri::command]
 pub async fn count_clientes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM CLIENTE")
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM CLIENTE WHERE is_active = 1")
         .fetch_one(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
@@ -304,14 +364,12 @@ pub async fn count_clientes() -> Result<i64, String> {
     Ok(count)
 }
 
+
 #[tauri::command]
 pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at 
-         FROM CLIENTE 
-         ORDER BY cliente_nombre 
-         LIMIT ? OFFSET ?"
+        &format!("{} WHERE is_active = 1 ORDER BY cliente_nombre LIMIT ? OFFSET ?", BASE_SELECT)
     )
     .bind(limit)
     .bind(offset)
@@ -323,18 +381,34 @@ pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec
 }
 
 
-// Unificar Filtros
+// Unificar Filtros 
 #[tauri::command]
 pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
 
     let mut query = String::from(
-        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, created_by, created_at 
+        "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, is_active, created_by, created_at 
          FROM CLIENTE 
          WHERE 1=1"
     );
 
     let mut params: Vec<String> = Vec::new();
+
+    // Filtro por estado (activo/inactivo)
+    if let Some(estados) = filtros.estado {
+        if !estados.is_empty() {
+            if estados.len() == 1 {
+                // Solo un estado seleccionado
+                let estado = if estados[0] { 1 } else { 0 };
+                query.push_str(" AND is_active = ?");
+                params.push(estado.to_string());
+            }
+            // Si ambos están seleccionados, no agregar filtro (mostrar todos)
+        }
+    } else {
+        // Si no se especifica filtro de estado, mostrar solo activos por defecto
+        query.push_str(" AND is_active = 1");
+    }
 
     //  Filtro por búsqueda de texto 
     if let Some(search_term) = filtros.search {
@@ -344,6 +418,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
             params.push(search_pattern);
         }
     }
+    
     // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
         query.push_str(" AND date(created_at) >= date(?)");
@@ -388,9 +463,8 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
         }
     }
 
-    // NUEVO: Agregar cláusula ORDER BY según el ordenamiento solicitado
+    // Agregar cláusula ORDER BY según el ordenamiento solicitado
     query.push_str(&build_order_by_clause(&filtros.ordenamiento));
-
 
     // Ejecutar consulta
     let mut q = sqlx::query_as::<_, Cliente>(&query);
@@ -405,7 +479,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
     Ok(clientes)
 }
 
-// Función para obtener RUTs únicos
+// Función para obtener RUTs únicos 
 #[derive(Debug, FromRow)]
 struct RutResult {
     cliente_rut: Option<String>,
@@ -430,7 +504,7 @@ pub async fn get_ruts_clientes() -> Result<Vec<String>, String> {
     Ok(lista)
 }
 
-// Función para obtener correos únicos
+// Función para obtener correos únicos 
 #[derive(Debug, FromRow)]
 struct CorreoResult {
     cliente_correo: Option<String>,
@@ -455,7 +529,7 @@ pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
     Ok(lista)
 }
 
-// Función para obtener ciudades únicas
+// Función para obtener ciudades únicas 
 #[derive(Debug, FromRow)]
 struct CiudadResult {
     cliente_direccion: Option<String>,

@@ -55,6 +55,7 @@ pub fn run() {
             commands::clientes::create_cliente,
             commands::clientes::update_cliente,
             commands::clientes::delete_cliente,
+            commands::clientes::reactivate_cliente,
             commands::clientes::count_clientes,
             commands::clientes::get_clientes_with_pagination,
             commands::clientes::get_clientes_filtrados,
