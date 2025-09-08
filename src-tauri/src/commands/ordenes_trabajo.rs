@@ -884,3 +884,20 @@ pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
     
     Ok(clientes)
 }
+
+#[tauri::command]
+pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at
+         FROM ORDEN_TRABAJO
+         WHERE equipo_id IN (SELECT equipo_id FROM EQUIPO WHERE cliente_id = ?)
+         ORDER BY created_at DESC"
+    )
+    .bind(cliente_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    Ok(ordenes)
+}

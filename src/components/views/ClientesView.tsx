@@ -11,8 +11,9 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Edit, Trash2 } from "lucide-react";
+import { Search, Edit, Trash2, History } from "lucide-react";
 import { ClienteFormDialog } from "./ClienteFormDialog";
+import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
@@ -36,6 +37,9 @@ export function ClientesView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [historialCliente, setHistorialCliente] = useState<Cliente | null>(
+    null
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -123,6 +127,10 @@ export function ClientesView() {
 
   const handleEditCliente = (cliente: Cliente) => {
     setEditingCliente(cliente);
+  };
+
+  const handleVerHistorial = (cliente: Cliente) => {
+    setHistorialCliente(cliente);
   };
 
   const handleDeleteCliente = async (cliente: Cliente) => {
@@ -263,6 +271,15 @@ export function ClientesView() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => handleVerHistorial(cliente)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Ver historial del cliente"
+                      >
+                        <History className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleDeleteCliente(cliente)}
                         className="text-red-600 hover:text-red-700"
                         title="Eliminar cliente"
@@ -305,6 +322,13 @@ export function ClientesView() {
           isEditing={true}
         />
       )}
+
+      {/* Dialog para ver historial del cliente */}
+      <ClienteHistorialDialog
+        open={historialCliente !== null}
+        onOpenChange={(open) => !open && setHistorialCliente(null)}
+        cliente={historialCliente}
+      />
     </div>
   );
 }
