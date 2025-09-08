@@ -48,6 +48,25 @@ pub struct FiltrosClientes {
     pub ordenamiento: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Cotizacion {
+    pub cotizacion_id: i32,
+    pub cliente_id: i32,
+    pub fecha: Option<DateTime<Utc>>,
+    pub total: Option<f64>,
+    pub estado: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct OrdenTrabajo {
+    pub orden_id: i32,
+    pub cliente_id: i32,
+    pub fecha_inicio: Option<DateTime<Utc>>,
+    pub fecha_fin: Option<DateTime<Utc>>,
+    pub estado: Option<String>,
+    pub descripcion: Option<String>,
+}
+
 fn build_order_by_clause(ordenamiento: &Option<String>) -> String {
     match ordenamiento.as_deref() {
         Some("asc") => " ORDER BY LOWER(cliente_nombre) ASC".to_string(),
@@ -553,3 +572,4 @@ pub async fn get_ciudades_clientes() -> Result<Vec<String>, String> {
 
     Ok(lista)
 }
+

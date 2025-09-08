@@ -626,3 +626,23 @@ pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotiza
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(piezas)
 }
+
+#[tauri::command]
+pub async fn get_cotizaciones_by_cliente(cliente_id: i32) -> Result<Vec<Cotizacion>, String> {
+    let pool = get_db_pool_safe()?;
+    let cotizaciones = sqlx::query_as::<_, Cotizacion>(
+        "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion, \
+                c.costo_total, c.is_aprobada, c.is_borrador, c.informe, c.created_by, c.created_at \
+         FROM COTIZACION c \
+         INNER JOIN ORDEN_TRABAJO ot ON c.cotizacion_id = ot.cotizacion_id \
+         INNER JOIN EQUIPO e ON ot.equipo_id = e.equipo_id \
+         WHERE e.cliente_id = ? \
+         GROUP BY c.cotizacion_id \
+         ORDER BY c.created_at DESC"
+    )
+    .bind(cliente_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error al obtener cotizaciones del cliente: {}", e))?;
+    Ok(cotizaciones)
+}
