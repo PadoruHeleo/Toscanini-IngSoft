@@ -56,20 +56,29 @@ interface OrdenTrabajo {
 
 interface Cotizacion {
   cotizacion_id: number;
-  cliente_id: number;
-  fecha: string | null;
-  total: number | null;
-  estado: string;
+  cotizacion_codigo?: string | null;
+  costo_revision?: number | null;
+  costo_reparacion?: number | null;
+  costo_total?: number | null;
+  is_aprobada?: boolean | null;
+  is_borrador?: boolean | null;
+  informe?: string | null;
+  created_by?: number | null;
+  created_at?: string | null;
 }
 
 interface Informe {
-  id: number;
-  informe_codigo: string;
-  diagnostico: string[];
-  created_at: string;
-  solucion_aplicada: string;
-  tecnico_responsable: string;
-  orden_codigo?: string;
+  informe_id: number;
+  informe_codigo?: string | null;
+  informe_acciones?: string | null;
+  informe_obs?: string | null;
+  is_borrador?: boolean | null;
+  created_by?: number | null;
+  created_at?: string | null;
+  diagnostico?: string | null;
+  recomendaciones?: string | null;
+  solucion_aplicada?: string | null;
+  tecnico_responsable?: string | null;
 }
 
 function formatChileanDate(dateString?: string | null) {
@@ -84,7 +93,7 @@ function capitalize(str: string) {
 }
 
 function formatCurrency(amount?: number | null) {
-  if (!amount) return "N/A";
+  if (amount === null || amount === undefined) return "N/A";
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",
@@ -132,15 +141,15 @@ export function ClienteHistorialDialog({
         clienteId: cliente.cliente_id,
       }).catch(() => []);
 
-      // Cargar órdenes de trabajo del cliente (nuevo comando)
+      // Cargar órdenes de trabajo del cliente
       const ordenesData = await invoke<OrdenTrabajo[]>(
         "get_ordenes_trabajo_by_cliente",
         { clienteId: cliente.cliente_id }
       ).catch(() => []);
 
-      // Cargar cotizaciones del cliente
+      // Cargar cotizaciones del cliente (nuevo endpoint)
       const cotizacionesData = await invoke<Cotizacion[]>(
-        "get_cotizaciones_cliente",
+        "get_cotizaciones_by_cliente",
         { clienteId: cliente.cliente_id }
       ).catch(() => []);
 
@@ -317,19 +326,23 @@ export function ClienteHistorialDialog({
                   <TableHeader>
                     <TableRow>
                       <TableHead>ID</TableHead>
-                      <TableHead>Estado</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Revisión</TableHead>
+                      <TableHead>Reparación</TableHead>
                       <TableHead>Total</TableHead>
+                      <TableHead>Aprobada</TableHead>
+                      <TableHead>Borrador</TableHead>
                       <TableHead>Fecha</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={4}>Cargando...</TableCell>
+                        <TableCell colSpan={8}>Cargando...</TableCell>
                       </TableRow>
                     ) : cotizaciones.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center">
+                        <TableCell colSpan={8} className="text-center">
                           No hay cotizaciones.
                         </TableCell>
                       </TableRow>
@@ -337,13 +350,27 @@ export function ClienteHistorialDialog({
                       cotizaciones.map((cotizacion) => (
                         <TableRow key={cotizacion.cotizacion_id}>
                           <TableCell>{cotizacion.cotizacion_id}</TableCell>
-                          <TableCell>{capitalize(cotizacion.estado)}</TableCell>
                           <TableCell>
-                            {formatCurrency(cotizacion.total)}
+                            {cotizacion.cotizacion_codigo || "N/A"}
                           </TableCell>
                           <TableCell>
-                            {cotizacion.fecha
-                              ? formatChileanDate(cotizacion.fecha)
+                            {formatCurrency(cotizacion.costo_revision)}
+                          </TableCell>
+                          <TableCell>
+                            {formatCurrency(cotizacion.costo_reparacion)}
+                          </TableCell>
+                          <TableCell>
+                            {formatCurrency(cotizacion.costo_total)}
+                          </TableCell>
+                          <TableCell>
+                            {cotizacion.is_aprobada ? "Sí" : "No"}
+                          </TableCell>
+                          <TableCell>
+                            {cotizacion.is_borrador ? "Sí" : "No"}
+                          </TableCell>
+                          <TableCell>
+                            {cotizacion.created_at
+                              ? formatChileanDate(cotizacion.created_at)
                               : "N/A"}
                           </TableCell>
                         </TableRow>
@@ -359,8 +386,8 @@ export function ClienteHistorialDialog({
                   <TableCaption>Informes técnicos del cliente</TableCaption>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Código Informe</TableHead>
-                      <TableHead>Orden Asociada</TableHead>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Código</TableHead>
                       <TableHead>Técnico</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Acciones</TableHead>
@@ -379,12 +406,18 @@ export function ClienteHistorialDialog({
                       </TableRow>
                     ) : (
                       informes.map((informe) => (
-                        <TableRow key={informe.id}>
-                          <TableCell>{informe.informe_codigo}</TableCell>
-                          <TableCell>{informe.orden_codigo || "N/A"}</TableCell>
-                          <TableCell>{informe.tecnico_responsable}</TableCell>
+                        <TableRow key={informe.informe_id}>
+                          <TableCell>{informe.informe_id}</TableCell>
                           <TableCell>
-                            {formatChileanDate(informe.created_at)}
+                            {informe.informe_codigo || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            {informe.tecnico_responsable || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            {informe.created_at
+                              ? formatChileanDate(informe.created_at)
+                              : "N/A"}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -422,28 +455,35 @@ export function ClienteHistorialDialog({
             {selectedInforme ? (
               <>
                 <div>
-                  <strong>Código:</strong> {selectedInforme.informe_codigo}
-                </div>
-                <div>
-                  <strong>Orden Asociada:</strong>{" "}
-                  {selectedInforme.orden_codigo || "N/A"}
+                  <strong>Código:</strong>{" "}
+                  {selectedInforme.informe_codigo || "N/A"}
                 </div>
                 <div>
                   <strong>Técnico Responsable:</strong>{" "}
-                  {selectedInforme.tecnico_responsable}
+                  {selectedInforme.tecnico_responsable || "N/A"}
                 </div>
                 <div>
                   <strong>Diagnóstico:</strong>
                   <div className="mt-1 p-2 bg-gray-50 rounded">
-                    {Array.isArray(selectedInforme.diagnostico)
-                      ? selectedInforme.diagnostico.join(", ")
-                      : selectedInforme.diagnostico}
+                    {selectedInforme.diagnostico || "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <strong>Recomendaciones:</strong>
+                  <div className="mt-1 p-2 bg-gray-50 rounded">
+                    {selectedInforme.recomendaciones || "N/A"}
                   </div>
                 </div>
                 <div>
                   <strong>Solución Aplicada:</strong>
                   <div className="mt-1 p-2 bg-gray-50 rounded">
-                    {selectedInforme.solucion_aplicada}
+                    {selectedInforme.solucion_aplicada || "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <strong>Observaciones:</strong>
+                  <div className="mt-1 p-2 bg-gray-50 rounded">
+                    {selectedInforme.informe_obs || "N/A"}
                   </div>
                 </div>
                 <div>

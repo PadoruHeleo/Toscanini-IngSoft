@@ -573,38 +573,3 @@ pub async fn get_ciudades_clientes() -> Result<Vec<String>, String> {
     Ok(lista)
 }
 
-#[tauri::command]
-pub async fn get_cotizaciones_cliente(cliente_id: i32) -> Result<Vec<Cotizacion>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    let cotizaciones = sqlx::query_as::<_, Cotizacion>(
-        "SELECT cotizacion_id, cliente_id, fecha, total, estado
-         FROM COTIZACION
-         WHERE cliente_id = ? 
-         ORDER BY fecha DESC"
-    )
-    .bind(cliente_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Database error al obtener cotizaciones: {}", e))?;
-    
-    Ok(cotizaciones)
-}
-
-#[tauri::command]
-pub async fn get_ordenes_cliente(cliente_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
-        "SELECT orden_id, cliente_id, fecha_inicio, fecha_fin, estado, descripcion
-         FROM ORDENES_TRABAJO
-         WHERE cliente_id = ?
-         ORDER BY fecha_inicio DESC"
-    )
-    .bind(cliente_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Database error al obtener órdenes: {}", e))?;
-    
-    Ok(ordenes)
-}
