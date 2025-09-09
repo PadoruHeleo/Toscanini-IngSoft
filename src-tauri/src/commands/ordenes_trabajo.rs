@@ -901,3 +901,57 @@ pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<Orden
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(ordenes)
 }
+
+#[tauri::command]
+pub async fn remove_cotizacion_from_ordenes(cotizacion_id: i32, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
+        .bind(cotizacion_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Registrar la acción en el log de auditoría
+        let _ = log_action(
+            "REMOVE_COTIZACION_FROM_ORDENES",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            None,
+            Some(&format!("Cotización {} removida de órdenes de trabajo", cotizacion_id)),
+            None
+        ).await;
+        
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn remove_informe_from_ordenes(informe_id: i32, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+        .bind(informe_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Registrar la acción en el log de auditoría
+        let _ = log_action(
+            "REMOVE_INFORME_FROM_ORDENES",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            None,
+            Some(&format!("Informe {} removido de órdenes de trabajo", informe_id)),
+            None
+        ).await;
+        
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}

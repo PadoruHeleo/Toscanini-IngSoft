@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react"; // <-- Agregado XCircle
 import { Textarea } from "@/components/ui/textarea";
 
 interface Cotizacion {
@@ -124,6 +124,44 @@ export default function CotizacionFormDialog({
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [showEliminarConfirmDialog, setShowEliminarConfirmDialog] = useState(false);
+  const handleEliminarCotizacion = async () => {
+    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+      showError("Error", "No se puede eliminar la cotización.");
+      return;
+    }
+    try {
+      setLoading(true);
+      // Actualiza la orden de trabajo y quita la cotización
+      const ordenResult = await invoke<boolean>("remove_cotizacion_from_ordenes", {
+        cotizacionId: cotizacion.cotizacion_id,
+        updatedBy: user.usuario_id,
+      });
+      if (!ordenResult) {
+        showError("Error", "No se pudo desvincular la cotización de la orden.");
+        setLoading(false);
+        return;
+      }
+      // Elimina la cotización
+      const result = await invoke<boolean>("delete_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        deletedBy: user.usuario_id,
+      });
+      if (result) {
+        success("Cotización eliminada", "La cotización fue eliminada exitosamente.");
+        onCotizacionAdded();
+        onOpenChange(false);
+      } else {
+        showError("Error", "No se pudo eliminar la cotización.");
+      }
+    } catch (error) {
+      showError("Error", "Ocurrió un error al eliminar la cotización.");
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // Calcular costo total automáticamente
   const calculateTotal = () => {
@@ -144,12 +182,10 @@ export default function CotizacionFormDialog({
         loadCotizacionPiezas();
       }
       // Si hay ordenTrabajoId, obtener el estado de la orden
-      console.log("ordenTrabajoId:", ordenTrabajoId);
       if (ordenTrabajoId) {
         invoke<{ estado: string }>("get_orden_trabajo_by_id", { ordenId: ordenTrabajoId })
           .then((orden) => { 
             setEstadoOrden(orden.estado);
-            console.log("Estado de la orden:", orden.estado);
           })
           .catch((err) => {
             console.error("Error obteniendo estado de orden:", err);
@@ -168,7 +204,6 @@ export default function CotizacionFormDialog({
         informe: cotizacion.informe || "",
       });
     } else if (!isEditing && open) {
-      // Resetear formulario para crear nueva cotización
       setFormData({
         costo_revision: "25000",
         costo_reparacion: "0",
@@ -186,7 +221,6 @@ export default function CotizacionFormDialog({
       const piezasData = await invoke<Pieza[]>("get_piezas");
       setPiezas(piezasData);
     } catch (error) {
-      console.error("Error cargando piezas:", error);
       showError("Error", "No se pudieron cargar las piezas.");
     } finally {
       setLoadingPiezas(false);
@@ -217,16 +251,7 @@ export default function CotizacionFormDialog({
 
       setSelectedPiezas(selectedPiezasWithDetails);
     } catch (error) {
-      console.error("Error cargando piezas de cotización:", error);
-      let errorMsg = "No se pudieron cargar las piezas de la cotización.";
-      if (error instanceof Error) {
-        errorMsg += `\n${error.message}`;
-      } else if (typeof error === "string") {
-        errorMsg += `\n${error}`;
-      } else if (error && typeof error === "object" && "message" in error) {
-        errorMsg += `\n${(error as any).message}`;
-      }
-      showError("Error", errorMsg);
+      showError("Error", "No se pudieron cargar las piezas de la cotización.");
     }
   };
 
@@ -259,7 +284,6 @@ export default function CotizacionFormDialog({
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
-    // Limpiar error del campo cuando el usuario empiece a escribir
     if (errors[field as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
@@ -277,18 +301,15 @@ export default function CotizacionFormDialog({
       return;
     }
 
-    // Verificar si la pieza ya está seleccionada
     const existingIndex = selectedPiezas.findIndex(
       (sp) => sp.pieza_id === pieza.pieza_id
     );
 
     if (existingIndex >= 0) {
-      // Actualizar cantidad si ya existe
       const updated = [...selectedPiezas];
       updated[existingIndex].cantidad += cantidadNum;
       setSelectedPiezas(updated);
     } else {
-      // Agregar nueva pieza
       const newSelectedPieza: SelectedPieza = {
         pieza_id: pieza.pieza_id,
         cotizacion_id: cotizacion?.cotizacion_id || 0,
@@ -318,6 +339,7 @@ export default function CotizacionFormDialog({
       )
     );
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -330,7 +352,6 @@ export default function CotizacionFormDialog({
       return;
     }
 
-    // Mostrar modal de confirmación en lugar de enviar directamente
     setShowConfirmationDialog(true);
   };
 
@@ -347,7 +368,6 @@ export default function CotizacionFormDialog({
       const costoTotal = calculateTotal();
 
       if (isEditing && cotizacion) {
-        // Actualizar cotización existente
         const updateData = {
           costo_revision:
             parseInt(formData.costo_revision) !== cotizacion.costo_revision
@@ -376,7 +396,6 @@ export default function CotizacionFormDialog({
         });
 
         if (result) {
-          // Actualizar piezas
           await updateCotizacionPiezas(cotizacion.cotizacion_id);
 
           success(
@@ -388,13 +407,12 @@ export default function CotizacionFormDialog({
           showError("Error", "No se pudo actualizar la cotización.");
         }
       } else {
-        // Crear nueva cotización
         const createData = {
           costo_revision: parseInt(formData.costo_revision),
           costo_reparacion: parseInt(formData.costo_reparacion),
           costo_total: costoTotal,
           is_aprobada: formData.is_aprobada,
-          is_borrador: true, // Siempre crear como borrador
+          is_borrador: true,
           created_by: user.usuario_id,
           informe: formData.informe,
           piezas:
@@ -421,11 +439,9 @@ export default function CotizacionFormDialog({
           return;
         }
 
-        // Agregar piezas a la cotización
         await updateCotizacionPiezas(cotizacionId);
 
         let asociadaAOrden = false;
-        // Si se proporciona ordenTrabajoId, asociar la cotización a la orden
         if (ordenTrabajoId) {
           try {
             const asociada = await invoke<boolean>("update_orden_trabajo", {
@@ -441,10 +457,6 @@ export default function CotizacionFormDialog({
               );
             }
           } catch (error) {
-            console.error(
-              "Error asociando cotización a orden de trabajo:",
-              error
-            );
             showError(
               "Advertencia",
               "La cotización se creó pero no se pudo asociar a la orden de trabajo."
@@ -480,12 +492,9 @@ export default function CotizacionFormDialog({
         "cotizacionId inválido al agregar piezas a la cotización"
       );
     }
-    // Solo soportado para creación, no para edición
     if (!isEditing) {
-      // Ya se envían las piezas en create_cotizacion
       return;
     } else {
-      // Si se desea soportar edición de piezas, implementar en backend y aquí
       showError(
         "No soportado",
         "La edición de piezas en cotizaciones existentes no está soportada."
@@ -511,7 +520,6 @@ export default function CotizacionFormDialog({
     try {
       setLoading(true);
 
-      // Actualizar is_borrador a false para marcar como enviada
       const result = await invoke<boolean>("update_cotizacion", {
         cotizacionId: cotizacion.cotizacion_id,
         request: { is_borrador: false },
@@ -528,13 +536,12 @@ export default function CotizacionFormDialog({
           onSendToClient(cotizacion.cotizacion_id);
         }
 
-        onCotizacionAdded(); // Refrescar la lista
-        onOpenChange(false); // Cerrar el diálogo
+        onCotizacionAdded();
+        onOpenChange(false);
       } else {
         showError("Error", "No se pudo enviar la cotización al cliente.");
       }
     } catch (error) {
-      console.error("Error enviando cotización al cliente:", error);
       showError(
         "Error al enviar cotización",
         typeof error === "string" ? error : "Ha ocurrido un error inesperado."
@@ -544,40 +551,36 @@ export default function CotizacionFormDialog({
     }
   };
   
-  // Función para aprobar la cotización
   const handleAprobarCotizacion = async () => {
-  if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
-    showError("Error de autenticación", "Usuario no autenticado");
-    return;
-  }
-  try {
-    setLoading(true);
-    // Aprobar la cotización
-    const result = await invoke<boolean>("update_cotizacion", {
-      cotizacionId: cotizacion.cotizacion_id,
-      request: { is_aprobada: true },
-      updatedBy: user.usuario_id,
-    });
-    if (result) {
-      // Cambiar estado de la orden a "en_reparacion"
-      await invoke("cambiar_estado_orden_trabajo", {
-        ordenId: ordenTrabajoId,
-        nuevoEstado: "en_reparacion",
+    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+    try {
+      setLoading(true);
+      const result = await invoke<boolean>("update_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        request: { is_aprobada: true },
         updatedBy: user.usuario_id,
       });
-      success("Cotización aprobada", "La cotización ha sido aprobada y la orden está en reparación.");
-      onCotizacionAdded();
-      onOpenChange(false);
-    } else {
-      showError("Error", "No se pudo aprobar la cotización.");
+      if (result) {
+        await invoke("cambiar_estado_orden_trabajo", {
+          ordenId: ordenTrabajoId,
+          nuevoEstado: "en_reparacion",
+          updatedBy: user.usuario_id,
+        });
+        success("Cotización aprobada", "La cotización ha sido aprobada y la orden está en reparación.");
+        onCotizacionAdded();
+        onOpenChange(false);
+      } else {
+        showError("Error", "No se pudo aprobar la cotización.");
+      }
+    } catch (error) {
+      showError("Error", "Ocurrió un error al aprobar la cotización.");
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error(error);
-    showError("Error", "Ocurrió un error al aprobar la cotización.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleRechazarCotizacion = async () => {
     if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
@@ -586,14 +589,12 @@ export default function CotizacionFormDialog({
     }
     try {
       setLoading(true);
-      // Rechazar la cotización
       const result = await invoke<boolean>("update_cotizacion", {
         cotizacionId: cotizacion.cotizacion_id,
         request: { is_aprobada: false },
         updatedBy: user.usuario_id,
       });
       if (result) {
-        // Cambiar estado de la orden a "aprobacion_pendiente"
         await invoke("cambiar_estado_orden_trabajo", {
           ordenId: ordenTrabajoId,
           nuevoEstado: "cotizacion_rechazada",
@@ -606,7 +607,6 @@ export default function CotizacionFormDialog({
         showError("Error", "No se pudo rechazar la cotización.");
       }
     } catch (error) {
-      console.error(error);
       showError("Error", "Ocurrió un error al rechazar la cotización.");
     } finally {
       setLoading(false);
@@ -627,12 +627,11 @@ export default function CotizacionFormDialog({
     try {
       setLoading(true);
 
-      // Cambiar estado de la orden a "no_reparable"
       await invoke("cambiar_estado_orden_trabajo", {
         ordenId: ordenTrabajoId,
         nuevoEstado: "equipo_no_reparable",
         updatedBy: user.usuario_id,
-        comentario: comentarioNoReparable, // Enviar comentario
+        comentario: comentarioNoReparable,
       });
 
       success(
@@ -643,7 +642,6 @@ export default function CotizacionFormDialog({
       onCotizacionAdded();
       onOpenChange(false);
     } catch (error) {
-      console.error(error);
       showError("Error", "Ocurrió un error al declarar como no reparable.");
     } finally {
       setLoading(false);
@@ -662,7 +660,6 @@ export default function CotizacionFormDialog({
 
     try {
       setLoading(true);
-      // Cambiar estado de la orden a "abandonado"
       await invoke("cambiar_estado_orden_trabajo", {
         ordenId: ordenTrabajoId,
         nuevoEstado: "abandonado",
@@ -674,15 +671,11 @@ export default function CotizacionFormDialog({
       onCotizacionAdded();
       onOpenChange(false);
     } catch (error) {
-      console.error(error);
       showError("Error", "Ocurrió un error al declarar el equipo como abandono.");
     } finally {
       setLoading(false);
     }
   };
-
-  console.log("Render CotizacionFormDialog, ordenTrabajoId:", ordenTrabajoId);
-  console.log("Render CotizacionFormDialog, estadoOrden:", estadoOrden);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -702,9 +695,9 @@ export default function CotizacionFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* ...formulario existente... */}
           {/* Datos básicos */}
           <div className="grid grid-cols-2 gap-4">
-            {/* Código de cotización (solo lectura si existe) */}
             <div className="space-y-2">
               <Label htmlFor="cotizacion_codigo">Código de Cotización</Label>
               <Input
@@ -718,8 +711,6 @@ export default function CotizacionFormDialog({
                 className="bg-gray-50 font-semibold"
               />
             </div>
-
-            {/* Costo total (solo lectura) */}
             <div className="space-y-2">
               <Label htmlFor="costo_total">Costo Total</Label>
               <Input
@@ -732,7 +723,6 @@ export default function CotizacionFormDialog({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {/* Costo de revisión */}
             <div className="space-y-2">
               <Label htmlFor="costo_revision">Costo de Revisión *</Label>
               <Input
@@ -750,8 +740,6 @@ export default function CotizacionFormDialog({
                 <p className="text-sm text-red-500">{errors.costo_revision}</p>
               )}
             </div>
-
-            {/* Costo de reparación */}
             <div className="space-y-2">
               <Label htmlFor="costo_reparacion">Costo de Reparación *</Label>
               <Input
@@ -771,9 +759,7 @@ export default function CotizacionFormDialog({
                 </p>
               )}
             </div>
-          </div>{" "}
-
-          {/* Informe */}
+          </div>
           <div className="col-span-2 space-y-2">
             <Label htmlFor="informe">Informe *</Label>
             <Textarea
@@ -789,13 +775,10 @@ export default function CotizacionFormDialog({
               <p className="text-sm text-red-500">{errors.informe}</p>
             )}
           </div>
-          {/* Gestión de piezas */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">Piezas</Label>
             </div>
-
-            {/* Agregar pieza */}
             <div className="flex gap-2 items-end">
               <div className="flex-1">
                 <Label htmlFor="pieza_select">Seleccionar Pieza</Label>
@@ -824,7 +807,6 @@ export default function CotizacionFormDialog({
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="w-24">
                 <Label htmlFor="cantidad">Cantidad</Label>
                 <Input
@@ -835,7 +817,6 @@ export default function CotizacionFormDialog({
                   onChange={(e) => setCantidad(e.target.value)}
                 />
               </div>
-
               <Button
                 type="button"
                 onClick={handleAddPieza}
@@ -845,8 +826,6 @@ export default function CotizacionFormDialog({
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-
-            {/* Tabla de piezas seleccionadas */}
             {selectedPiezas.length > 0 && (
               <div className="border rounded-md">
                 <Table>
@@ -904,8 +883,7 @@ export default function CotizacionFormDialog({
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}{" "}
-
+          )}
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -915,7 +893,18 @@ export default function CotizacionFormDialog({
             >
               Cancelar
             </Button>
-
+            {/* --- NUEVO: Botón Eliminar Cotización --- */}
+            {isEditing && cotizacion && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setShowEliminarConfirmDialog(true)}
+                disabled={loading}
+                className="bg-red-700 hover:bg-red-800"
+              >
+                Eliminar Cotización
+              </Button>
+            )}
             {isEditing && cotizacion?.is_borrador && (
               <Button
                 type="button"
@@ -927,7 +916,6 @@ export default function CotizacionFormDialog({
                 {loading ? "Enviando..." : "Enviar al Cliente"}
               </Button>
             )}
-
             {isEditing &&
               estadoOrden &&
               estadoOrden
@@ -958,7 +946,6 @@ export default function CotizacionFormDialog({
                   </Button>
                 </>
             )}
-
             {isEditing &&
               estadoOrden &&
               estadoOrden.toLowerCase().trim() === "recibido" && (
@@ -972,7 +959,6 @@ export default function CotizacionFormDialog({
                 {loading ? "Procesando..." : "No Reparable"}
               </Button>
             )}
-
             {isEditing && 
               estadoOrden.toLowerCase() !== "recibido" &&
               estadoOrden.toLowerCase() !== "abandonado" && (
@@ -986,14 +972,12 @@ export default function CotizacionFormDialog({
                 Declarar Abandono
               </Button>
             )}
-
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
             </Button>
-          </DialogFooter>{" "}
+          </DialogFooter>
         </form>
       </DialogContent>
-
       {/* Modal de confirmación */}
       <Dialog
         open={showConfirmationDialog}
@@ -1012,7 +996,6 @@ export default function CotizacionFormDialog({
                 : "¿Está seguro que desea crear esta cotización con la siguiente información?"}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-2 text-sm">
             <div>
               <strong>Costo Revisión:</strong> $
@@ -1042,7 +1025,6 @@ export default function CotizacionFormDialog({
               </div>
             )}
           </div>
-
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -1062,7 +1044,41 @@ export default function CotizacionFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      {/* Modal de confirmación de eliminación */}
+      <Dialog
+        open={showEliminarConfirmDialog}
+        onOpenChange={setShowEliminarConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea eliminar esta cotización? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowEliminarConfirmDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                setShowEliminarConfirmDialog(false);
+                await handleEliminarCotizacion();
+              }}
+              disabled={loading}
+              className="bg-red-700 hover:bg-red-800"
+            >
+              {loading ? "Eliminando..." : "Confirmar Eliminación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Modal de confirmación de aprobación */}
       <Dialog
         open={showAprobarConfirmDialog}
@@ -1099,7 +1115,6 @@ export default function CotizacionFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Modal de confirmación de rechazo */}
       <Dialog
         open={showRechazarConfirmDialog}
@@ -1136,7 +1151,6 @@ export default function CotizacionFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
       {/* Modal de confirmación de No Reparable */}
       <Dialog
         open={showNoReparableConfirmDialog}
@@ -1151,7 +1165,6 @@ export default function CotizacionFormDialog({
               Debe justificar su decisión en el campo de comentario.
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-3">
             <Label htmlFor="comentario">Comentario *</Label>
             <Textarea
@@ -1163,7 +1176,6 @@ export default function CotizacionFormDialog({
               required
             />
           </div>
-
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -1199,7 +1211,6 @@ export default function CotizacionFormDialog({
               Por favor, ingrese un comentario justificando esta acción.
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-2">
             <Label htmlFor="abandono_comentario">Comentario *</Label>
             <Textarea
@@ -1211,7 +1222,6 @@ export default function CotizacionFormDialog({
               className="border-red-500 focus:border-red-600"
             />
           </div>
-
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -1238,4 +1248,3 @@ export default function CotizacionFormDialog({
     </Dialog>
   );
 }
-
