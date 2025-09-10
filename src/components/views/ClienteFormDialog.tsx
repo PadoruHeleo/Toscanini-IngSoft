@@ -70,6 +70,20 @@ export function ClienteFormDialog({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // --- Validaciones ---
+  const isValidRut = (value: string): boolean => /^[0-9\-]*$/.test(value);
+  const isValidTelefono = (value: string): boolean => /^[0-9+]*$/.test(value);
+  const isValidNombre = (value: string): boolean =>
+    /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s']*$/.test(value);
+
+  // Mensajes de validación
+  const messages: Record<string, string> = {
+    cliente_rut: "Solo se permiten números y guion (-) en el RUT.",
+    cliente_telefono: "Solo se permiten números y el símbolo + en el teléfono.",
+    cliente_nombre:
+      "Solo se permiten letras, espacios y apóstrofes en el nombre.",
+  };
+
   // Cargar datos del cliente al editar
   useEffect(() => {
     if (isEditing && cliente) {
@@ -107,17 +121,33 @@ export function ClienteFormDialog({
       newErrors.cliente_correo = "El formato del correo no es válido";
     }
 
-    setErrors(newErrors);
+    setErrors((prev) => ({ ...prev, ...newErrors }));
     return Object.keys(newErrors).length === 0;
   };
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
 
-    if (!validateForm()) {
-      return;
+  const handleInputChange = (field: keyof typeof formData, value: string) => {
+    let isValid = true;
+
+    if (field === "cliente_rut") isValid = isValidRut(value);
+    if (field === "cliente_telefono") isValid = isValidTelefono(value);
+    if (field === "cliente_nombre") isValid = isValidNombre(value);
+
+    if (isValid) {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+
+      // limpiar error si estaba antes
+      if (errors[field]) {
+        setErrors((prev) => ({ ...prev, [field]: "" }));
+      }
+    } else {
+      // mostrar mensaje en tiempo real
+      setErrors((prev) => ({ ...prev, [field]: messages[field] }));
     }
+  };
 
-    // Mostrar modal de confirmación en lugar de enviar directamente
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
     setShowConfirmationDialog(true);
   };
 
@@ -132,7 +162,6 @@ export function ClienteFormDialog({
       setLoading(true);
 
       if (isEditing && cliente) {
-        // Actualizar cliente existente
         const updateRequest: UpdateClienteRequest = {
           cliente_rut: formData.cliente_rut || undefined,
           cliente_nombre: formData.cliente_nombre || undefined,
@@ -157,7 +186,6 @@ export function ClienteFormDialog({
           return;
         }
       } else {
-        // Crear nuevo cliente
         const createRequest: CreateClienteRequest = {
           cliente_rut: formData.cliente_rut,
           cliente_nombre: formData.cliente_nombre,
@@ -177,10 +205,7 @@ export function ClienteFormDialog({
         );
       }
 
-      // Cerrar diálogo
       onOpenChange(false);
-
-      // Limpiar formulario
       setFormData({
         cliente_rut: "",
         cliente_nombre: "",
@@ -192,30 +217,15 @@ export function ClienteFormDialog({
       onClienteAdded();
     } catch (error) {
       console.error("Error procesando cliente:", error);
-
       showError(
         isEditing ? "Error al actualizar cliente" : "Error al crear cliente",
         typeof error === "string"
           ? error
           : "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
       );
-      setErrors({
-        submit: `Error al ${
-          isEditing ? "actualizar" : "crear"
-        } el cliente. Intente nuevamente.`,
-      });
     } finally {
       setLoading(false);
       setShowConfirmationDialog(false);
-    }
-  };
-
-  const handleInputChange = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-
-    // Limpiar error del campo cuando el usuario empiece a escribir
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
@@ -234,19 +244,22 @@ export function ClienteFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* RUT */}
           <div className="space-y-2">
             <Label htmlFor="cliente_rut">RUT *</Label>
             <Input
               id="cliente_rut"
               value={formData.cliente_rut}
               onChange={(e) => handleInputChange("cliente_rut", e.target.value)}
-              placeholder="Ej: 12.345.678-9"
+              placeholder="Ej: 12345678-9"
               className={errors.cliente_rut ? "border-red-500" : ""}
             />
             {errors.cliente_rut && (
               <p className="text-sm text-red-500">{errors.cliente_rut}</p>
             )}
           </div>
+
+          {/* Nombre */}
           <div className="space-y-2">
             <Label htmlFor="cliente_nombre">Nombre *</Label>
             <Input
@@ -262,6 +275,8 @@ export function ClienteFormDialog({
               <p className="text-sm text-red-500">{errors.cliente_nombre}</p>
             )}
           </div>
+
+          {/* Correo */}
           <div className="space-y-2">
             <Label htmlFor="cliente_correo">Correo Electrónico *</Label>
             <Input
@@ -278,6 +293,8 @@ export function ClienteFormDialog({
               <p className="text-sm text-red-500">{errors.cliente_correo}</p>
             )}
           </div>
+
+          {/* Teléfono */}
           <div className="space-y-2">
             <Label htmlFor="cliente_telefono">Teléfono</Label>
             <Input
@@ -286,9 +303,15 @@ export function ClienteFormDialog({
               onChange={(e) =>
                 handleInputChange("cliente_telefono", e.target.value)
               }
-              placeholder="Ej: +56 9 1234 5678"
+              placeholder="Ej: +56912345678"
+              className={errors.cliente_telefono ? "border-red-500" : ""}
             />
+            {errors.cliente_telefono && (
+              <p className="text-sm text-red-500">{errors.cliente_telefono}</p>
+            )}
           </div>
+
+          {/* Dirección */}
           <div className="space-y-2">
             <Label htmlFor="cliente_direccion">Dirección</Label>
             <Input
@@ -300,11 +323,14 @@ export function ClienteFormDialog({
               placeholder="Dirección completa del cliente"
             />
           </div>
+
+          {/* Error de submit */}
           {errors.submit && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               {errors.submit}
             </div>
           )}
+
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -323,7 +349,7 @@ export function ClienteFormDialog({
                 ? "Actualizar Cliente"
                 : "Crear Cliente"}
             </Button>
-          </DialogFooter>{" "}
+          </DialogFooter>
         </form>
       </DialogContent>
 
