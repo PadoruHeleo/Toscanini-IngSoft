@@ -144,10 +144,58 @@ export function ClienteFormDialog({
       setErrors((prev) => ({ ...prev, [field]: messages[field] }));
     }
   };
+  const validateUniqueCliente = async (): Promise<boolean> => {
+    try {
+      setErrors((prev) => ({ ...prev, cliente_rut: "", cliente_correo: "" }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+      const normalizedRut = formData.cliente_rut.trim();
+      const normalizedCorreo = formData.cliente_correo.trim().toLowerCase();
+
+      const ruts = (await invoke<string[]>("get_ruts_clientes")) || [];
+      const correos = (await invoke<string[]>("get_correos_clientes")) || [];
+
+      let unique = true;
+
+      const rutExists = ruts.some((r) => (r ?? "").trim() === normalizedRut);
+      if (rutExists && !(isEditing && cliente?.cliente_rut === normalizedRut)) {
+        setErrors((prev) => ({
+          ...prev,
+          cliente_rut: "El RUT ya está registrado en el sistema.",
+        }));
+        unique = false;
+      }
+
+      const correoExists = correos.some(
+        (c) => (c ?? "").trim().toLowerCase() === normalizedCorreo
+      );
+      if (
+        correoExists &&
+        !(
+          isEditing &&
+          cliente?.cliente_correo?.toLowerCase() === normalizedCorreo
+        )
+      ) {
+        setErrors((prev) => ({
+          ...prev,
+          cliente_correo: "El correo ya está registrado en el sistema.",
+        }));
+        unique = false;
+      }
+
+      return unique;
+    } catch (err) {
+      console.error("Error validando unicidad:", err);
+      showError("Error", "No se pudo validar si el RUT o correo ya existen.");
+      return false;
+    }
+  };
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
+
+    const isUnique = await validateUniqueCliente();
+    if (!isUnique) return;
+
     setShowConfirmationDialog(true);
   };
 
