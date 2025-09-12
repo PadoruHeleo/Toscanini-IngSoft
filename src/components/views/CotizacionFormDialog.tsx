@@ -116,6 +116,8 @@ export default function CotizacionFormDialog({
   const [comentarioNoReparable, setComentarioNoReparable] = useState("");
   const [showAbandonoConfirmDialog, setShowAbandonoConfirmDialog] = useState(false);
   const [abandonoComentario, setAbandonoComentario] = useState("");
+  const [ordenCreatedAt, setOrdenCreatedAt] = useState<string | null>(null);
+  const [puedeAbandonar, setPuedeAbandonar] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     costo_revision: "25000",
     costo_reparacion: "0",
@@ -146,10 +148,17 @@ export default function CotizacionFormDialog({
       // Si hay ordenTrabajoId, obtener el estado de la orden
       console.log("ordenTrabajoId:", ordenTrabajoId);
       if (ordenTrabajoId) {
-        invoke<{ estado: string }>("get_orden_trabajo_by_id", { ordenId: ordenTrabajoId })
+        invoke<{ estado: string, created_at: string }>("get_orden_trabajo_by_id", { ordenId: ordenTrabajoId })
           .then((orden) => { 
             setEstadoOrden(orden.estado);
-            console.log("Estado de la orden:", orden.estado);
+            setOrdenCreatedAt(orden.created_at);
+            // Calcular si han pasado más de 168 horas
+            if (orden.created_at) {
+              const createdDate = new Date(orden.created_at);
+              const now = new Date();
+              const diffHours = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+              setPuedeAbandonar(diffHours >= 168);
+            }
           })
           .catch((err) => {
             console.error("Error obteniendo estado de orden:", err);
@@ -975,16 +984,17 @@ export default function CotizacionFormDialog({
 
             {isEditing && 
               estadoOrden.toLowerCase() !== "recibido" &&
-              estadoOrden.toLowerCase() !== "abandonado" && (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setShowAbandonoConfirmDialog(true)}
-                disabled={loading}
-                className="bg-orange-600 hover:bg-orange-700"
-              >
-                Declarar Abandono
-              </Button>
+              estadoOrden.toLowerCase() !== "abandonado" &&
+              puedeAbandonar && ( // Solo si han pasado más de 168 horas
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowAbandonoConfirmDialog(true)}
+                  disabled={loading}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  Declarar Abandono
+                </Button>
             )}
 
             <Button type="submit" disabled={loading}>
