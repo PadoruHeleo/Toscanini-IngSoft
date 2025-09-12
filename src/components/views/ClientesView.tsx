@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Table,
@@ -11,10 +11,12 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Edit, Trash2 } from "lucide-react";
+import { Search, Edit, Trash2, History } from "lucide-react";
 import { ClienteFormDialog } from "./ClienteFormDialog";
+import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
 
 interface Cliente {
   cliente_id: number;
@@ -35,48 +37,100 @@ export function ClientesView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [historialCliente, setHistorialCliente] = useState<Cliente | null>(
+    null
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadClientes = async () => {
-    try {
-      setLoading(true);
-      let clientesData: Cliente[];
+  // Estado para forzar actualización de filtros
+  const [refreshFilters, setRefreshFilters] = useState(0);
 
-      if (searchTerm.trim()) {
-        clientesData = await invoke<Cliente[]>("search_clientes", {
-          searchTerm: searchTerm.trim(),
-        });
-      } else {
-        clientesData = await invoke<Cliente[]>("get_clientes");
-      }
+  //  Función para validar que solo contenga texto (sin números)
+  const isValidText = (text: string): boolean => {
+    // Solo permite: letras (con acentos), espacios, apostrofes, guiones
+    const textOnlyRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/;
+    return textOnlyRegex.test(text);
+  };
 
-      setClientes(clientesData);
-    } catch (error) {
-      console.error("Error cargando clientes:", error);
-      showError(
-        "Error al cargar clientes",
-        "No se pudieron cargar los clientes."
-      );
-    } finally {
-      setLoading(false);
+  //  Manejar cambios en el input de búsqueda (solo texto)
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+
+    // Solo actualizar si es texto válido (sin números)
+    if (isValidText(value)) {
+      setSearchTerm(value);
     }
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm("");
+  };
+
+  //  Prevenir entrada de números al escribir
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Prevenir números (0-9)
+    if (/[0-9]/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
+  //  Carga inicial de clientes (sin filtros)
   useEffect(() => {
-    loadClientes();
+    const loadInitialClientes = async () => {
+      try {
+        setLoading(true);
+        const clientesData = await invoke<Cliente[]>("get_clientes");
+        setClientes(clientesData);
+      } catch (error) {
+        console.error("Error cargando clientes:", error);
+        showError(
+          "Error al cargar clientes",
+          "No se pudieron cargar los clientes."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialClientes();
+  }, []);
+
+  //  Manejo del término de búsqueda con debounce (sin cargar clientes directamente)
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // El debounce solo actualiza el estado, no carga clientes
+    // UnificarFiltrosClientes se encarga de aplicar el filtro
+    searchTimeoutRef.current = setTimeout(() => {
+      // El searchTerm se pasa como prop a UnificarFiltrosClientes
+    }, 150);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [searchTerm]);
 
   const handleClienteAdded = () => {
-    loadClientes();
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleClienteUpdated = () => {
-    loadClientes();
     setEditingCliente(null);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleEditCliente = (cliente: Cliente) => {
     setEditingCliente(cliente);
+  };
+
+  const handleVerHistorial = (cliente: Cliente) => {
+    setHistorialCliente(cliente);
   };
 
   const handleDeleteCliente = async (cliente: Cliente) => {
@@ -99,7 +153,7 @@ export function ClientesView() {
           "Cliente eliminado",
           `${cliente.cliente_nombre} ha sido eliminado exitosamente.`
         );
-        loadClientes();
+        setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
       }
@@ -117,6 +171,12 @@ export function ClientesView() {
     return new Date(dateString).toLocaleDateString("es-CL");
   };
 
+  //  Función que recibe los clientes filtrados desde UnificarFiltrosClientes
+  const handleClientesFiltrados = (clientesFiltrados: Cliente[]) => {
+    setClientes(clientesFiltrados);
+    setLoading(false);
+  };
+
   if (loading) {
     return (
       <div className="p-4">
@@ -132,23 +192,33 @@ export function ClientesView() {
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
       </div>
+
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar clientes..."
+            ref={searchInputRef}
+            placeholder="Buscar por nombre..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
+            onKeyPress={handleKeyPress}
             className="pl-8"
+            title="Solo se permiten letras y espacios"
           />
         </div>
-        {searchTerm && (
-          <Button variant="outline" onClick={() => setSearchTerm("")}>
-            Limpiar
-          </Button>
-        )}
+
+        {/*  Filtros unificados - pasamos searchTerm y función para recibir resultados */}
+        <div className="flex-grow min-w-0">
+          <UnificarFiltrosClientes
+            key={refreshFilters}
+            searchTerm={searchTerm}
+            onFiltrar={handleClientesFiltrados}
+            onClearSearch={handleClearSearch}
+          />
+        </div>
       </div>
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -186,7 +256,7 @@ export function ClientesView() {
                   <TableCell className="max-w-xs truncate">
                     {cliente.cliente_direccion || "N/A"}
                   </TableCell>
-                  <TableCell>{formatDate(cliente.created_at)}</TableCell>{" "}
+                  <TableCell>{formatDate(cliente.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
@@ -197,6 +267,15 @@ export function ClientesView() {
                         title="Editar cliente"
                       >
                         <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleVerHistorial(cliente)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Ver historial del cliente"
+                      >
+                        <History className="h-3 w-3" />
                       </Button>
                       <Button
                         variant="outline"
@@ -215,16 +294,24 @@ export function ClientesView() {
           </TableBody>
         </Table>
       </div>
+
       {/* Total de clientes */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {clientes.length} cliente{clientes.length !== 1 ? "s" : ""}
+        {searchTerm && (
+          <span className="ml-2 text-blue-600">
+            (filtrado por: "{searchTerm}")
+          </span>
+        )}
       </div>
+
       {/* Dialog para agregar cliente */}
       <ClienteFormDialog
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onClienteAdded={handleClienteAdded}
-      />{" "}
+      />
+
       {/* Dialog para editar cliente */}
       {editingCliente && (
         <ClienteFormDialog
@@ -235,6 +322,13 @@ export function ClientesView() {
           isEditing={true}
         />
       )}
+
+      {/* Dialog para ver historial del cliente */}
+      <ClienteHistorialDialog
+        open={historialCliente !== null}
+        onOpenChange={(open) => !open && setHistorialCliente(null)}
+        cliente={historialCliente}
+      />
     </div>
   );
 }

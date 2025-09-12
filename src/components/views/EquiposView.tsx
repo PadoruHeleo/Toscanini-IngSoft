@@ -11,7 +11,7 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Edit } from "lucide-react";
+import { Search, Edit, History } from "lucide-react";
 import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
 import { EquipoHistorialDialog } from "@/components/views/EquipoHistorialDialog";
 
@@ -75,7 +75,6 @@ export function EquiposView() {
     setEditingEquipo(equipo);
     setShowAddForm(true); // Use the same form for editing
   };
-
 
   if (loading) {
     return (
@@ -161,10 +160,10 @@ export function EquiposView() {
                         variant="outline"
                         size="sm"
                         onClick={() => setHistorialEquipo(equipo)}
-                        className="text-gray-600 hover:text-gray-700"
+                        className="text-blue-600 hover:text-blue-700"
                         title="Ver historial del equipo"
                       >
-                        Ver Historial Del Equipo
+                        <History className="h-3 w-3" />
                       </Button>
                     </div>
                   </TableCell>
@@ -199,4 +198,3 @@ export function EquiposView() {
     </div>
   );
 }
-

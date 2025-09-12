@@ -19,7 +19,7 @@ interface OrdenTrabajo {
 }
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
+  onFiltrar: (ordenes: OrdenTrabajo[]) => void; // 🔹 ahora solo devuelve órdenes
 }
 
 export function UnificarFiltros({ onFiltrar }: Props) {
@@ -33,7 +33,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
-  const [resetKey, setResetKey] = useState(0); // 🔹 usado para resetear filtros hijos
+  const [resetKey, setResetKey] = useState(0);
 
   const actualizarFiltro = (nuevoFiltro: Partial<typeof filtros>) => {
     setFiltros((prev) => ({ ...prev, ...nuevoFiltro }));
@@ -41,8 +41,6 @@ export function UnificarFiltros({ onFiltrar }: Props) {
 
   const aplicarFiltros = async (filtrosActuales = filtros) => {
     try {
-      console.log("🔍 Aplicando filtros automáticamente:", filtrosActuales);
-
       const filtrosParaBackend = {
         fecha_inicio: filtrosActuales.fecha_inicio,
         fecha_fin: filtrosActuales.fecha_fin,
@@ -58,22 +56,18 @@ export function UnificarFiltros({ onFiltrar }: Props) {
           filtrosActuales.clientes.length > 0 ? filtrosActuales.clientes : null,
       };
 
-      console.log("📤 Enviando al backend:", filtrosParaBackend);
-
       const ordenes = await invoke<OrdenTrabajo[]>(
         "get_ordenes_trabajo_filtradas",
         { filtros: filtrosParaBackend }
       );
 
-      console.log("📨 Órdenes filtradas recibidas:", ordenes.length);
-      onFiltrar(ordenes);
+      onFiltrar(ordenes); // 🔹 solo enviamos órdenes
     } catch (err) {
       console.error("❌ Error aplicando filtros:", err);
     }
   };
 
   useEffect(() => {
-    console.log("🔄 useEffect disparado - filtros cambiaron:", filtros);
     aplicarFiltros(filtros);
   }, [filtros]);
 
@@ -127,7 +121,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
           variant="outline"
           onClick={() => {
             setFiltros(filtrosIniciales);
-            setResetKey((prev) => prev + 1); // 🔹 dispara el reseteo de hijos
+            setResetKey((prev) => prev + 1);
           }}
         >
           Limpiar
