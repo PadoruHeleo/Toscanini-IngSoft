@@ -1021,6 +1021,6 @@ pub async fn marcar_orden_abandonada(orden_id: i32, updated_by: i32) -> Result<O
         Some("abandonado")
     ).await;
     
-    // Obtener la orden actualizada
+    // Obtener la orden actualizada(deje esto para que funcione NO QUIERE DECIR QUE ESTE)
     get_orden_trabajo_by_id(orden_id).await
 }
