@@ -67,6 +67,13 @@ pub struct OrdenTrabajo {
     pub descripcion: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeleteClienteRequest {
+    pub cliente_id: i32,           // ID del cliente a inactivar
+    pub deleted_by: i32,           // ID del usuario que elimina
+    pub motivo: Option<String>,    // Motivo de inactivación
+}
+
 fn build_order_by_clause(ordenamiento: &Option<String>) -> String {
     match ordenamiento.as_deref() {
         Some("asc") => " ORDER BY LOWER(cliente_nombre) ASC".to_string(),
@@ -261,30 +268,30 @@ pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, upda
 }
 
 #[tauri::command]
-pub async fn delete_cliente(cliente_id: i32, deleted_by: i32) -> Result<bool, String> {
+pub async fn delete_cliente(request: DeleteClienteRequest) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
-    
-    // Obtener el cliente antes de inactivarlo para logging
-    let cliente_to_delete = get_cliente_by_id(cliente_id).await?;
-    
+
+    // Obtener el cliente antes de inactivarlo (para el log)
+    let cliente_to_delete = get_cliente_by_id(request.cliente_id).await?;
+
     // Verificar si el cliente existe y está activo
     let cliente_exists = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ? AND is_active = 1"
     )
-    .bind(cliente_id)
+    .bind(request.cliente_id)
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Database error checking client existence: {}", e))?;
-    
+
     if cliente_exists == 0 {
         return Err("No se puede inactivar el cliente porque no existe o ya está inactivo".to_string());
     }
-    
+
     // Verificar si el cliente tiene equipos asociados
     let has_dependencies = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM EQUIPO WHERE cliente_id = ?"
     )
-    .bind(cliente_id)
+    .bind(request.cliente_id)
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
@@ -292,33 +299,41 @@ pub async fn delete_cliente(cliente_id: i32, deleted_by: i32) -> Result<bool, St
     if has_dependencies > 0 {
         return Err("No se puede inactivar el cliente porque tiene equipos asociados".to_string());
     }
-    
-    // Marcar el cliente como inactivo en lugar de eliminarlo
+
+    // Marcar el cliente como inactivo
     let result = sqlx::query("UPDATE CLIENTE SET is_active = 0 WHERE cliente_id = ?")
-        .bind(cliente_id)
+        .bind(request.cliente_id)
         .execute(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
-    
+
     let was_inactivated = result.rows_affected() > 0;
-    
-    // Registrar la acción en el log de auditoría
+
+    // Registrar la acción en el log de auditoría con motivo
     if was_inactivated {
         if let Some(ref cliente) = cliente_to_delete {
+            let prev_data = format!(
+                "Cliente activo: {} ({})",
+                cliente.cliente_nombre.as_deref().unwrap_or("N/A"),
+                cliente.cliente_correo.as_deref().unwrap_or("N/A")
+            );
+
+            let new_data = format!(
+                "Cliente inactivado con motivo: {}",
+                request.motivo.clone().unwrap_or("Sin motivo especificado".to_string())
+            );
+
             let _ = log_action(
                 "INACTIVATE_CLIENTE",
-                Some(deleted_by),
+                Some(request.deleted_by),
                 "CLIENTE",
-                Some(cliente_id),
-                Some(&format!("Cliente inactivado: {} ({})", 
-                    cliente.cliente_nombre.as_deref().unwrap_or("N/A"),
-                    cliente.cliente_correo.as_deref().unwrap_or("N/A")
-                )),
-                None
+                Some(request.cliente_id),
+                Some(&prev_data),
+                Some(&new_data),
             ).await;
         }
     }
-    
+
     Ok(was_inactivated)
 }
 
