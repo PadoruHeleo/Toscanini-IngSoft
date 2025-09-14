@@ -15,4 +15,6 @@ export * from "./FiltrarOrdenesPorPrioridad";
 export * from "./FiltrarOrdenesPorMarca";
 export * from "./FiltrarOrdenesPorModelo";
 export * from "./FiltrarOrdenesPorCliente";
-export * from "./UnificarFiltros.tsx";
+export * from "./UnificarFiltros";
+export * from "./UsuarioView";
+export * from "./UsuarioFormDialog";

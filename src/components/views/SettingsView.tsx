@@ -49,6 +49,14 @@ export function SettingsView() {
   const [emailSuccess, setEmailSuccess] = useState("");
   const [emailError, setEmailError] = useState("");
 
+  // Estados para cambio de teléfono
+  const [newPhone, setNewPhone] = useState("");
+  const [phonePassword, setPhonePassword] = useState("");
+  const [showPhonePassword, setShowPhonePassword] = useState(false);
+  const [isChangingPhone, setIsChangingPhone] = useState(false);
+  const [phoneSuccess, setPhoneSuccess] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError("");
@@ -155,6 +163,56 @@ export function SettingsView() {
       setIsChangingEmail(false);
     }
   };
+
+  const handleChangePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneError("");
+    setPhoneSuccess("");
+
+    // Validaciones
+    if (newPhone.length < 9) {
+      setPhoneError("El nuevo teléfono debe tener al menos 9 dígitos");
+      return;
+    }
+
+    if (newPhone === user?.usuario_telefono) {
+      setPhoneError("El nuevo teléfono debe ser diferente al actual");
+      return;
+    }
+
+    setIsChangingPhone(true);
+
+    try {
+      const request = {
+        new_phone: newPhone,
+        password: phonePassword,
+      };
+
+      const result = await invoke<any>("change_user_phone", {
+        usuarioId: user!.usuario_id,
+        request,
+      });
+
+      if (result) {
+        setPhoneSuccess("Teléfono cambiado exitosamente");
+        setNewPhone("");
+        setPhonePassword("");
+
+        // Revalidar sesión para obtener los datos actualizados
+        await validateSession();
+      }
+    } catch (error) {
+      const errorMessage = String(error);
+      if (errorMessage.includes("Contraseña incorrecta")) {
+        setPhoneError("La contraseña es incorrecta");
+      } else {
+        setPhoneError("Error al cambiar el teléfono: " + errorMessage);
+      }
+    } finally {
+      setIsChangingPhone(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -422,6 +480,88 @@ export function SettingsView() {
                 </Button>
               </form>
             </CardContent>{" "}
+          </Card>
+
+          {/* Cambiar teléfono */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cambiar Teléfono</CardTitle>
+              <CardDescription>
+                Cambia tu número de teléfono asociado a la cuenta
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleChangePhone} className="space-y-4">
+                {phoneSuccess && (
+                  <Alert className="border-green-200 bg-green-50">
+                    <IconCheck className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      {phoneSuccess}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {phoneError && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <IconX className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-red-800">
+                      {phoneError}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="new-phone">Nuevo teléfono</Label>
+                  <Input
+                    id="new-phone"
+                    type="tel"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    required
+                    disabled={isChangingPhone}
+                    placeholder="+56912345678"
+                    minLength={9}
+                    maxLength={9}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone-password">Confirma tu contraseña</Label>
+                  <div className="relative">
+                    <Input
+                      id="phone-password"
+                      type={showPhonePassword ? "text" : "password"}
+                      value={phonePassword}
+                      onChange={(e) => setPhonePassword(e.target.value)}
+                      required
+                      disabled={isChangingPhone}
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPhonePassword(!showPhonePassword)}
+                    >
+                      {showPhonePassword ? (
+                        <IconEyeOff className="h-4 w-4" />
+                      ) : (
+                        <IconEye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isChangingPhone}
+                  className="w-full"
+                >
+                  {isChangingPhone ? "Cambiando teléfono..." : "Cambiar teléfono"}
+                </Button>
+              </form>
+            </CardContent>
           </Card>
         </div>
       </div>
