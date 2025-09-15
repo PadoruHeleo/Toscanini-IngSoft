@@ -530,3 +530,23 @@ pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<boo
     
     Ok(true)
 }
+
+#[tauri::command]
+pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, String> {
+    let pool = get_db_pool_safe()?;
+    let informes = sqlx::query_as::<_, Informe>(
+        "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
+                i.is_borrador, i.created_by, i.created_at,
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
+         FROM INFORME i
+         INNER JOIN ORDEN_TRABAJO ot ON i.informe_id = ot.informe_id
+         INNER JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
+         WHERE e.cliente_id = ?
+         ORDER BY i.created_at DESC"
+    )
+    .bind(cliente_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error al obtener informes del cliente: {}", e))?;
+    Ok(informes)
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Table,
@@ -11,10 +11,20 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Edit, Trash2 } from "lucide-react";
+import { Search, Edit, Trash2, History } from "lucide-react";
 import { ClienteFormDialog } from "./ClienteFormDialog";
+import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Cliente {
   cliente_id: number;
@@ -35,71 +45,110 @@ export function ClientesView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [historialCliente, setHistorialCliente] = useState<Cliente | null>(
+    null
+  );
+  const [refreshFilters, setRefreshFilters] = useState(0);
 
-  const loadClientes = async () => {
-    try {
-      setLoading(true);
-      let clientesData: Cliente[];
+  // --- Estados para eliminar cliente ---
+  const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
+  const [deleteMotivo, setDeleteMotivo] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-      if (searchTerm.trim()) {
-        clientesData = await invoke<Cliente[]>("search_clientes", {
-          searchTerm: searchTerm.trim(),
-        });
-      } else {
-        clientesData = await invoke<Cliente[]>("get_clientes");
-      }
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-      setClientes(clientesData);
-    } catch (error) {
-      console.error("Error cargando clientes:", error);
-      showError(
-        "Error al cargar clientes",
-        "No se pudieron cargar los clientes."
-      );
-    } finally {
-      setLoading(false);
-    }
+  // Validación de texto (sin números)
+  const isValidText = (text: string) =>
+    /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/.test(text);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (isValidText(value)) setSearchTerm(value);
   };
 
+  const handleClearSearch = () => setSearchTerm("");
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (/[0-9]/.test(e.key)) e.preventDefault();
+  };
+
+  // Cargar clientes inicial
   useEffect(() => {
-    loadClientes();
+    const loadInitialClientes = async () => {
+      try {
+        setLoading(true);
+        const clientesData = await invoke<Cliente[]>("get_clientes");
+        setClientes(clientesData);
+      } catch (error) {
+        console.error("Error cargando clientes:", error);
+        showError(
+          "Error al cargar clientes",
+          "No se pudieron cargar los clientes."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadInitialClientes();
+  }, []);
+
+  // Debounce búsqueda
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    searchTimeoutRef.current = setTimeout(() => {
+      // UnificarFiltrosClientes se encarga de filtrar
+    }, 150);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
   }, [searchTerm]);
 
   const handleClienteAdded = () => {
-    loadClientes();
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleClienteUpdated = () => {
-    loadClientes();
     setEditingCliente(null);
+    setRefreshFilters((prev) => prev + 1);
   };
 
-  const handleEditCliente = (cliente: Cliente) => {
-    setEditingCliente(cliente);
+  const handleEditCliente = (cliente: Cliente) => setEditingCliente(cliente);
+  const handleVerHistorial = (cliente: Cliente) => setHistorialCliente(cliente);
+
+  // --- Abrir modal de eliminación ---
+  const handleOpenDeleteDialog = (cliente: Cliente) => {
+    setClienteToDelete(cliente);
+    setDeleteMotivo("");
+    setShowDeleteDialog(true);
   };
 
-  const handleDeleteCliente = async (cliente: Cliente) => {
-    if (!user) return;
-
-    const confirmDelete = window.confirm(
-      `¿Está seguro que desea eliminar al cliente "${cliente.cliente_nombre}"?\n\nEsta acción no se puede deshacer.`
-    );
-
-    if (!confirmDelete) return;
+  // --- Confirmar eliminación ---
+  const handleConfirmDelete = async () => {
+    if (!clienteToDelete || !user) return;
 
     try {
       const result = await invoke<boolean>("delete_cliente", {
-        clienteId: cliente.cliente_id,
-        deletedBy: user.usuario_id,
+        request: {
+          cliente_id: clienteToDelete.cliente_id,
+          deleted_by: user.usuario_id,
+          motivo: deleteMotivo,
+          deleted_at: new Date().toISOString(),
+        },
       });
 
       if (result) {
         success(
           "Cliente eliminado",
-          `${cliente.cliente_nombre} ha sido eliminado exitosamente.`
+          `${clienteToDelete.cliente_nombre} ha sido eliminado exitosamente.`
         );
-        loadClientes();
+        setShowDeleteDialog(false);
+        setClienteToDelete(null);
+        setDeleteMotivo("");
+        setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
       }
@@ -112,9 +161,12 @@ export function ClientesView() {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-CL");
+  const formatDate = (dateString?: string) =>
+    dateString ? new Date(dateString).toLocaleDateString("es-CL") : "N/A";
+
+  const handleClientesFiltrados = (clientesFiltrados: Cliente[]) => {
+    setClientes(clientesFiltrados);
+    setLoading(false);
   };
 
   if (loading) {
@@ -132,23 +184,31 @@ export function ClientesView() {
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
       </div>
+
       {/* Barra de búsqueda */}
       <div className="flex items-center space-x-2 mb-4">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar clientes..."
+            ref={searchInputRef}
+            placeholder="Buscar por nombre..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
+            onKeyPress={handleKeyPress}
             className="pl-8"
+            title="Solo se permiten letras y espacios"
           />
         </div>
-        {searchTerm && (
-          <Button variant="outline" onClick={() => setSearchTerm("")}>
-            Limpiar
-          </Button>
-        )}
+        <div className="flex-grow min-w-0">
+          <UnificarFiltrosClientes
+            key={refreshFilters}
+            searchTerm={searchTerm}
+            onFiltrar={handleClientesFiltrados}
+            onClearSearch={handleClearSearch}
+          />
+        </div>
       </div>
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -186,7 +246,7 @@ export function ClientesView() {
                   <TableCell className="max-w-xs truncate">
                     {cliente.cliente_direccion || "N/A"}
                   </TableCell>
-                  <TableCell>{formatDate(cliente.created_at)}</TableCell>{" "}
+                  <TableCell>{formatDate(cliente.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
@@ -201,7 +261,16 @@ export function ClientesView() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDeleteCliente(cliente)}
+                        onClick={() => handleVerHistorial(cliente)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Ver historial del cliente"
+                      >
+                        <History className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenDeleteDialog(cliente)}
                         className="text-red-600 hover:text-red-700"
                         title="Eliminar cliente"
                       >
@@ -215,16 +284,24 @@ export function ClientesView() {
           </TableBody>
         </Table>
       </div>
+
       {/* Total de clientes */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {clientes.length} cliente{clientes.length !== 1 ? "s" : ""}
+        {searchTerm && (
+          <span className="ml-2 text-blue-600">
+            (filtrado por: "{searchTerm}")
+          </span>
+        )}
       </div>
+
       {/* Dialog para agregar cliente */}
       <ClienteFormDialog
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onClienteAdded={handleClienteAdded}
-      />{" "}
+      />
+
       {/* Dialog para editar cliente */}
       {editingCliente && (
         <ClienteFormDialog
@@ -235,6 +312,52 @@ export function ClientesView() {
           isEditing={true}
         />
       )}
+
+      {/* Dialog para ver historial del cliente */}
+      <ClienteHistorialDialog
+        open={historialCliente !== null}
+        onOpenChange={(open) => !open && setHistorialCliente(null)}
+        cliente={historialCliente}
+      />
+
+      {/* Dialog de eliminación */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea eliminar al cliente "
+              {clienteToDelete?.cliente_nombre}"?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium mb-1">
+              Motivo de eliminación
+            </label>
+            <textarea
+              value={deleteMotivo}
+              onChange={(e) => setDeleteMotivo(e.target.value)}
+              placeholder="Ingrese motivo..."
+              className="w-full border rounded-md p-2 mt-1"
+              rows={4}
+            />
+          </div>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmDelete} disabled={!deleteMotivo}>
+              Confirmar Eliminación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

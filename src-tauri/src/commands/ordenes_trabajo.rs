@@ -480,8 +480,15 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
         .map_err(|e| format!("Database error: {}", e))?;
     
     // Registrar la acción en el log de auditoría
+    let accion = match nuevo_estado.as_str() {
+        "en_reparacion" => "APROBAR_COTIZACION",
+        "cotizacion_rechazada" => "RECHAZAR_COTIZACION",
+        "equipo_no_reparable" => "NO_REPARABLE",
+        "abandonado" => "ABANDONO",
+        _ => "CHANGE_ORDER_STATUS",
+    };
     let _ = log_action(
-        "CHANGE_ORDER_STATUS",
+        accion,
         Some(updated_by),
         "ORDEN_TRABAJO",
         Some(orden_id),
@@ -883,4 +890,137 @@ pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(clientes)
+}
+
+/// Aprobar cotización y cambiar estado a "en_reparacion"
+#[tauri::command]
+pub async fn aprobar_cotizacion(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Cambiar estado a "en_reparacion" y actualizar cotización
+    let result = sqlx::query(
+        "UPDATE ORDEN_TRABAJO SET estado = 'en_reparacion', cotizacion_id = ? WHERE orden_id = ?"
+    )
+    .bind(cotizacion_id)
+    .bind(orden_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Orden de trabajo no encontrada".to_string());
+    }
+    
+    // Registrar la acción en el log de auditoría
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    let _ = log_action(
+        "APROBAR_COTIZACION",
+        Some(updated_by),
+        "ORDEN_TRABAJO",
+        Some(orden_id),
+        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
+        Some("en_reparacion")
+    ).await;
+    
+    // Obtener la orden actualizada
+    get_orden_trabajo_by_id(orden_id).await
+}
+
+/// Rechazar cotización y cambiar estado a "cotizacion_rechazada"
+#[tauri::command]
+pub async fn rechazar_cotizacion(orden_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Cambiar estado a "cotizacion_rechazada"
+    let result = sqlx::query(
+        "UPDATE ORDEN_TRABAJO SET estado = 'cotizacion_rechazada' WHERE orden_id = ?"
+    )
+    .bind(orden_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Orden de trabajo no encontrada".to_string());
+    }
+    
+    // Registrar la acción en el log de auditoría
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    let _ = log_action(
+        "RECHAZAR_COTIZACION",
+        Some(updated_by),
+        "ORDEN_TRABAJO",
+        Some(orden_id),
+        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
+        Some("cotizacion_rechazada")
+    ).await;
+    
+    // Obtener la orden actualizada
+    get_orden_trabajo_by_id(orden_id).await
+}
+
+/// Marcar orden como no reparable
+#[tauri::command]
+pub async fn marcar_orden_no_reparable(orden_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Cambiar estado a "equipo_no_reparable"
+    let result = sqlx::query(
+        "UPDATE ORDEN_TRABAJO SET estado = 'equipo_no_reparable' WHERE orden_id = ?"
+    )
+    .bind(orden_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Orden de trabajo no encontrada".to_string());
+    }
+    
+    // Registrar la acción en el log de auditoría
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    let _ = log_action(
+        "NO_REPARABLE",
+        Some(updated_by),
+        "ORDEN_TRABAJO",
+        Some(orden_id),
+        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
+        Some("equipo_no_reparable")
+    ).await;
+    
+    // Obtener la orden actualizada
+    get_orden_trabajo_by_id(orden_id).await
+}
+
+/// Marcar orden como abandonada
+#[tauri::command]
+pub async fn marcar_orden_abandonada(orden_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Cambiar estado a "abandonado"
+    let result = sqlx::query(
+        "UPDATE ORDEN_TRABAJO SET estado = 'abandonado' WHERE orden_id = ?"
+    )
+    .bind(orden_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Orden de trabajo no encontrada".to_string());
+    }
+    
+    // Registrar la acción en el log de auditoría
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    let _ = log_action(
+        "ABANDONO",
+        Some(updated_by),
+        "ORDEN_TRABAJO",
+        Some(orden_id),
+        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
+        Some("abandonado")
+    ).await;
+    
+    // Obtener la orden actualizada(deje esto para que funcione NO QUIERE DECIR QUE ESTE)
+    get_orden_trabajo_by_id(orden_id).await
 }
