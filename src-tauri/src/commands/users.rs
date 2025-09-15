@@ -17,6 +17,7 @@ pub struct Usuario {
     pub usuario_contrasena: Option<String>,
     pub usuario_telefono: Option<String>,
     pub usuario_rol: Option<String>,
+    pub is_active: Option<bool>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub session_expires_at: Option<DateTime<Utc>>,
     pub session_token: Option<String>,
@@ -30,6 +31,7 @@ pub struct CreateUsuarioRequest {
     pub usuario_contrasena: String,
     pub usuario_telefono: Option<String>,
     pub usuario_rol: String, // 'admin', 'tecnico', 'cliente'
+    pub is_active: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,8 +80,8 @@ pub struct ChangeEmailRequest {
 #[tauri::command]
 pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
     let pool = get_db_pool_safe()?;
-      let usuarios = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO"
+            let usuarios = sqlx::query_as::<_, Usuario>(
+                "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO"
     )
     .fetch_all(pool)
     .await
@@ -91,8 +93,8 @@ pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
 #[tauri::command]
 pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
-      let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_id = ?"
+            let usuario = sqlx::query_as::<_, Usuario>(
+                "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_id = ?"
     )
     .bind(usuario_id)
     .fetch_optional(pool)
@@ -105,8 +107,8 @@ pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, Strin
 #[tauri::command]
 pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
-      let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_rut = ?"
+            let usuario = sqlx::query_as::<_, Usuario>(
+                "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_rut = ?"
     )
     .bind(usuario_rut)
     .fetch_optional(pool)
@@ -124,7 +126,7 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
     let hashed_password = hash_password(&request.usuario_contrasena)?;
     
     let result = sqlx::query(
-        "INSERT INTO USUARIO (usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO USUARIO (usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&request.usuario_rut)
     .bind(&request.usuario_nombre)
@@ -132,6 +134,7 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
     .bind(&hashed_password) // Usar la contraseña encriptada
     .bind(&request.usuario_telefono)
     .bind(&request.usuario_rol)
+    .bind(true)
     .execute(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
@@ -226,7 +229,7 @@ pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
     // Obtener el usuario antes de eliminarlo para logging
     let user_to_delete = get_usuario_by_id(usuario_id).await?;
     
-    let result = sqlx::query("DELETE FROM USUARIO WHERE usuario_id = ?")
+    let result = sqlx::query("UPDATE USUARIO SET is_active = FALSE WHERE usuario_id = ?")
         .bind(usuario_id)
         .execute(pool)
         .await
@@ -260,24 +263,34 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     
     // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
-         FROM USUARIO 
-         WHERE usuario_correo = ?"
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_correo = ?"
     )
     .bind(&usuario_correo)
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-      // Si encontramos el usuario, verificar la contraseña
+
     if let Some(user) = usuario {
-        if let Some(ref stored_password) = user.usuario_contrasena {            
+        // Verificar si el usuario está activo
+        if let Some(false) = user.is_active {
+            // Registrar intento de login con usuario desactivado
+            let _ = log_action(
+                "LOGIN_FAILED_DISABLED",
+                None,
+                "USUARIO",
+                Some(user.usuario_id),
+                None,
+                Some(&format!("Intento de login con usuario desactivado: {}", usuario_correo))
+            ).await;
+            return Err("USER_DISABLED".to_string());
+        }
+        if let Some(ref stored_password) = user.usuario_contrasena {
             // Verificar la contraseña usando bcrypt
             if verify_password(&usuario_contrasena, stored_password)? {
                 // Generar token de sesión
                 let session_token = Uuid::new_v4().to_string();
                 let login_time = Utc::now();
                 let session_expires = login_time + Duration::hours(16);
-                
                 // Actualizar campos de sesión en la base de datos
                 let _ = sqlx::query(
                     "UPDATE USUARIO SET last_login_at = ?, session_expires_at = ?, session_token = ? WHERE usuario_id = ?"
@@ -288,7 +301,6 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                 .bind(user.usuario_id)
                 .execute(pool)
                 .await;
-                
                 // Registrar login exitoso en el log de auditoría
                 let _ = log_action(
                     "LOGIN_SUCCESS",
@@ -298,7 +310,6 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     None,
                     Some(&format!("Login exitoso para {}", usuario_correo))
                 ).await;
-                
                 // Crear una copia del usuario sin la contraseña para enviar al frontend
                 let safe_user = Usuario {
                     usuario_id: user.usuario_id,
@@ -308,6 +319,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     usuario_contrasena: None, // No enviar la contraseña al frontend
                     usuario_telefono: user.usuario_telefono,
                     usuario_rol: user.usuario_rol,
+                    is_active: user.is_active,
                     last_login_at: Some(login_time),
                     session_expires_at: Some(session_expires),
                     session_token: Some(session_token),
@@ -326,7 +338,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                 return Err("INVALID_PASSWORD".to_string());
             }
         } else {
-                    return Err("USER_NO_PASSWORD".to_string());
+            return Err("USER_NO_PASSWORD".to_string());
         }
     } else {
         // Registrar intento de login con usuario inexistente
@@ -347,7 +359,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     let pool = get_db_pool_safe()?;
       // Verificar si ya existe un usuario admin
     let existing_admin = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token 
          FROM USUARIO 
          WHERE usuario_rol = 'admin' OR usuario_correo = ? OR usuario_rut = ?"
     )
@@ -378,6 +390,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
             usuario_contrasena: None, // No retornar la contraseña por seguridad
             usuario_telefono: admin.usuario_telefono,
             usuario_rol: admin.usuario_rol,
+            is_active: admin.is_active,
             last_login_at: admin.last_login_at,
             session_expires_at: admin.session_expires_at,
             session_token: None, // No retornar el token de sesión por seguridad
@@ -388,7 +401,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     let hashed_password = hash_password("admin123")?;
     
     let result = sqlx::query(
-        "INSERT INTO USUARIO (usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO USUARIO (usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .bind("12345678-9")
     .bind("Administrador")
@@ -396,6 +409,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     .bind(&hashed_password)
     .bind("+56912345678")
     .bind("admin")
+    .bind(true)
     .execute(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
@@ -417,16 +431,17 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
         .await?
         .ok_or_else(|| "Failed to retrieve created admin user".to_string())?;
       Ok(Usuario {
-        usuario_id: created_user.usuario_id,
-        usuario_rut: created_user.usuario_rut,
-        usuario_nombre: created_user.usuario_nombre,
-        usuario_correo: created_user.usuario_correo,
-        usuario_contrasena: None, // No retornar la contraseña por seguridad
-        usuario_telefono: created_user.usuario_telefono,
-        usuario_rol: created_user.usuario_rol,
-        last_login_at: created_user.last_login_at,
-        session_expires_at: created_user.session_expires_at,
-        session_token: None, // No retornar el token de sesión por seguridad
+    usuario_id: created_user.usuario_id,
+    usuario_rut: created_user.usuario_rut,
+    usuario_nombre: created_user.usuario_nombre,
+    usuario_correo: created_user.usuario_correo,
+    usuario_contrasena: None, // No retornar la contraseña por seguridad
+    usuario_telefono: created_user.usuario_telefono,
+    usuario_rol: created_user.usuario_rol,
+    is_active: created_user.is_active,
+    last_login_at: created_user.last_login_at,
+    session_expires_at: created_user.session_expires_at,
+    session_token: None, // No retornar el token de sesión por seguridad
     })
 }
 
@@ -668,6 +683,7 @@ pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, 
                 usuario_contrasena: None,
                 usuario_telefono: user.usuario_telefono,
                 usuario_rol: user.usuario_rol,
+                is_active: user.is_active,
                 last_login_at: user.last_login_at,
                 session_expires_at: user.session_expires_at,
                 session_token: Some(session_token),
@@ -881,28 +897,6 @@ pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> 
 }
 
 #[tauri::command]
-pub fn verify_rut_format(rut: String) -> bool {
-    // Debe tener exactamente 9 caracteres: 8 dígitos, guion, dígito verificador
-    if rut.len() != 10 {
-        return false;
-    }
-    // Debe tener el guion en la posición 9 (índice 8)
-    if rut.chars().nth(8) != Some('-') {
-        return false;
-    }
-    // Los primeros 8 caracteres deben ser dígitos
-    if !rut[..8].chars().all(|c| c.is_digit(10)) {
-        return false;
-    }
-    // El dígito verificador puede ser número o 'K'
-    let dv = rut.chars().nth(9).unwrap();
-    if !dv.is_digit(10) && dv.to_ascii_uppercase() != 'K' {
-        return false;
-    }
-    true
-}
-
-#[tauri::command]
 pub async fn verify_email_in_use(correo: String) -> bool {
     let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
     
@@ -963,3 +957,4 @@ pub async fn verify_rut_in_use(rut: String) -> bool {
         Err(_) => false,
     }
 }
+

@@ -114,13 +114,12 @@ export function UsuarioFormDialog({
   };
 
   const validateForm = async (): Promise<boolean> => {
-    const newErrors: Record<string, string> = {};
+  const newErrors: Record<string, string> = {};
 
-    const rutValido = await invoke<boolean>("verify_rut_format", {
-      rut: formData.usuario_rut,
-    });
-    if (!rutValido) {
-      newErrors.usuario_rut = "El formato valido es 12345678-9";
+    // Validación de teléfono: mínimo 9 dígitos, solo números
+    const telefonoSoloNumeros = formData.usuario_telefono.replace(/[^0-9]/g, "");
+    if (telefonoSoloNumeros.length > 0 && telefonoSoloNumeros.length < 9) {
+      newErrors.usuario_telefono = "El teléfono debe tener al menos 9 dígitos";
     }
 
     if (!formData.usuario_rut.trim()) {
@@ -168,6 +167,7 @@ export function UsuarioFormDialog({
       setShowConfirmationDialog(false);
       return;
     }
+
 
     try {
       setLoading(true);
@@ -259,6 +259,11 @@ export function UsuarioFormDialog({
   };
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
+    if (field === "usuario_rut") {
+      // Limita a máximo 9 caracteres antes de formatear
+      value = value.replace(/[.\-]/g, "").slice(0, 9);
+      value = formatRut(value);
+    }
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -272,6 +277,15 @@ export function UsuarioFormDialog({
       contrasena += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return contrasena;
+  }
+
+  function formatRut(rut: string) {
+    rut = rut.replace(/[^\dkK]/gi, ""); // Elimina todo menos números y k/K
+    if (rut.length <= 1) return rut;
+    let cuerpo = rut.slice(0, -1);
+    let dv = rut.slice(-1);
+    cuerpo = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return `${cuerpo}-${dv}`;
   }
 
   return (
@@ -297,6 +311,7 @@ export function UsuarioFormDialog({
               onChange={(e) => handleInputChange("usuario_rut", e.target.value)}
               placeholder="Ej: 12.345.678-9"
               className={errors.usuario_rut ? "border-red-500" : ""}
+              maxLength={12} // 9 dígitos + puntos y guion
             />
             {errors.usuario_rut && (
               <p className="text-sm text-red-500">{errors.usuario_rut}</p>
@@ -338,11 +353,21 @@ export function UsuarioFormDialog({
             <Input
               id="usuario_telefono"
               value={formData.usuario_telefono}
-              onChange={(e) =>
-                handleInputChange("usuario_telefono", e.target.value)
-              }
-              placeholder="Ej: +56 9 1234 5678"
+              onChange={(e) => {
+                let value = e.target.value.replace(/[^\d+]/g, "");
+                value = value.slice(0, 12); // Limita a 12 caracteres (+569XXXXXXXX)
+                handleInputChange("usuario_telefono", value);
+              }}
+              className={`px-3 py-2 text-base w-full${errors.usuario_telefono ? " border-red-500" : ""}`}
+              placeholder="+56912345678"
+              maxLength={12}
+              style={{ minWidth: "180px" }}
             />
+            {errors.usuario_telefono && (
+              <div className="w-full">
+                <p className="text-sm text-red-500 mt-2">{errors.usuario_telefono}</p>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="usuario_rol">Rol *</Label>
