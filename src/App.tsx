@@ -4,7 +4,7 @@ import {
   EquiposView,
   ClientesView,
   OrdenesTrabajoView,
-  SettingsView,
+  AjustesDeCuentaView,
   HelpView,
   PiezasView,
   UsuarioView,
@@ -45,8 +45,8 @@ function ViewRenderer() {
     case "usuarios":
       return <UsuarioView />;
     case "projects":
-    case "settings":
-      return <SettingsView />;
+    case "Ajustes de Cuenta":
+      return <AjustesDeCuentaView />;
     case "gethelp":
       return <HelpView />;
     default:

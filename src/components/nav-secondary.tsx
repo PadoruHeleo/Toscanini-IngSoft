@@ -29,7 +29,7 @@ export function NavSecondary({
         <SidebarMenu>
           {items.map((item) => {
             // Convertir el título a camelCase para el ID de la vista
-            const viewId = item.title.toLowerCase().replace(/\s+/g, "");
+            const viewId = item.title;
             const isActive = currentView === viewId;
 
             return (

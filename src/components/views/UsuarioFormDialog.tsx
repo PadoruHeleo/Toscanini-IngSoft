@@ -116,10 +116,12 @@ export function UsuarioFormDialog({
   const validateForm = async (): Promise<boolean> => {
   const newErrors: Record<string, string> = {};
 
-    // Validación de teléfono: mínimo 9 dígitos, solo números
-    const telefonoSoloNumeros = formData.usuario_telefono.replace(/[^0-9]/g, "");
-    if (telefonoSoloNumeros.length > 0 && telefonoSoloNumeros.length < 9) {
-      newErrors.usuario_telefono = "El teléfono debe tener al menos 9 dígitos";
+    // Validación de teléfono usando función Tauri
+    if (formData.usuario_telefono) {
+      const telefonoValido = await invoke<boolean>("verify_phone", { phone: formData.usuario_telefono });
+      if (!telefonoValido) {
+        newErrors.usuario_telefono = "El teléfono debe tener formato +569XXXXXXXX";
+      }
     }
 
     if (!formData.usuario_rut.trim()) {
