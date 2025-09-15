@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
+use crate::email::EmailService;
+use crate::commands::equipos::get_equipo_by_id;
 use chrono::{DateTime, Utc};
 use chrono::Datelike;
 
@@ -124,6 +126,73 @@ pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabaj
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(orden)
+}
+#[tauri::command]
+/// Enviar correo genérico al cliente relacionado a una orden de trabajo
+pub async fn send_orden_trabajo_cliente(
+    orden_id: i32,
+    sent_by: i32
+) -> Result<bool, String> {
+
+    // Obtener la orden de trabajo
+    let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+
+    // Obtener información del equipo
+    let equipo = get_equipo_by_id(orden_trabajo.equipo_id.unwrap_or(0)).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+
+    // Obtener información del cliente
+    let pool = crate::database::get_db_pool_safe()?;
+    #[derive(sqlx::FromRow)]
+    struct ClienteRow {
+        cliente_correo: String,
+        cliente_nombre: String,
+    }
+    let cliente = sqlx::query_as::<_, ClienteRow>(
+        "SELECT cliente_correo, cliente_nombre FROM CLIENTE WHERE cliente_id = ?"
+    )
+    .bind(equipo.cliente_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    let (cliente_correo, cliente_nombre) = if let Some(cliente) = cliente {
+        (cliente.cliente_correo, cliente.cliente_nombre)
+    } else {
+        return Err("Cliente no encontrado".to_string());
+    };
+
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
+
+    // Enviar el email al cliente
+    email_service.send_orden_trabajo_cliente(
+        &cliente_correo,
+        &cliente_nombre,
+        &orden_trabajo,
+        &equipo
+    ).await
+    .map_err(|e| format!("Error enviando email al cliente: {}", e))?;
+
+    // Registrar la acción en el log de auditoría
+    let _ = log_action(
+        "SEND_ORDEN_CLIENTE_EMAIL_GENERIC",
+        Some(sent_by),
+        "ORDEN_TRABAJO",
+        Some(orden_id),
+        None,
+        Some(&format!(
+            "Correo de orden {} enviado a {} (equipo: marca={}, modelo={}, tipo={})",
+            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"),
+            cliente_correo,
+            equipo.equipo_marca.as_deref().unwrap_or("N/A"),
+            equipo.equipo_modelo.as_deref().unwrap_or("N/A"),
+            equipo.equipo_tipo.as_deref().unwrap_or("N/A")
+        ))
+    ).await;
+
+    Ok(true)
 }
 
 /// Obtener una orden de trabajo por código
