@@ -25,6 +25,8 @@ interface Usuario {
   usuario_rol?: string;
   created_by?: number;
   created_at?: string;
+  is_active?: boolean;
+  
 }
 
 export function UsuarioView() {
@@ -171,6 +173,7 @@ export function UsuarioView() {
               <TableHead>Correo</TableHead>
               <TableHead>Teléfono</TableHead>
               <TableHead>Rol</TableHead>
+              <TableHead>Habilitado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -196,6 +199,7 @@ export function UsuarioView() {
                   <TableCell>{usuario.usuario_correo || "N/A"}</TableCell>
                   <TableCell>{usuario.usuario_telefono || "N/A"}</TableCell>
                   <TableCell>{getRolLabel(usuario.usuario_rol)}</TableCell>
+                  <TableCell>{usuario.is_active ? "Sí" : "No"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
