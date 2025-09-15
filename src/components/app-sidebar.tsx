@@ -57,7 +57,7 @@ const data = {
   ],
   navSecondary: [
     {
-      title: "Settings",
+      title: "Ajustes de Cuenta",
       url: "#",
       icon: IconSettings,
     },

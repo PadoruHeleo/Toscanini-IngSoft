@@ -5,7 +5,7 @@ export * from "./ClientesView";
 export * from "./ClienteFormDialog";
 export * from "./OrdenesTrabajoView";
 export * from "./OrdenTrabajoFormDialog";
-export * from "./SettingsView";
+export * from "./AjustesDeCuentaView";
 export * from "./HelpView";
 export * from "./LoginView";
 export * from "./PasswordResetView";

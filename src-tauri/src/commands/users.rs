@@ -653,9 +653,9 @@ pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, 
     
     // Buscar usuario por token de sesión válido y no expirado
     let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token
          FROM USUARIO 
-         WHERE session_token = ? AND session_expires_at > UTC_TIMESTAMP()"
+         WHERE session_token = ? AND session_expires_at > UTC_TIMESTAMP() AND is_active = TRUE"
     )
     .bind(&session_token)
     .fetch_optional(pool)
@@ -956,5 +956,23 @@ pub async fn verify_rut_in_use(rut: String) -> bool {
         },
         Err(_) => false,
     }
+}
+
+#[tauri::command]
+pub fn verify_phone(phone: String) -> bool {
+    if phone.len() > 12 {
+        return false;
+    }
+    let chars: Vec<char> = phone.chars().collect();
+    if chars.is_empty() || chars[0] != '+' {
+        return false;
+    }
+    if chars.len() == 1 {
+        return false;
+    }
+    if !chars[1..].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    true
 }
 
