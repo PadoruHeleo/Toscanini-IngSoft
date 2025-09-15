@@ -6,6 +6,7 @@ use crate::commands::logs::log_action;
 use crate::email::EmailService;
 use chrono::{DateTime, Utc, Duration};
 use uuid::Uuid;
+use sqlx::Row;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Usuario {
@@ -876,5 +877,89 @@ pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> 
         get_usuario_by_id(usuario_id).await
     } else {
         Err("No se pudo actualizar el email".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn verify_rut_format(rut: String) -> bool {
+    // Debe tener exactamente 9 caracteres: 8 dígitos, guion, dígito verificador
+    if rut.len() != 10 {
+        return false;
+    }
+    // Debe tener el guion en la posición 9 (índice 8)
+    if rut.chars().nth(8) != Some('-') {
+        return false;
+    }
+    // Los primeros 8 caracteres deben ser dígitos
+    if !rut[..8].chars().all(|c| c.is_digit(10)) {
+        return false;
+    }
+    // El dígito verificador puede ser número o 'K'
+    let dv = rut.chars().nth(9).unwrap();
+    if !dv.is_digit(10) && dv.to_ascii_uppercase() != 'K' {
+        return false;
+    }
+    true
+}
+
+#[tauri::command]
+pub async fn verify_email_in_use(correo: String) -> bool {
+    let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
+    
+    // Consulta la base de datos y retorna true si el correo existe
+    match sqlx::query("SELECT COUNT(*) FROM USUARIO WHERE usuario_correo = ?")
+        .bind(correo)
+        .fetch_one(pool)
+        .await {
+        Ok(row) => {
+            let count: i64 = row.get(0);
+            count > 0
+        },
+        Err(_) => false,
+    }
+}
+
+#[tauri::command]
+pub fn verify_email(email: String) -> bool {
+    // Verifica que tenga un '@' y un '.' después del '@'
+    let parts: Vec<&str> = email.split('@').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    let domain = parts[1];
+    if !domain.contains('.') {
+        return false;
+    }
+    // Opcional: verifica que no tenga espacios
+    if email.contains(' ') {
+        return false;
+    }
+    true
+}
+
+#[tauri::command]
+pub async fn send_password_email(
+    to_email: &str,
+    user_name: &str,
+    temp_password: &str,
+) -> Result<(), String> {
+    let service: EmailService = EmailService::new()?;
+    service.send_password_email(to_email, user_name, temp_password).await
+}
+
+#[tauri::command]
+pub async fn verify_rut_in_use(rut: String) -> bool {
+    let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
+
+    // Consulta la base de datos y retorna true si el RUT existe
+    match sqlx::query("SELECT COUNT(*) FROM USUARIO WHERE usuario_rut = ?")
+        .bind(rut)
+        .fetch_one(pool)
+        .await {
+        Ok(row) => {
+            let count: i64 = row.get(0);
+            count > 0
+        },
+        Err(_) => false,
     }
 }
