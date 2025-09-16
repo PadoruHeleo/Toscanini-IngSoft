@@ -47,12 +47,17 @@ const data = {
     {
       title: "Piezas",
       url: "#",
-      icon: IconChartBar, // Puedes cambiar el icono si lo deseas
+      icon: IconChartBar,
+    },
+    {
+      title: "Usuarios",
+      url: "#",
+      icon: IconUsers, 
     },
   ],
   navSecondary: [
     {
-      title: "Settings",
+      title: "Ajustes de Cuenta",
       url: "#",
       icon: IconSettings,
     },
