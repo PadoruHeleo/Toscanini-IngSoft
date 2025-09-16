@@ -10,7 +10,15 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Edit, Eye, EyeOff, Star, StarOff } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Edit,
+  Eye,
+  Trash2,
+  CheckCircle,
+  Circle,
+} from "lucide-react";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -231,27 +239,6 @@ export function TerminosCondicionesView() {
     }
   };
 
-  const handleToggleDefault = async (termino: TerminoCondicion) => {
-    if (!user) return;
-
-    try {
-      await invoke("toggle_termino_default", {
-        termino_id: termino.termino_id,
-        is_default: !termino.is_default,
-        updated_by: user.usuario_id,
-      });
-      success(
-        `Término ${
-          !termino.is_default ? "marcado" : "desmarcado"
-        } como por defecto`
-      );
-      loadTerminos();
-    } catch (error) {
-      showError("Error al cambiar estado por defecto");
-      console.error("Error toggling default:", error);
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       termino_nombre: "",
@@ -400,9 +387,9 @@ export function TerminosCondicionesView() {
                   </TableCell>
                   <TableCell>
                     {termino.is_default ? (
-                      <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                      <CheckCircle className="w-4 h-4 text-green-500" />
                     ) : (
-                      <StarOff className="w-4 h-4 text-gray-400" />
+                      <Circle className="w-4 h-4 text-gray-400" />
                     )}
                   </TableCell>
                   <TableCell>
@@ -426,7 +413,7 @@ export function TerminosCondicionesView() {
                           size="sm"
                           onClick={() => setDeleteConfirm(termino)}
                         >
-                          <EyeOff className="w-4 h-4 text-red-500" />
+                          <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
                       ) : (
                         <Button
@@ -437,18 +424,6 @@ export function TerminosCondicionesView() {
                           <Eye className="w-4 h-4 text-green-500" />
                         </Button>
                       )}
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleDefault(termino)}
-                      >
-                        {termino.is_default ? (
-                          <StarOff className="w-4 h-4 text-yellow-500" />
-                        ) : (
-                          <Star className="w-4 h-4 text-gray-400" />
-                        )}
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
