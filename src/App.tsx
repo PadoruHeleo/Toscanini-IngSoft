@@ -4,9 +4,10 @@ import {
   EquiposView,
   ClientesView,
   OrdenesTrabajoView,
-  SettingsView,
+  AjustesDeCuentaView,
   HelpView,
   PiezasView,
+  UsuarioView,
 } from "@/components/views";
 import { usePeriodicNotification } from "@/hooks/use-periodic-notification";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -41,9 +42,11 @@ function ViewRenderer() {
       return <OrdenesTrabajoView />;
     case "piezas":
       return <PiezasView />;
+    case "usuarios":
+      return <UsuarioView />;
     case "projects":
-    case "settings":
-      return <SettingsView />;
+    case "Ajustes de Cuenta":
+      return <AjustesDeCuentaView />;
     case "gethelp":
       return <HelpView />;
     default:

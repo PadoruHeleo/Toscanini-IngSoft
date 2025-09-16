@@ -17,6 +17,14 @@ import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Cliente {
   cliente_id: number;
@@ -40,42 +48,32 @@ export function ClientesView() {
   const [historialCliente, setHistorialCliente] = useState<Cliente | null>(
     null
   );
+  const [refreshFilters, setRefreshFilters] = useState(0);
+
+  // --- Estados para eliminar cliente ---
+  const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
+  const [deleteMotivo, setDeleteMotivo] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Estado para forzar actualización de filtros
-  const [refreshFilters, setRefreshFilters] = useState(0);
+  // Validación de texto (sin números)
+  const isValidText = (text: string) =>
+    /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/.test(text);
 
-  //  Función para validar que solo contenga texto (sin números)
-  const isValidText = (text: string): boolean => {
-    // Solo permite: letras (con acentos), espacios, apostrofes, guiones
-    const textOnlyRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/;
-    return textOnlyRegex.test(text);
-  };
-
-  //  Manejar cambios en el input de búsqueda (solo texto)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-
-    // Solo actualizar si es texto válido (sin números)
-    if (isValidText(value)) {
-      setSearchTerm(value);
-    }
+    if (isValidText(value)) setSearchTerm(value);
   };
 
-  const handleClearSearch = () => {
-    setSearchTerm("");
-  };
+  const handleClearSearch = () => setSearchTerm("");
 
-  //  Prevenir entrada de números al escribir
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Prevenir números (0-9)
-    if (/[0-9]/.test(e.key)) {
-      e.preventDefault();
-    }
+    if (/[0-9]/.test(e.key)) e.preventDefault();
   };
 
-  //  Carga inicial de clientes (sin filtros)
+  // Cargar clientes inicial
   useEffect(() => {
     const loadInitialClientes = async () => {
       try {
@@ -92,26 +90,19 @@ export function ClientesView() {
         setLoading(false);
       }
     };
-
     loadInitialClientes();
   }, []);
 
-  //  Manejo del término de búsqueda con debounce (sin cargar clientes directamente)
+  // Debounce búsqueda
   useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
-    // El debounce solo actualiza el estado, no carga clientes
-    // UnificarFiltrosClientes se encarga de aplicar el filtro
     searchTimeoutRef.current = setTimeout(() => {
-      // El searchTerm se pasa como prop a UnificarFiltrosClientes
+      // UnificarFiltrosClientes se encarga de filtrar
     }, 150);
 
     return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
   }, [searchTerm]);
 
@@ -125,34 +116,38 @@ export function ClientesView() {
     setRefreshFilters((prev) => prev + 1);
   };
 
-  const handleEditCliente = (cliente: Cliente) => {
-    setEditingCliente(cliente);
+  const handleEditCliente = (cliente: Cliente) => setEditingCliente(cliente);
+  const handleVerHistorial = (cliente: Cliente) => setHistorialCliente(cliente);
+
+  // --- Abrir modal de eliminación ---
+  const handleOpenDeleteDialog = (cliente: Cliente) => {
+    setClienteToDelete(cliente);
+    setDeleteMotivo("");
+    setShowDeleteDialog(true);
   };
 
-  const handleVerHistorial = (cliente: Cliente) => {
-    setHistorialCliente(cliente);
-  };
-
-  const handleDeleteCliente = async (cliente: Cliente) => {
-    if (!user) return;
-
-    const confirmDelete = window.confirm(
-      `¿Está seguro que desea eliminar al cliente "${cliente.cliente_nombre}"?\n\nEsta acción no se puede deshacer.`
-    );
-
-    if (!confirmDelete) return;
+  // --- Confirmar eliminación ---
+  const handleConfirmDelete = async () => {
+    if (!clienteToDelete || !user) return;
 
     try {
       const result = await invoke<boolean>("delete_cliente", {
-        clienteId: cliente.cliente_id,
-        deletedBy: user.usuario_id,
+        request: {
+          cliente_id: clienteToDelete.cliente_id,
+          deleted_by: user.usuario_id,
+          motivo: deleteMotivo,
+          deleted_at: new Date().toISOString(),
+        },
       });
 
       if (result) {
         success(
           "Cliente eliminado",
-          `${cliente.cliente_nombre} ha sido eliminado exitosamente.`
+          `${clienteToDelete.cliente_nombre} ha sido eliminado exitosamente.`
         );
+        setShowDeleteDialog(false);
+        setClienteToDelete(null);
+        setDeleteMotivo("");
         setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar el cliente.");
@@ -166,12 +161,9 @@ export function ClientesView() {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-CL");
-  };
+  const formatDate = (dateString?: string) =>
+    dateString ? new Date(dateString).toLocaleDateString("es-CL") : "N/A";
 
-  //  Función que recibe los clientes filtrados desde UnificarFiltrosClientes
   const handleClientesFiltrados = (clientesFiltrados: Cliente[]) => {
     setClientes(clientesFiltrados);
     setLoading(false);
@@ -207,8 +199,6 @@ export function ClientesView() {
             title="Solo se permiten letras y espacios"
           />
         </div>
-
-        {/*  Filtros unificados - pasamos searchTerm y función para recibir resultados */}
         <div className="flex-grow min-w-0">
           <UnificarFiltrosClientes
             key={refreshFilters}
@@ -280,7 +270,7 @@ export function ClientesView() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDeleteCliente(cliente)}
+                        onClick={() => handleOpenDeleteDialog(cliente)}
                         className="text-red-600 hover:text-red-700"
                         title="Eliminar cliente"
                       >
@@ -329,6 +319,45 @@ export function ClientesView() {
         onOpenChange={(open) => !open && setHistorialCliente(null)}
         cliente={historialCliente}
       />
+
+      {/* Dialog de eliminación */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea eliminar al cliente "
+              {clienteToDelete?.cliente_nombre}"?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium mb-1">
+              Motivo de eliminación
+            </label>
+            <textarea
+              value={deleteMotivo}
+              onChange={(e) => setDeleteMotivo(e.target.value)}
+              placeholder="Ingrese motivo..."
+              className="w-full border rounded-md p-2 mt-1"
+              rows={4}
+            />
+          </div>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmDelete} disabled={!deleteMotivo}>
+              Confirmar Eliminación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

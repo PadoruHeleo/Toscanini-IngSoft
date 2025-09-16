@@ -370,13 +370,19 @@ export default function OrdenTrabajoFormDialog({
           cotizacion_id: null,
           informe_id: null,
         };
-        const result = await invoke<number>("create_orden_trabajo", {
+        const result = await invoke<OrdenTrabajo>("create_orden_trabajo", {
           request: createData,
         });
 
         if (result) {
           success("Orden creada", `La orden ha sido creada exitosamente.`);
           onOrdenAdded();
+
+          // Enviar comando al cliente después de crear la orden
+          await invoke("send_orden_trabajo_cliente", {
+            ordenId: result.orden_id, // id de la orden creada
+            sentBy: user.usuario_id
+          });
         } else {
           showError("Error", "No se pudo crear la orden de trabajo.");
         }

@@ -143,6 +143,7 @@ export function OrdenesTrabajoView() {
   const { success, error: showError } = useToastContext();
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshFilters, setRefreshFilters] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenTrabajo | null>(null);
@@ -163,7 +164,7 @@ export function OrdenesTrabajoView() {
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-    }, 60 * 1000);  
+    }, 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -211,12 +212,13 @@ export function OrdenesTrabajoView() {
   };
 
   const isTiempoEnEstadoCritico = (orden: OrdenTrabajo) => {
-    if (orden.estado !== "en_reparacion" && orden.estado !== "recibido") return false;
+    if (orden.estado !== "en_reparacion" && orden.estado !== "recibido")
+      return false;
     const base = orden.estado_updated_at || orden.created_at;
     if (!base) return false;
     const baseDate = new Date(base);
     const now = new Date();
-    const diffMs = now.getTime() - baseDate.getTime(); 
+    const diffMs = now.getTime() - baseDate.getTime();
     return diffMs > 60 * 60 * 1000;
   };
 
@@ -237,14 +239,17 @@ export function OrdenesTrabajoView() {
   const handleOrdenAdded = () => {
     loadOrdenes();
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleOrdenUpdated = () => {
     loadOrdenes();
     setEditingOrden(null);
+    setRefreshFilters((prev) => prev + 1);
   };
   const handleEditOrden = (orden: OrdenTrabajo) => {
     setEditingOrden(orden);
+    setRefreshFilters((prev) => prev + 1);
   };
   const handleCotizacionAdded = () => {
     // Recargar las órdenes para ver los cambios
@@ -286,6 +291,7 @@ export function OrdenesTrabajoView() {
           `La orden ${orden.orden_codigo} ha sido eliminada exitosamente.`
         );
         loadOrdenes();
+        setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar la orden de trabajo.");
       }
@@ -315,7 +321,10 @@ export function OrdenesTrabajoView() {
       });
 
       // Log para depuración
-      console.log("Abriendo CotizacionFormDialog, ordenTrabajoId:", orden.orden_id);
+      console.log(
+        "Abriendo CotizacionFormDialog, ordenTrabajoId:",
+        orden.orden_id
+      );
 
       // Abrir el formulario de cotización en modo edición
       setSelectedOrdenForCotizacion(orden);
@@ -341,7 +350,10 @@ export function OrdenesTrabajoView() {
     try {
       setLoadingCotizacion(orden.orden_id);
       // Log para depuración
-      console.log("Abriendo CotizacionFormDialog, ordenTrabajoId:", orden.orden_id);
+      console.log(
+        "Abriendo CotizacionFormDialog, ordenTrabajoId:",
+        orden.orden_id
+      );
 
       setSelectedOrdenForCotizacion(orden);
       setEditingCotizacion(null);
@@ -442,6 +454,7 @@ export function OrdenesTrabajoView() {
         )}
         {/* boton para los filtos */}
         <UnificarFiltros
+          key={refreshFilters}
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
       </div>
@@ -490,9 +503,17 @@ export function OrdenesTrabajoView() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    {getTiempoEnEstado(orden.estado_updated_at || orden.created_at)}
+                    {getTiempoEnEstado(
+                      orden.estado_updated_at || orden.created_at
+                    )}
                     {isTiempoEnEstadoCritico(orden) && (
-                      <span style={{ color: "#dc2626", fontWeight: "bold", marginLeft: 8 }}>
+                      <span
+                        style={{
+                          color: "#dc2626",
+                          fontWeight: "bold",
+                          marginLeft: 8,
+                        }}
+                      >
                         Atrasado
                       </span>
                     )}
