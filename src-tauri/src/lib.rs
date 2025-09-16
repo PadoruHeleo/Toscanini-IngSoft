@@ -133,6 +133,7 @@ pub fn run() {
             commands::informe::get_informes_with_pagination,
             commands::informe::get_piezas_informe,
             commands::informe::send_informe_to_client,
+            commands::informe::rechazar_informe_borrador,
             commands::database::get_database_status,
             commands::database::check_database_connection,
             commands::database::retry_database_connection,

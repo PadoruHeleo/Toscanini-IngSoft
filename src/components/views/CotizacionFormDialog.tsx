@@ -116,6 +116,7 @@ export default function CotizacionFormDialog({
   const [comentarioNoReparable, setComentarioNoReparable] = useState("");
   const [showAbandonoConfirmDialog, setShowAbandonoConfirmDialog] = useState(false);
   const [abandonoComentario, setAbandonoComentario] = useState("");
+  const [motivoRechazo, setMotivoRechazo] = useState("");
   const [formData, setFormData] = useState<FormData>({
     costo_revision: "25000",
     costo_reparacion: "0",
@@ -579,27 +580,55 @@ export default function CotizacionFormDialog({
   }
 };
 
-  const handleRechazarCotizacion = async () => {
-    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
+  const handleRechazarCotizacion = async (motivo?: string) => {
+    if (!cotizacion?.cotizacion_id || !user) {
       showError("Error de autenticación", "Usuario no autenticado");
       return;
     }
     try {
       setLoading(true);
-      // Rechazar la cotización
+      // Rechazar la cotización y guardar el motivo
       const result = await invoke<boolean>("update_cotizacion", {
         cotizacionId: cotizacion.cotizacion_id,
-        request: { is_aprobada: false },
+        request: { is_aprobada: false, motivo_rechazo: motivo },
         updatedBy: user.usuario_id,
       });
       if (result) {
-        // Cambiar estado de la orden a "aprobacion_pendiente"
+        // Cambiar estado de la orden a "cotizacion_rechazada"
         await invoke("cambiar_estado_orden_trabajo", {
           ordenId: ordenTrabajoId,
           nuevoEstado: "cotizacion_rechazada",
           updatedBy: user.usuario_id,
         });
         success("Cotización rechazada", "La cotización ha sido rechazada y la orden está cotizacion rechazada.");
+        onCotizacionAdded();
+        onOpenChange(false);
+      } else {
+        showError("Error", "No se pudo rechazar la cotización.");
+      }
+    } catch (error) {
+      console.error(error);
+      showError("Error", "Ocurrió un error al rechazar la cotización.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleRechazarCotizacionBorrador = async (motivo?: string) => {
+    if (!cotizacion?.cotizacion_id || !user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+    try {
+      setLoading(true);
+      // Rechaza la cotización, guarda el motivo y marca como no borrador
+      const result = await invoke<boolean>("update_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        request: { is_aprobada: false, is_borrador: false, motivo_rechazo: motivo, estado: "rechazada" },
+        updatedBy: user.usuario_id,
+      });
+      if (result) {
+        success("Cotización rechazada", "La cotización ha sido rechazada.");
         onCotizacionAdded();
         onOpenChange(false);
       } else {
@@ -928,6 +957,18 @@ export default function CotizacionFormDialog({
               </Button>
             )}
 
+            {isEditing && cotizacion?.is_borrador && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setShowRechazarConfirmDialog(true)}
+                disabled={loading}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {loading ? "Eliminando..." : "Eliminar Borrador"}
+              </Button>
+            )}
+
             {isEditing &&
               estadoOrden &&
               estadoOrden
@@ -1136,6 +1177,56 @@ export default function CotizacionFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de confirmación de rechazo en estado Borrador */}        
+     {isEditing && cotizacion?.is_borrador && (
+        <Dialog
+          open={showRechazarConfirmDialog}
+          onOpenChange={setShowRechazarConfirmDialog}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirmar rechazo</DialogTitle>
+              <DialogDescription>
+                ¿Está seguro que desea <b>rechazar</b> esta cotización?<br />
+                El estado de la cotización cambiará a <b>Cotización Rechazada</b>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Label htmlFor="motivo_rechazo">Motivo del rechazo *</Label>
+              <Textarea
+                id="motivo_rechazo"
+                value={motivoRechazo}
+                onChange={e => setMotivoRechazo(e.target.value)}
+                placeholder="Ingrese el motivo del rechazo..."
+                rows={3}
+                required
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowRechazarConfirmDialog(false)}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  setShowRechazarConfirmDialog(false);
+                  await handleRechazarCotizacionBorrador(motivoRechazo);
+                }}
+                disabled={loading || !motivoRechazo.trim()}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {loading ? "Eliminando..." : "Confirmar Eliminación"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       
       {/* Modal de confirmación de No Reparable */}
       <Dialog
@@ -1235,6 +1326,7 @@ export default function CotizacionFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
     </Dialog>
   );
 }
