@@ -117,7 +117,49 @@ export default function InformeFormDialog({
     tecnico_responsable: "",
   });
 
-  const [errors, setErrors] = useState<FormErrors>({}); // Cargar piezas al abrir el diálogo
+  const [errors, setErrors] = useState<FormErrors>({});
+  // Estado para el diálogo de confirmación de eliminación
+  const [showEliminarInformeDialog, setShowEliminarInformeDialog] = useState(false);
+  // Función para manejar la eliminación del informe
+  const handleEliminarInforme = async () => {
+  if (!informe?.informe_id || !user) {
+    showError("Error", "No se puede eliminar el informe.");
+    return;
+  }
+  try {
+    setLoading(true);
+    // Actualizar la orden de trabajo para quitar la referencia al informe
+    const ordenResult = await invoke<boolean>("remove_informe_from_ordenes", {
+      informeId: informe.informe_id,
+      updatedBy: user.usuario_id,
+    });
+
+    if (!ordenResult) { // <-- Cambia aquí la condición
+      showError("Error", "No se pudo desvincular el informe de la orden de trabajo.");
+      setLoading(false);
+      return;
+    }
+    // Eliminar el informe
+    const result = await invoke<boolean>("delete_informe", {
+      informeId: informe.informe_id,
+      deletedBy: user.usuario_id,
+    });
+
+    if (result) {
+      success("Informe eliminado", "El informe fue eliminado exitosamente.");
+      onInformeAdded();
+      onOpenChange(false);
+    } else {
+      showError("Error", "No se pudo eliminar el informe.");
+    }
+  } catch (error) {
+    showError("Error", "Ocurrió un error al eliminar el informe.");
+    console.log(error);
+  } finally {
+    setLoading(false);
+  }
+  };
+
   useEffect(() => {
     if (open) {
       loadPiezas();
@@ -929,6 +971,17 @@ export default function InformeFormDialog({
                 </>
               )}
             </Button>
+              {isEditing && informe && (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => setShowEliminarInformeDialog(true)}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Eliminar Informe
+            </Button>
+          )}
             <Button
               type="submit"
               disabled={
@@ -981,6 +1034,44 @@ export default function InformeFormDialog({
           </DialogFooter>{" "}
         </form>
       </DialogContent>
+
+      {/* Diálogo de confirmación para eliminar informe */}
+      <Dialog
+        open={showEliminarInformeDialog}
+        onOpenChange={setShowEliminarInformeDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogDescription> 
+              ¿Está seguro que desea eliminar este informe? Esta acción no se
+              puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowEliminarInformeDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={ async () => {
+                setShowEliminarInformeDialog(false);
+                await handleEliminarInforme();
+              }}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {loading ? "Eliminando..." : "Eliminar Informe"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de confirmación */}
       <Dialog

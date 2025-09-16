@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
-use crate::email::EmailService;
-use crate::commands::equipos::get_equipo_by_id;
 use chrono::{DateTime, Utc};
 use chrono::Datelike;
 
@@ -126,73 +124,6 @@ pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabaj
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(orden)
-}
-#[tauri::command]
-/// Enviar correo genérico al cliente relacionado a una orden de trabajo
-pub async fn send_orden_trabajo_cliente(
-    orden_id: i32,
-    sent_by: i32
-) -> Result<bool, String> {
-
-    // Obtener la orden de trabajo
-    let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
-        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
-
-    // Obtener información del equipo
-    let equipo = get_equipo_by_id(orden_trabajo.equipo_id.unwrap_or(0)).await?
-        .ok_or_else(|| "Equipo no encontrado".to_string())?;
-
-    // Obtener información del cliente
-    let pool = crate::database::get_db_pool_safe()?;
-    #[derive(sqlx::FromRow)]
-    struct ClienteRow {
-        cliente_correo: String,
-        cliente_nombre: String,
-    }
-    let cliente = sqlx::query_as::<_, ClienteRow>(
-        "SELECT cliente_correo, cliente_nombre FROM CLIENTE WHERE cliente_id = ?"
-    )
-    .bind(equipo.cliente_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    let (cliente_correo, cliente_nombre) = if let Some(cliente) = cliente {
-        (cliente.cliente_correo, cliente.cliente_nombre)
-    } else {
-        return Err("Cliente no encontrado".to_string());
-    };
-
-    // Crear el servicio de email
-    let email_service = EmailService::new()
-        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
-
-    // Enviar el email al cliente
-    email_service.send_orden_trabajo_cliente(
-        &cliente_correo,
-        &cliente_nombre,
-        &orden_trabajo,
-        &equipo
-    ).await
-    .map_err(|e| format!("Error enviando email al cliente: {}", e))?;
-
-    // Registrar la acción en el log de auditoría
-    let _ = log_action(
-        "SEND_ORDEN_CLIENTE_EMAIL_GENERIC",
-        Some(sent_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        None,
-        Some(&format!(
-            "Correo de orden {} enviado a {} (equipo: marca={}, modelo={}, tipo={})",
-            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"),
-            cliente_correo,
-            equipo.equipo_marca.as_deref().unwrap_or("N/A"),
-            equipo.equipo_modelo.as_deref().unwrap_or("N/A"),
-            equipo.equipo_tipo.as_deref().unwrap_or("N/A")
-        ))
-    ).await;
-
-    Ok(true)
 }
 
 /// Obtener una orden de trabajo por código
@@ -549,15 +480,8 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
         .map_err(|e| format!("Database error: {}", e))?;
     
     // Registrar la acción en el log de auditoría
-    let accion = match nuevo_estado.as_str() {
-        "en_reparacion" => "APROBAR_COTIZACION",
-        "cotizacion_rechazada" => "RECHAZAR_COTIZACION",
-        "equipo_no_reparable" => "NO_REPARABLE",
-        "abandonado" => "ABANDONO",
-        _ => "CHANGE_ORDER_STATUS",
-    };
     let _ = log_action(
-        accion,
+        "CHANGE_ORDER_STATUS",
         Some(updated_by),
         "ORDEN_TRABAJO",
         Some(orden_id),
@@ -961,135 +885,73 @@ pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
     Ok(clientes)
 }
 
-/// Aprobar cotización y cambiar estado a "en_reparacion"
 #[tauri::command]
-pub async fn aprobar_cotizacion(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
-    
-    // Cambiar estado a "en_reparacion" y actualizar cotización
-    let result = sqlx::query(
-        "UPDATE ORDEN_TRABAJO SET estado = 'en_reparacion', cotizacion_id = ? WHERE orden_id = ?"
+    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at
+         FROM ORDEN_TRABAJO
+         WHERE equipo_id IN (SELECT equipo_id FROM EQUIPO WHERE cliente_id = ?)
+         ORDER BY created_at DESC"
     )
-    .bind(cotizacion_id)
-    .bind(orden_id)
-    .execute(pool)
+    .bind(cliente_id)
+    .fetch_all(pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
-    if result.rows_affected() == 0 {
-        return Err("Orden de trabajo no encontrada".to_string());
-    }
-    
-    // Registrar la acción en el log de auditoría
-    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
-    let _ = log_action(
-        "APROBAR_COTIZACION",
-        Some(updated_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
-        Some("en_reparacion")
-    ).await;
-    
-    // Obtener la orden actualizada
-    get_orden_trabajo_by_id(orden_id).await
+    Ok(ordenes)
 }
 
-/// Rechazar cotización y cambiar estado a "cotizacion_rechazada"
 #[tauri::command]
-pub async fn rechazar_cotizacion(orden_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+pub async fn remove_cotizacion_from_ordenes(cotizacion_id: i32, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    // Cambiar estado a "cotizacion_rechazada"
-    let result = sqlx::query(
-        "UPDATE ORDEN_TRABAJO SET estado = 'cotizacion_rechazada' WHERE orden_id = ?"
-    )
-    .bind(orden_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
+        .bind(cotizacion_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
     
-    if result.rows_affected() == 0 {
-        return Err("Orden de trabajo no encontrada".to_string());
+    if result.rows_affected() > 0 {
+        // Registrar la acción en el log de auditoría
+        let _ = log_action(
+            "REMOVE_COTIZACION_FROM_ORDENES",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            None,
+            Some(&format!("Cotización {} removida de órdenes de trabajo", cotizacion_id)),
+            None
+        ).await;
+        
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    
-    // Registrar la acción en el log de auditoría
-    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
-    let _ = log_action(
-        "RECHAZAR_COTIZACION",
-        Some(updated_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
-        Some("cotizacion_rechazada")
-    ).await;
-    
-    // Obtener la orden actualizada
-    get_orden_trabajo_by_id(orden_id).await
 }
 
-/// Marcar orden como no reparable
 #[tauri::command]
-pub async fn marcar_orden_no_reparable(orden_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+pub async fn remove_informe_from_ordenes(informe_id: i32, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    // Cambiar estado a "equipo_no_reparable"
-    let result = sqlx::query(
-        "UPDATE ORDEN_TRABAJO SET estado = 'equipo_no_reparable' WHERE orden_id = ?"
-    )
-    .bind(orden_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+        .bind(informe_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
     
-    if result.rows_affected() == 0 {
-        return Err("Orden de trabajo no encontrada".to_string());
+    if result.rows_affected() > 0 {
+        // Registrar la acción en el log de auditoría
+        let _ = log_action(
+            "REMOVE_INFORME_FROM_ORDENES",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            None,
+            Some(&format!("Informe {} removido de órdenes de trabajo", informe_id)),
+            None
+        ).await;
+        
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    
-    // Registrar la acción en el log de auditoría
-    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
-    let _ = log_action(
-        "NO_REPARABLE",
-        Some(updated_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
-        Some("equipo_no_reparable")
-    ).await;
-    
-    // Obtener la orden actualizada
-    get_orden_trabajo_by_id(orden_id).await
-}
-
-/// Marcar orden como abandonada
-#[tauri::command]
-pub async fn marcar_orden_abandonada(orden_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    // Cambiar estado a "abandonado"
-    let result = sqlx::query(
-        "UPDATE ORDEN_TRABAJO SET estado = 'abandonado' WHERE orden_id = ?"
-    )
-    .bind(orden_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    if result.rows_affected() == 0 {
-        return Err("Orden de trabajo no encontrada".to_string());
-    }
-    
-    // Registrar la acción en el log de auditoría
-    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
-    let _ = log_action(
-        "ABANDONO",
-        Some(updated_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
-        Some("abandonado")
-    ).await;
-    
-    // Obtener la orden actualizada(deje esto para que funcione NO QUIERE DECIR QUE ESTE)
-    get_orden_trabajo_by_id(orden_id).await
 }
