@@ -193,16 +193,14 @@ pub async fn create_termino_condicion(
     let termino_id = result.last_insert_id() as i32;
     
     // Registrar en el log de auditoría
-    if let Err(e) = log_action(
-        "CREATE_TERMINO_CONDICION".to_string(),
-        created_by,
-        "TERMINOS_CONDICIONES".to_string(),
-        termino_id,
+    let _ = log_action(
+        "CREATE_TERMINO_CONDICION",
+        Some(created_by),
+        "TERMINOS_CONDICIONES",
+        Some(termino_id),
         None,
-        Some(request.termino_nombre.clone())
-    ).await {
-        eprintln!("Error logging action: {}", e);
-    }
+        Some(&format!("Término creado: {} ({})", request.termino_nombre, request.tipo_referencia))
+    ).await;
     
     Ok(termino_id)
 }
@@ -284,16 +282,26 @@ pub async fn update_termino_condicion(
     }
     
     // Registrar en el log de auditoría
-    if let Err(e) = log_action(
-        "UPDATE_TERMINO_CONDICION".to_string(),
-        updated_by,
-        "TERMINOS_CONDICIONES".to_string(),
-        termino_id,
-        Some(current_termino.termino_nombre.clone()),
-        request.termino_nombre.clone()
-    ).await {
-        eprintln!("Error logging action: {}", e);
-    }
+    let _ = log_action(
+        "UPDATE_TERMINO_CONDICION",
+        Some(updated_by),
+        "TERMINOS_CONDICIONES",
+        Some(termino_id),
+        Some(&format!("{}|{}|{}|{}|{}", 
+            current_termino.termino_nombre,
+            current_termino.termino_descripcion,
+            current_termino.is_active.unwrap_or(false),
+            current_termino.tipo_referencia,
+            current_termino.is_default.unwrap_or(false)
+        )),
+        Some(&format!("{}|{}|{}|{}|{}", 
+            request.termino_nombre.as_ref().unwrap_or(&current_termino.termino_nombre),
+            request.termino_descripcion.as_ref().unwrap_or(&current_termino.termino_descripcion),
+            request.is_active.unwrap_or(current_termino.is_active.unwrap_or(false)),
+            request.tipo_referencia.as_ref().unwrap_or(&current_termino.tipo_referencia),
+            request.is_default.unwrap_or(current_termino.is_default.unwrap_or(false))
+        ))
+    ).await;
     
     Ok(())
 }
@@ -320,16 +328,17 @@ pub async fn delete_termino_condicion(termino_id: i32, deleted_by: i32) -> Resul
     }
     
     // Registrar en el log de auditoría
-    if let Err(e) = log_action(
-        "DELETE_TERMINO_CONDICION".to_string(),
-        deleted_by,
-        "TERMINOS_CONDICIONES".to_string(),
-        termino_id,
-        Some(current_termino.termino_nombre.clone()),
-        Some("INACTIVE".to_string())
-    ).await {
-        eprintln!("Error logging action: {}", e);
-    }
+    let _ = log_action(
+        "DELETE_TERMINO_CONDICION",
+        Some(deleted_by),
+        "TERMINOS_CONDICIONES",
+        Some(termino_id),
+        Some(&format!("Término desactivado: {} ({})", 
+            current_termino.termino_nombre, 
+            current_termino.tipo_referencia
+        )),
+        Some("INACTIVE")
+    ).await;
     
     Ok(())
 }
@@ -384,6 +393,7 @@ pub async fn apply_terminos_to_informe(
     applied_by: i32
 ) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
+    let terminos_count = terminos.len();
     
     // Primero, eliminar términos existentes para este informe
     sqlx::query("DELETE FROM TERMINOS_INFORME WHERE informe_id = ?")
@@ -406,16 +416,14 @@ pub async fn apply_terminos_to_informe(
     }
     
     // Registrar en el log de auditoría
-    if let Err(e) = log_action(
-        "APPLY_TERMINOS_INFORME".to_string(),
-        applied_by,
-        "TERMINOS_INFORME".to_string(),
-        informe_id,
+    let _ = log_action(
+        "APPLY_TERMINOS_INFORME",
+        Some(applied_by),
+        "TERMINOS_INFORME",
+        Some(informe_id),
         None,
-        Some(format!("Applied {} terms", terminos.len()))
-    ).await {
-        eprintln!("Error logging action: {}", e);
-    }
+        Some(&format!("Aplicados {} términos al informe", terminos_count))
+    ).await;
     
     Ok(())
 }
@@ -428,6 +436,7 @@ pub async fn apply_terminos_to_cotizacion(
     applied_by: i32
 ) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
+    let terminos_count = terminos.len();
     
     // Primero, eliminar términos existentes para esta cotización
     sqlx::query("DELETE FROM TERMINOS_COTIZACION WHERE cotizacion_id = ?")
@@ -450,16 +459,14 @@ pub async fn apply_terminos_to_cotizacion(
     }
     
     // Registrar en el log de auditoría
-    if let Err(e) = log_action(
-        "APPLY_TERMINOS_COTIZACION".to_string(),
-        applied_by,
-        "TERMINOS_COTIZACION".to_string(),
-        cotizacion_id,
+    let _ = log_action(
+        "APPLY_TERMINOS_COTIZACION",
+        Some(applied_by),
+        "TERMINOS_COTIZACION",
+        Some(cotizacion_id),
         None,
-        Some(format!("Applied {} terms", terminos.len()))
-    ).await {
-        eprintln!("Error logging action: {}", e);
-    }
+        Some(&format!("Aplicados {} términos a la cotización", terminos_count))
+    ).await;
     
     Ok(())
 }
@@ -480,6 +487,16 @@ pub async fn apply_default_terminos_to_informe(
         })
         .collect();
     
+    // Registrar específicamente la aplicación de términos por defecto
+    let _ = log_action(
+        "APPLY_DEFAULT_TERMINOS_INFORME",
+        Some(applied_by),
+        "TERMINOS_INFORME",
+        Some(informe_id),
+        None,
+        Some(&format!("Aplicados {} términos por defecto al informe", termino_requests.len()))
+    ).await;
+    
     apply_terminos_to_informe(informe_id, termino_requests, applied_by).await
 }
 
@@ -499,5 +516,91 @@ pub async fn apply_default_terminos_to_cotizacion(
         })
         .collect();
     
+    // Registrar específicamente la aplicación de términos por defecto
+    let _ = log_action(
+        "APPLY_DEFAULT_TERMINOS_COTIZACION",
+        Some(applied_by),
+        "TERMINOS_COTIZACION",
+        Some(cotizacion_id),
+        None,
+        Some(&format!("Aplicados {} términos por defecto a la cotización", termino_requests.len()))
+    ).await;
+    
     apply_terminos_to_cotizacion(cotizacion_id, termino_requests, applied_by).await
+}
+
+/// Reactivar un término y condición
+#[tauri::command]
+pub async fn reactivate_termino_condicion(termino_id: i32, reactivated_by: i32) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el término actual para el log
+    let current_termino = get_termino_condicion_by_id(termino_id).await?
+        .ok_or("Término y condición no encontrado")?;
+    
+    let result = sqlx::query(
+        "UPDATE TERMINOS_CONDICIONES SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE termino_id = ?"
+    )
+    .bind(termino_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Término y condición no encontrado".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "REACTIVATE_TERMINO_CONDICION",
+        Some(reactivated_by),
+        "TERMINOS_CONDICIONES",
+        Some(termino_id),
+        Some(&format!("Término reactivado: {} ({})", 
+            current_termino.termino_nombre, 
+            current_termino.tipo_referencia
+        )),
+        Some("ACTIVE")
+    ).await;
+    
+    Ok(())
+}
+
+/// Cambiar estado por defecto de un término
+#[tauri::command]
+pub async fn toggle_termino_default(
+    termino_id: i32,
+    is_default: bool,
+    updated_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el término actual para el log
+    let current_termino = get_termino_condicion_by_id(termino_id).await?
+        .ok_or("Término y condición no encontrado")?;
+    
+    let result = sqlx::query(
+        "UPDATE TERMINOS_CONDICIONES SET is_default = ?, updated_at = CURRENT_TIMESTAMP WHERE termino_id = ?"
+    )
+    .bind(is_default)
+    .bind(termino_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Término y condición no encontrado".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "TOGGLE_TERMINO_DEFAULT",
+        Some(updated_by),
+        "TERMINOS_CONDICIONES",
+        Some(termino_id),
+        Some(&format!("Estado anterior: {}", current_termino.is_default.unwrap_or(false))),
+        Some(&format!("Estado nuevo: {}", is_default))
+    ).await;
+    
+    Ok(())
 }
