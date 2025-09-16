@@ -7,6 +7,7 @@ import {
   IconHome,
   IconUsers,
   IconClipboardList,
+  IconFileText,
 } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -52,7 +53,12 @@ const data = {
     {
       title: "Usuarios",
       url: "#",
-      icon: IconUsers, 
+      icon: IconUsers,
+    },
+    {
+      title: "Términos y Condiciones",
+      url: "#",
+      icon: IconFileText,
     },
   ],
   navSecondary: [

@@ -8,6 +8,7 @@ import {
   HelpView,
   PiezasView,
   UsuarioView,
+  TerminosCondicionesView,
 } from "@/components/views";
 import { usePeriodicNotification } from "@/hooks/use-periodic-notification";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -44,6 +45,8 @@ function ViewRenderer() {
       return <PiezasView />;
     case "usuarios":
       return <UsuarioView />;
+    case "términos y condiciones":
+      return <TerminosCondicionesView />;
     case "projects":
     case "Ajustes de Cuenta":
       return <AjustesDeCuentaView />;
@@ -61,7 +64,8 @@ export default function App() {
         <ViewProvider>
           <ProtectedRoute>
             <SidebarProvider>
-              <PeriodicNotifications /> {/* Componente de notificaciones periodicas, insertado aqui, evaluar cambiar su posicion */}
+              <PeriodicNotifications />{" "}
+              {/* Componente de notificaciones periodicas, insertado aqui, evaluar cambiar su posicion */}
               <AppSidebar variant="inset" />{" "}
               <SidebarInset>
                 <div className="flex flex-1 flex-col">
