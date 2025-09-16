@@ -1,6 +1,5 @@
 use resend_rs::{Resend, types::CreateEmailBaseOptions};
 use std::env;
-use chrono::{DateTime, Utc, NaiveDateTime};
 use chrono_tz::America::Santiago;
 
 pub struct EmailService {
