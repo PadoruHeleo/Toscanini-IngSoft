@@ -10,6 +10,7 @@ export * from "./HelpView";
 export * from "./LoginView";
 export * from "./PasswordResetView";
 export * from "./PiezasView";
+export * from "./TerminosCondicionesView";
 export * from "./FiltrarOrdenesPorFecha";
 export * from "./FiltrarOrdenesPorPrioridad";
 export * from "./FiltrarOrdenesPorMarca";
