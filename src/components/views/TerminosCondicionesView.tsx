@@ -103,7 +103,7 @@ export function TerminosCondicionesView() {
     null
   );
   const [filterType, setFilterType] = useState<string>("todos");
-  const [filterStatus, setFilterStatus] = useState<string>("todos");
+  const [filterStatus, setFilterStatus] = useState<string>("activos");
   const [formData, setFormData] = useState<FormData>({
     termino_nombre: "",
     termino_descripcion: "",
