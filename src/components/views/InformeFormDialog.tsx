@@ -121,7 +121,6 @@ export default function InformeFormDialog({
 
   const [errors, setErrors] = useState<FormErrors>({});
   // Estado para el diálogo de confirmación de eliminación
-  const [showEliminarInformeDialog, setShowEliminarInformeDialog] = useState(false);
   // Función para manejar la eliminación del informe
   const handleEliminarInforme = async () => {
   if (!informe?.informe_id || !user) {
