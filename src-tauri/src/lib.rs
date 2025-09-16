@@ -152,6 +152,7 @@ pub fn run() {
             commands::terminos_condiciones::apply_terminos_to_cotizacion,
             commands::terminos_condiciones::apply_default_terminos_to_informe,
             commands::terminos_condiciones::apply_default_terminos_to_cotizacion,
+            commands::informe::rechazar_informe_borrador,
             commands::database::get_database_status,
             commands::database::check_database_connection,
             commands::database::retry_database_connection,

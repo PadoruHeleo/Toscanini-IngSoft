@@ -252,6 +252,31 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
 pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequest, updated_by: i32) -> Result<Option<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
+    let current_cotizacion = get_cotizacion_by_id(cotizacion_id).await?;
+    if let Some(ref cotizacion) = current_cotizacion {
+        // Si estaba en borrador y ahora se rechaza
+        if cotizacion.is_borrador == Some(true) && request.is_aprobada == Some(false) {
+            // Guardar el motivo si corresponde (ya lo haces)
+            // Desvincular la cotización de la orden de trabajo
+            sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
+                .bind(cotizacion_id)
+                .execute(pool)
+                .await
+                .map_err(|e| format!("Database error al desvincular cotización: {}", e))?;
+
+            // AuditLog para rechazo de borrador
+            let motivo = request.informe.as_deref().unwrap_or(""); // O usa request.motivo_rechazo si tienes ese campo
+            let _ = log_action(
+                "ELIMINAR_BORRADOR_COTIZACION",
+                Some(updated_by),
+                "COTIZACION",
+                Some(cotizacion_id),
+                Some("Cotización en borrador rechazada"),
+                Some(motivo)
+            ).await;
+        }
+    }
+    
     // Obtener la cotización actual para logging
     let current_cotizacion = get_cotizacion_by_id(cotizacion_id).await?;
     

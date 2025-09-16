@@ -250,6 +250,38 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
         .ok_or_else(|| "Failed to retrieve created informe".to_string())
 }
 
+/// Eliminar un informe en estado de borrador
+#[tauri::command]
+pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: String, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+
+    // Cambia el estado del informe a "rechazado" y guarda el motivo
+    
+
+
+    // Desvincula el informe de la orden de trabajo
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+        .bind(informe_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error al desvincular informe: {}", e))?;
+
+    // Registrar AuditLog
+    let was_updated = result.rows_affected() > 0;
+    if was_updated {
+        let _ = log_action(
+            "RECHAZAR_INFORME_BORRADOR",
+            Some(updated_by),
+            "INFORME",
+            Some(informe_id),
+            Some("Informe en borrador eliminado"),
+            Some(&motivo_eliminacion)
+        ).await;
+    }
+
+    Ok(was_updated)
+}
+
 /// Actualizar un informe existente
 #[tauri::command]
 pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, updated_by: i32) -> Result<Option<Informe>, String> {
