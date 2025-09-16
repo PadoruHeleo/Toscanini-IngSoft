@@ -51,6 +51,34 @@ interface TerminoCondicion {
   updated_at?: string;
 }
 
+interface TerminoInforme {
+  termino_id: number;
+  informe_id: number;
+  aplicado?: boolean;
+  created_at?: string;
+  termino_nombre?: string;
+  termino_descripcion?: string;
+}
+
+interface TerminoCotizacion {
+  termino_id: number;
+  cotizacion_id: number;
+  aplicado?: boolean;
+  created_at?: string;
+  termino_nombre?: string;
+  termino_descripcion?: string;
+}
+
+interface TerminoInformeRequest {
+  termino_id: number;
+  aplicado?: boolean;
+}
+
+interface TerminoCotizacionRequest {
+  termino_id: number;
+  aplicado?: boolean;
+}
+
 interface FormData {
   termino_nombre: string;
   termino_descripcion: string;
@@ -169,20 +197,20 @@ export function TerminosCondicionesView() {
     try {
       if (editingTermino) {
         await invoke("update_termino_condicion", {
-          termino_id: editingTermino.termino_id,
+          terminoId: editingTermino.termino_id,
           request: {
             termino_nombre: formData.termino_nombre,
             termino_descripcion: formData.termino_descripcion,
             tipo_referencia: formData.tipo_referencia,
             is_default: formData.is_default,
           },
-          updated_by: user?.usuario_id,
+          updatedBy: user?.usuario_id,
         });
         success("Término y condición actualizado correctamente");
       } else {
         await invoke("create_termino_condicion", {
           request: formData,
-          created_by: user?.usuario_id,
+          createdBy: user?.usuario_id,
         });
         success("Término y condición creado correctamente");
       }
@@ -210,9 +238,15 @@ export function TerminosCondicionesView() {
     if (!deleteConfirm || !user) return;
 
     try {
+      console.log(
+        "Deleting termino with ID:",
+        deleteConfirm.termino_id,
+        "by user:",
+        user.usuario_id
+      );
       await invoke("delete_termino_condicion", {
-        termino_id: deleteConfirm.termino_id,
-        deleted_by: user.usuario_id,
+        terminoId: deleteConfirm.termino_id,
+        deletedBy: user.usuario_id,
       });
       success("Término y condición desactivado correctamente");
       setDeleteConfirm(null);
@@ -228,8 +262,8 @@ export function TerminosCondicionesView() {
 
     try {
       await invoke("reactivate_termino_condicion", {
-        termino_id: termino.termino_id,
-        reactivated_by: user.usuario_id,
+        terminoId: termino.termino_id,
+        reactivatedBy: user.usuario_id,
       });
       success("Término y condición reactivado correctamente");
       loadTerminos();
@@ -238,6 +272,263 @@ export function TerminosCondicionesView() {
       console.error("Error reactivating termino:", error);
     }
   };
+
+  // ==================== MÉTODOS ADICIONALES ====================
+  // Estos métodos corresponden a todos los comandos disponibles en terminos_condiciones.rs
+
+  /** Obtener solo términos y condiciones activos */
+  const getTerminosActivos = async (): Promise<TerminoCondicion[]> => {
+    try {
+      const data = await invoke<TerminoCondicion[]>(
+        "get_terminos_condiciones_activos"
+      );
+      return data;
+    } catch (error) {
+      showError("Error al cargar términos activos");
+      console.error("Error loading active terminos:", error);
+      return [];
+    }
+  };
+
+  /** Obtener términos y condiciones filtrados por tipo (informe, cotizacion, ambos) */
+  const getTerminosByTipo = async (
+    tipo: string
+  ): Promise<TerminoCondicion[]> => {
+    try {
+      const data = await invoke<TerminoCondicion[]>(
+        "get_terminos_condiciones_by_tipo",
+        { tipo }
+      );
+      return data;
+    } catch (error) {
+      showError(`Error al cargar términos del tipo ${tipo}`);
+      console.error("Error loading terminos by tipo:", error);
+      return [];
+    }
+  };
+
+  /** Obtener términos y condiciones marcados como por defecto para un tipo específico */
+  const getTerminosDefault = async (
+    tipo: string
+  ): Promise<TerminoCondicion[]> => {
+    try {
+      const data = await invoke<TerminoCondicion[]>(
+        "get_terminos_condiciones_default",
+        { tipo }
+      );
+      return data;
+    } catch (error) {
+      showError(`Error al cargar términos por defecto del tipo ${tipo}`);
+      console.error("Error loading default terminos:", error);
+      return [];
+    }
+  };
+
+  /** Obtener un término y condición específico por su ID */
+  const getTerminoById = async (
+    termino_id: number
+  ): Promise<TerminoCondicion | null> => {
+    try {
+      const data = await invoke<TerminoCondicion | null>(
+        "get_termino_condicion_by_id",
+        { terminoId: termino_id }
+      );
+      return data;
+    } catch (error) {
+      showError("Error al cargar término por ID");
+      console.error("Error loading termino by id:", error);
+      return null;
+    }
+  };
+
+  /** Obtener términos aplicados a un informe específico */
+  const getTerminosByInforme = async (
+    informe_id: number
+  ): Promise<TerminoInforme[]> => {
+    try {
+      const data = await invoke<TerminoInforme[]>("get_terminos_by_informe", {
+        informeId: informe_id,
+      });
+      return data;
+    } catch (error) {
+      showError("Error al cargar términos del informe");
+      console.error("Error loading terminos by informe:", error);
+      return [];
+    }
+  };
+
+  /** Obtener términos aplicados a una cotización específica */
+  const getTerminosByCotizacion = async (
+    cotizacion_id: number
+  ): Promise<TerminoCotizacion[]> => {
+    try {
+      const data = await invoke<TerminoCotizacion[]>(
+        "get_terminos_by_cotizacion",
+        { cotizacionId: cotizacion_id }
+      );
+      return data;
+    } catch (error) {
+      showError("Error al cargar términos de la cotización");
+      console.error("Error loading terminos by cotizacion:", error);
+      return [];
+    }
+  };
+
+  /** Aplicar términos específicos a un informe */
+  const applyTerminosToInforme = async (
+    informe_id: number,
+    terminos: TerminoInformeRequest[]
+  ): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      await invoke("apply_terminos_to_informe", {
+        informeId: informe_id,
+        terminos,
+        appliedBy: user.usuario_id,
+      });
+      success("Términos aplicados al informe correctamente");
+      return true;
+    } catch (error) {
+      showError("Error al aplicar términos al informe");
+      console.error("Error applying terminos to informe:", error);
+      return false;
+    }
+  };
+
+  /** Aplicar términos específicos a una cotización */
+  const applyTerminosToCotizacion = async (
+    cotizacion_id: number,
+    terminos: TerminoCotizacionRequest[]
+  ): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      await invoke("apply_terminos_to_cotizacion", {
+        cotizacionId: cotizacion_id,
+        terminos,
+        appliedBy: user.usuario_id,
+      });
+      success("Términos aplicados a la cotización correctamente");
+      return true;
+    } catch (error) {
+      showError("Error al aplicar términos a la cotización");
+      console.error("Error applying terminos to cotizacion:", error);
+      return false;
+    }
+  };
+
+  /** Aplicar todos los términos marcados como por defecto a un informe */
+  const applyDefaultTerminosToInforme = async (
+    informe_id: number
+  ): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      await invoke("apply_default_terminos_to_informe", {
+        informeId: informe_id,
+        appliedBy: user.usuario_id,
+      });
+      success("Términos por defecto aplicados al informe correctamente");
+      return true;
+    } catch (error) {
+      showError("Error al aplicar términos por defecto al informe");
+      console.error("Error applying default terminos to informe:", error);
+      return false;
+    }
+  };
+
+  /** Aplicar todos los términos marcados como por defecto a una cotización */
+  const applyDefaultTerminosToCotizacion = async (
+    cotizacion_id: number
+  ): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      await invoke("apply_default_terminos_to_cotizacion", {
+        cotizacionId: cotizacion_id,
+        appliedBy: user.usuario_id,
+      });
+      success("Términos por defecto aplicados a la cotización correctamente");
+      return true;
+    } catch (error) {
+      showError("Error al aplicar términos por defecto a la cotización");
+      console.error("Error applying default terminos to cotizacion:", error);
+      return false;
+    }
+  };
+
+  /** Cambiar el estado por defecto de un término y condición */
+  const toggleTerminoDefault = async (
+    termino: TerminoCondicion,
+    is_default: boolean
+  ): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      await invoke("toggle_termino_default", {
+        terminoId: termino.termino_id,
+        isDefault: is_default,
+        updatedBy: user.usuario_id,
+      });
+      success(
+        `Término ${is_default ? "marcado" : "desmarcado"} como por defecto`
+      );
+      loadTerminos();
+      return true;
+    } catch (error) {
+      showError("Error al cambiar estado por defecto");
+      console.error("Error toggling default:", error);
+      return false;
+    }
+  };
+
+  // ==================== FIN MÉTODOS ADICIONALES ====================
+
+  // Objeto con todas las funciones de términos y condiciones para uso externo
+  const terminosCondicionesAPI = {
+    // Métodos de consulta
+    getAll: loadTerminos,
+    getActivos: getTerminosActivos,
+    getByTipo: getTerminosByTipo,
+    getDefault: getTerminosDefault,
+    getById: getTerminoById,
+
+    // Métodos CRUD
+    create: (request: FormData, created_by: number) =>
+      invoke("create_termino_condicion", { request, createdBy: created_by }),
+    update: (termino_id: number, request: any, updated_by: number) =>
+      invoke("update_termino_condicion", {
+        terminoId: termino_id,
+        request,
+        updatedBy: updated_by,
+      }),
+    delete: (termino_id: number, deleted_by: number) =>
+      invoke("delete_termino_condicion", {
+        terminoId: termino_id,
+        deletedBy: deleted_by,
+      }),
+    reactivate: (termino_id: number, reactivated_by: number) =>
+      invoke("reactivate_termino_condicion", {
+        terminoId: termino_id,
+        reactivatedBy: reactivated_by,
+      }),
+    toggleDefault: toggleTerminoDefault,
+
+    // Métodos de aplicación a informes
+    getTerminosByInforme,
+    applyTerminosToInforme,
+    applyDefaultTerminosToInforme,
+
+    // Métodos de aplicación a cotizaciones
+    getTerminosByCotizacion,
+    applyTerminosToCotizacion,
+    applyDefaultTerminosToCotizacion,
+  };
+
+  // Hacer disponible las funciones para uso externo (opcional)
+  // Se puede acceder como: TerminosCondicionesView.api
+  (TerminosCondicionesView as any).api = terminosCondicionesAPI;
 
   const resetForm = () => {
     setFormData({
