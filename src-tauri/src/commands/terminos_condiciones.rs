@@ -220,12 +220,11 @@ pub async fn update_termino_condicion(
     
     // Construir la consulta dinámicamente
     let mut query_parts = Vec::new();
-    let mut values: Vec<sqlx::mysql::MySqlArguments> = Vec::new();
     
-    if let Some(nombre) = &request.termino_nombre {
+    if let Some(_nombre) = &request.termino_nombre {
         query_parts.push("termino_nombre = ?");
     }
-    if let Some(descripcion) = &request.termino_descripcion {
+    if let Some(_descripcion) = &request.termino_descripcion {
         query_parts.push("termino_descripcion = ?");
     }
     if request.is_active.is_some() {
