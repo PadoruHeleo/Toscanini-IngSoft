@@ -1,0 +1,503 @@
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use crate::database::get_db_pool_safe;
+use crate::commands::logs::log_action;
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TerminoCondicion {
+    pub termino_id: i32,
+    pub termino_nombre: String,
+    pub termino_descripcion: String,
+    pub is_active: Option<bool>,
+    pub tipo_referencia: String, // 'informe', 'cotizacion', 'ambos'
+    pub is_default: Option<bool>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TerminoInforme {
+    pub termino_id: i32,
+    pub informe_id: i32,
+    pub aplicado: Option<bool>,
+    pub created_at: Option<DateTime<Utc>>,
+    // Campos adicionales para JOINs
+    pub termino_nombre: Option<String>,
+    pub termino_descripcion: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TerminoCotizacion {
+    pub termino_id: i32,
+    pub cotizacion_id: i32,
+    pub aplicado: Option<bool>,
+    pub created_at: Option<DateTime<Utc>>,
+    // Campos adicionales para JOINs
+    pub termino_nombre: Option<String>,
+    pub termino_descripcion: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTerminoCondicionRequest {
+    pub termino_nombre: String,
+    pub termino_descripcion: String,
+    pub tipo_referencia: String,
+    pub is_default: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTerminoCondicionRequest {
+    pub termino_nombre: Option<String>,
+    pub termino_descripcion: Option<String>,
+    pub is_active: Option<bool>,
+    pub tipo_referencia: Option<String>,
+    pub is_default: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TerminoInformeRequest {
+    pub termino_id: i32,
+    pub aplicado: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TerminoCotizacionRequest {
+    pub termino_id: i32,
+    pub aplicado: Option<bool>,
+}
+
+/// Obtener todos los términos y condiciones
+#[tauri::command]
+pub async fn get_terminos_condiciones() -> Result<Vec<TerminoCondicion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let terminos = sqlx::query_as::<_, TerminoCondicion>(
+        "SELECT termino_id, termino_nombre, termino_descripcion, is_active, 
+                tipo_referencia, is_default, created_at, updated_at
+         FROM TERMINOS_CONDICIONES
+         ORDER BY termino_nombre ASC"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(terminos)
+}
+
+/// Obtener términos y condiciones activos
+#[tauri::command]
+pub async fn get_terminos_condiciones_activos() -> Result<Vec<TerminoCondicion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let terminos = sqlx::query_as::<_, TerminoCondicion>(
+        "SELECT termino_id, termino_nombre, termino_descripcion, is_active, 
+                tipo_referencia, is_default, created_at, updated_at
+         FROM TERMINOS_CONDICIONES
+         WHERE is_active = TRUE
+         ORDER BY termino_nombre ASC"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(terminos)
+}
+
+/// Obtener términos y condiciones por tipo
+#[tauri::command]
+pub async fn get_terminos_condiciones_by_tipo(tipo: String) -> Result<Vec<TerminoCondicion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let terminos = sqlx::query_as::<_, TerminoCondicion>(
+        "SELECT termino_id, termino_nombre, termino_descripcion, is_active, 
+                tipo_referencia, is_default, created_at, updated_at
+         FROM TERMINOS_CONDICIONES
+         WHERE is_active = TRUE AND (tipo_referencia = ? OR tipo_referencia = 'ambos')
+         ORDER BY is_default DESC, termino_nombre ASC"
+    )
+    .bind(tipo)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(terminos)
+}
+
+/// Obtener términos y condiciones por defecto para un tipo específico
+#[tauri::command]
+pub async fn get_terminos_condiciones_default(tipo: String) -> Result<Vec<TerminoCondicion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let terminos = sqlx::query_as::<_, TerminoCondicion>(
+        "SELECT termino_id, termino_nombre, termino_descripcion, is_active, 
+                tipo_referencia, is_default, created_at, updated_at
+         FROM TERMINOS_CONDICIONES
+         WHERE is_active = TRUE AND is_default = TRUE 
+               AND (tipo_referencia = ? OR tipo_referencia = 'ambos')
+         ORDER BY termino_nombre ASC"
+    )
+    .bind(tipo)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(terminos)
+}
+
+/// Obtener un término y condición por ID
+#[tauri::command]
+pub async fn get_termino_condicion_by_id(termino_id: i32) -> Result<Option<TerminoCondicion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let termino = sqlx::query_as::<_, TerminoCondicion>(
+        "SELECT termino_id, termino_nombre, termino_descripcion, is_active, 
+                tipo_referencia, is_default, created_at, updated_at
+         FROM TERMINOS_CONDICIONES
+         WHERE termino_id = ?"
+    )
+    .bind(termino_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(termino)
+}
+
+/// Crear un nuevo término y condición
+#[tauri::command]
+pub async fn create_termino_condicion(
+    request: CreateTerminoCondicionRequest,
+    created_by: i32
+) -> Result<i32, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Validar que el tipo de referencia sea válido
+    if !["informe", "cotizacion", "ambos"].contains(&request.tipo_referencia.as_str()) {
+        return Err("Tipo de referencia inválido. Debe ser 'informe', 'cotizacion' o 'ambos'".to_string());
+    }
+    
+    let result = sqlx::query(
+        "INSERT INTO TERMINOS_CONDICIONES 
+         (termino_nombre, termino_descripcion, tipo_referencia, is_default)
+         VALUES (?, ?, ?, ?)"
+    )
+    .bind(&request.termino_nombre)
+    .bind(&request.termino_descripcion)
+    .bind(&request.tipo_referencia)
+    .bind(request.is_default.unwrap_or(false))
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let termino_id = result.last_insert_id() as i32;
+    
+    // Registrar en el log de auditoría
+    if let Err(e) = log_action(
+        "CREATE_TERMINO_CONDICION".to_string(),
+        created_by,
+        "TERMINOS_CONDICIONES".to_string(),
+        termino_id,
+        None,
+        Some(request.termino_nombre.clone())
+    ).await {
+        eprintln!("Error logging action: {}", e);
+    }
+    
+    Ok(termino_id)
+}
+
+/// Actualizar un término y condición
+#[tauri::command]
+pub async fn update_termino_condicion(
+    termino_id: i32,
+    request: UpdateTerminoCondicionRequest,
+    updated_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el término actual para el log
+    let current_termino = get_termino_condicion_by_id(termino_id).await?
+        .ok_or("Término y condición no encontrado")?;
+    
+    // Construir la consulta dinámicamente
+    let mut query_parts = Vec::new();
+    let mut values: Vec<sqlx::mysql::MySqlArguments> = Vec::new();
+    
+    if let Some(nombre) = &request.termino_nombre {
+        query_parts.push("termino_nombre = ?");
+    }
+    if let Some(descripcion) = &request.termino_descripcion {
+        query_parts.push("termino_descripcion = ?");
+    }
+    if request.is_active.is_some() {
+        query_parts.push("is_active = ?");
+    }
+    if let Some(tipo) = &request.tipo_referencia {
+        if !["informe", "cotizacion", "ambos"].contains(&tipo.as_str()) {
+            return Err("Tipo de referencia inválido. Debe ser 'informe', 'cotizacion' o 'ambos'".to_string());
+        }
+        query_parts.push("tipo_referencia = ?");
+    }
+    if request.is_default.is_some() {
+        query_parts.push("is_default = ?");
+    }
+    
+    if query_parts.is_empty() {
+        return Err("No hay campos para actualizar".to_string());
+    }
+    
+    query_parts.push("updated_at = CURRENT_TIMESTAMP");
+    
+    let query = format!(
+        "UPDATE TERMINOS_CONDICIONES SET {} WHERE termino_id = ?",
+        query_parts.join(", ")
+    );
+    
+    let mut query_builder = sqlx::query(&query);
+    
+    if let Some(nombre) = &request.termino_nombre {
+        query_builder = query_builder.bind(nombre);
+    }
+    if let Some(descripcion) = &request.termino_descripcion {
+        query_builder = query_builder.bind(descripcion);
+    }
+    if let Some(is_active) = request.is_active {
+        query_builder = query_builder.bind(is_active);
+    }
+    if let Some(tipo) = &request.tipo_referencia {
+        query_builder = query_builder.bind(tipo);
+    }
+    if let Some(is_default) = request.is_default {
+        query_builder = query_builder.bind(is_default);
+    }
+    
+    query_builder = query_builder.bind(termino_id);
+    
+    let result = query_builder
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Término y condición no encontrado".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    if let Err(e) = log_action(
+        "UPDATE_TERMINO_CONDICION".to_string(),
+        updated_by,
+        "TERMINOS_CONDICIONES".to_string(),
+        termino_id,
+        Some(current_termino.termino_nombre.clone()),
+        request.termino_nombre.clone()
+    ).await {
+        eprintln!("Error logging action: {}", e);
+    }
+    
+    Ok(())
+}
+
+/// Eliminar (desactivar) un término y condición
+#[tauri::command]
+pub async fn delete_termino_condicion(termino_id: i32, deleted_by: i32) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el término actual para el log
+    let current_termino = get_termino_condicion_by_id(termino_id).await?
+        .ok_or("Término y condición no encontrado")?;
+    
+    let result = sqlx::query(
+        "UPDATE TERMINOS_CONDICIONES SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE termino_id = ?"
+    )
+    .bind(termino_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Término y condición no encontrado".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    if let Err(e) = log_action(
+        "DELETE_TERMINO_CONDICION".to_string(),
+        deleted_by,
+        "TERMINOS_CONDICIONES".to_string(),
+        termino_id,
+        Some(current_termino.termino_nombre.clone()),
+        Some("INACTIVE".to_string())
+    ).await {
+        eprintln!("Error logging action: {}", e);
+    }
+    
+    Ok(())
+}
+
+/// Obtener términos aplicados a un informe específico
+#[tauri::command]
+pub async fn get_terminos_by_informe(informe_id: i32) -> Result<Vec<TerminoInforme>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let terminos = sqlx::query_as::<_, TerminoInforme>(
+        "SELECT ti.termino_id, ti.informe_id, ti.aplicado, ti.created_at,
+                tc.termino_nombre, tc.termino_descripcion
+         FROM TERMINOS_INFORME ti
+         JOIN TERMINOS_CONDICIONES tc ON ti.termino_id = tc.termino_id
+         WHERE ti.informe_id = ?
+         ORDER BY tc.termino_nombre ASC"
+    )
+    .bind(informe_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(terminos)
+}
+
+/// Obtener términos aplicados a una cotización específica
+#[tauri::command]
+pub async fn get_terminos_by_cotizacion(cotizacion_id: i32) -> Result<Vec<TerminoCotizacion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let terminos = sqlx::query_as::<_, TerminoCotizacion>(
+        "SELECT tc.termino_id, tc.cotizacion_id, tc.aplicado, tc.created_at,
+                t.termino_nombre, t.termino_descripcion
+         FROM TERMINOS_COTIZACION tc
+         JOIN TERMINOS_CONDICIONES t ON tc.termino_id = t.termino_id
+         WHERE tc.cotizacion_id = ?
+         ORDER BY t.termino_nombre ASC"
+    )
+    .bind(cotizacion_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(terminos)
+}
+
+/// Aplicar términos y condiciones a un informe
+#[tauri::command]
+pub async fn apply_terminos_to_informe(
+    informe_id: i32,
+    terminos: Vec<TerminoInformeRequest>,
+    applied_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Primero, eliminar términos existentes para este informe
+    sqlx::query("DELETE FROM TERMINOS_INFORME WHERE informe_id = ?")
+        .bind(informe_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error removing existing terms: {}", e))?;
+    
+    // Insertar los nuevos términos
+    for termino in terminos {
+        sqlx::query(
+            "INSERT INTO TERMINOS_INFORME (termino_id, informe_id, aplicado) VALUES (?, ?, ?)"
+        )
+        .bind(termino.termino_id)
+        .bind(informe_id)
+        .bind(termino.aplicado.unwrap_or(true))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error applying term: {}", e))?;
+    }
+    
+    // Registrar en el log de auditoría
+    if let Err(e) = log_action(
+        "APPLY_TERMINOS_INFORME".to_string(),
+        applied_by,
+        "TERMINOS_INFORME".to_string(),
+        informe_id,
+        None,
+        Some(format!("Applied {} terms", terminos.len()))
+    ).await {
+        eprintln!("Error logging action: {}", e);
+    }
+    
+    Ok(())
+}
+
+/// Aplicar términos y condiciones a una cotización
+#[tauri::command]
+pub async fn apply_terminos_to_cotizacion(
+    cotizacion_id: i32,
+    terminos: Vec<TerminoCotizacionRequest>,
+    applied_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Primero, eliminar términos existentes para esta cotización
+    sqlx::query("DELETE FROM TERMINOS_COTIZACION WHERE cotizacion_id = ?")
+        .bind(cotizacion_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error removing existing terms: {}", e))?;
+    
+    // Insertar los nuevos términos
+    for termino in terminos {
+        sqlx::query(
+            "INSERT INTO TERMINOS_COTIZACION (termino_id, cotizacion_id, aplicado) VALUES (?, ?, ?)"
+        )
+        .bind(termino.termino_id)
+        .bind(cotizacion_id)
+        .bind(termino.aplicado.unwrap_or(true))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error applying term: {}", e))?;
+    }
+    
+    // Registrar en el log de auditoría
+    if let Err(e) = log_action(
+        "APPLY_TERMINOS_COTIZACION".to_string(),
+        applied_by,
+        "TERMINOS_COTIZACION".to_string(),
+        cotizacion_id,
+        None,
+        Some(format!("Applied {} terms", terminos.len()))
+    ).await {
+        eprintln!("Error logging action: {}", e);
+    }
+    
+    Ok(())
+}
+
+/// Aplicar términos por defecto a un informe
+#[tauri::command]
+pub async fn apply_default_terminos_to_informe(
+    informe_id: i32,
+    applied_by: i32
+) -> Result<(), String> {
+    let terminos_default = get_terminos_condiciones_default("informe".to_string()).await?;
+    
+    let termino_requests: Vec<TerminoInformeRequest> = terminos_default
+        .into_iter()
+        .map(|t| TerminoInformeRequest {
+            termino_id: t.termino_id,
+            aplicado: Some(true),
+        })
+        .collect();
+    
+    apply_terminos_to_informe(informe_id, termino_requests, applied_by).await
+}
+
+/// Aplicar términos por defecto a una cotización
+#[tauri::command]
+pub async fn apply_default_terminos_to_cotizacion(
+    cotizacion_id: i32,
+    applied_by: i32
+) -> Result<(), String> {
+    let terminos_default = get_terminos_condiciones_default("cotizacion".to_string()).await?;
+    
+    let termino_requests: Vec<TerminoCotizacionRequest> = terminos_default
+        .into_iter()
+        .map(|t| TerminoCotizacionRequest {
+            termino_id: t.termino_id,
+            aplicado: Some(true),
+        })
+        .collect();
+    
+    apply_terminos_to_cotizacion(cotizacion_id, termino_requests, applied_by).await
+}
