@@ -177,13 +177,7 @@ export default function InformeFormDialog({
       const terminos = await invoke<any[]>("get_terminos_condiciones_activos");
       setTerminosCondiciones(terminos);
 
-      // Si es un nuevo informe, aplicar términos por defecto automáticamente
-      if (!isEditing) {
-        const terminosDefecto = terminos
-          .filter((termino) => termino.is_default)
-          .map((termino) => termino.termino_id);
-        setSelectedTerminos(terminosDefecto);
-      }
+      // Los términos por defecto se aplicarán en useEffect separado
     } catch (error) {
       console.error("Error cargando términos y condiciones:", error);
       showError("Error", "No se pudieron cargar los términos y condiciones.");
@@ -221,6 +215,49 @@ export default function InformeFormDialog({
     }
   }, [open]);
 
+  // Aplicar términos por defecto cuando se tienen los datos necesarios
+  useEffect(() => {
+    console.log("🔍 InformeFormDialog - useEffect términos por defecto:", {
+      isEditing,
+      terminosCondicionesLength: terminosCondiciones.length,
+      selectedTerminosLength: selectedTerminos.length,
+      open,
+      terminosCondiciones: terminosCondiciones.map((t) => ({
+        id: t.termino_id,
+        nombre: t.termino_nombre,
+        isDefault: t.is_default,
+      })),
+    });
+
+    if (
+      !isEditing &&
+      terminosCondiciones.length > 0 &&
+      selectedTerminos.length === 0 &&
+      open
+    ) {
+      const terminosDefecto = terminosCondiciones
+        .filter((termino) => termino.is_default)
+        .map((termino) => termino.termino_id);
+      console.log(
+        "✅ Condiciones cumplidas. Términos por defecto encontrados:",
+        terminosDefecto
+      );
+      if (terminosDefecto.length > 0) {
+        console.log(
+          "🎯 Aplicando términos por defecto automáticamente:",
+          terminosDefecto
+        );
+        setSelectedTerminos(terminosDefecto);
+      } else {
+        console.log("⚠️ No se encontraron términos marcados como por defecto");
+      }
+    } else {
+      console.log(
+        "❌ No se aplican términos por defecto porque no se cumplieron las condiciones"
+      );
+    }
+  }, [terminosCondiciones, selectedTerminos, isEditing, open]);
+
   // Inicializar formulario cuando se pasa un informe para editar
   useEffect(() => {
     if (isEditing && informe && open) {
@@ -243,6 +280,8 @@ export default function InformeFormDialog({
       if (!ordenTrabajoId) {
         setSelectedPiezas([]);
       }
+      // Resetear términos seleccionados para que loadTerminosCondiciones pueda aplicar los por defecto
+      setSelectedTerminos([]);
     }
     setErrors({});
   }, [isEditing, informe, open, user]);
@@ -1084,12 +1123,14 @@ export default function InformeFormDialog({
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="w-12">Aplicar</TableHead>
-                              <TableHead className="w-48">
+                              <TableHead className="w-16">Aplicar</TableHead>
+                              <TableHead className="w-56">
                                 Nombre del Término
                               </TableHead>
-                              <TableHead>Descripción Completa</TableHead>
-                              <TableHead className="w-24">Estado</TableHead>
+                              <TableHead className="w-96">
+                                Descripción Completa
+                              </TableHead>
+                              <TableHead className="w-28">Estado</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1101,7 +1142,7 @@ export default function InformeFormDialog({
                               return (
                                 <TableRow
                                   key={termino.termino_id}
-                                  className={`${
+                                  className={`h-24 ${
                                     isSelected
                                       ? "bg-blue-50 border-blue-200"
                                       : ""
@@ -1111,7 +1152,7 @@ export default function InformeFormDialog({
                                       : ""
                                   }`}
                                 >
-                                  <TableCell>
+                                  <TableCell className="align-top">
                                     <input
                                       type="checkbox"
                                       checked={isSelected}
@@ -1132,7 +1173,7 @@ export default function InformeFormDialog({
                                       className="rounded w-4 h-4"
                                     />
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="align-top">
                                     <div className="space-y-1">
                                       <p className="font-semibold text-sm">
                                         {termino.termino_nombre ||
@@ -1149,15 +1190,15 @@ export default function InformeFormDialog({
                                       )}
                                     </div>
                                   </TableCell>
-                                  <TableCell>
-                                    <div className="max-w-lg">
+                                  <TableCell className="align-top">
+                                    <div className="max-w-lg max-h-20 overflow-y-auto border rounded-sm bg-gray-50 p-2 scrollbar-thin scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400">
                                       <p className="text-sm text-gray-700 leading-relaxed">
                                         {termino.termino_descripcion ||
                                           "Sin descripción disponible"}
                                       </p>
                                     </div>
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="align-top">
                                     <div className="text-center">
                                       {isSelected ? (
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
