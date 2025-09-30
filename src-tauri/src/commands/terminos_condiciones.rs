@@ -603,3 +603,321 @@ pub async fn toggle_termino_default(
     
     Ok(())
 }
+
+// ==================== MÉTODOS DE RELACIONES ====================
+
+/// Crear relación entre término y condición e informe
+#[tauri::command]
+pub async fn create_termino_informe_relation(
+    termino_id: i32,
+    informe_id: i32,
+    aplicado: Option<bool>,
+    created_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Verificar que el término existe
+    let termino = get_termino_condicion_by_id(termino_id).await?
+        .ok_or("Término y condición no encontrado")?;
+    
+    let result = sqlx::query(
+        "INSERT INTO TERMINOS_INFORME (termino_id, informe_id, aplicado) VALUES (?, ?, ?)"
+    )
+    .bind(termino_id)
+    .bind(informe_id)
+    .bind(aplicado.unwrap_or(true))
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("No se pudo crear la relación término-informe".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "CREATE_TERMINO_INFORME_RELATION",
+        Some(created_by),
+        "TERMINOS_INFORME",
+        Some(informe_id),
+        None,
+        Some(&format!("Término '{}' asociado al informe {}", termino.termino_nombre, informe_id))
+    ).await;
+    
+    Ok(())
+}
+
+/// Crear relación entre término y condición y cotización
+#[tauri::command]
+pub async fn create_termino_cotizacion_relation(
+    termino_id: i32,
+    cotizacion_id: i32,
+    aplicado: Option<bool>,
+    created_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Verificar que el término existe
+    let termino = get_termino_condicion_by_id(termino_id).await?
+        .ok_or("Término y condición no encontrado")?;
+    
+    let result = sqlx::query(
+        "INSERT INTO TERMINOS_COTIZACION (termino_id, cotizacion_id, aplicado) VALUES (?, ?, ?)"
+    )
+    .bind(termino_id)
+    .bind(cotizacion_id)
+    .bind(aplicado.unwrap_or(true))
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("No se pudo crear la relación término-cotización".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "CREATE_TERMINO_COTIZACION_RELATION",
+        Some(created_by),
+        "TERMINOS_COTIZACION",
+        Some(cotizacion_id),
+        None,
+        Some(&format!("Término '{}' asociado a la cotización {}", termino.termino_nombre, cotizacion_id))
+    ).await;
+    
+    Ok(())
+}
+
+/// Actualizar relación término-informe (cambiar estado aplicado)
+#[tauri::command]
+pub async fn update_termino_informe_relation(
+    termino_id: i32,
+    informe_id: i32,
+    aplicado: bool,
+    updated_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query(
+        "UPDATE TERMINOS_INFORME SET aplicado = ? WHERE termino_id = ? AND informe_id = ?"
+    )
+    .bind(aplicado)
+    .bind(termino_id)
+    .bind(informe_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Relación término-informe no encontrada".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "UPDATE_TERMINO_INFORME_RELATION",
+        Some(updated_by),
+        "TERMINOS_INFORME",
+        Some(informe_id),
+        None,
+        Some(&format!("Término {} {} para informe {}", 
+            termino_id, 
+            if aplicado { "activado" } else { "desactivado" }, 
+            informe_id
+        ))
+    ).await;
+    
+    Ok(())
+}
+
+/// Actualizar relación término-cotización (cambiar estado aplicado)
+#[tauri::command]
+pub async fn update_termino_cotizacion_relation(
+    termino_id: i32,
+    cotizacion_id: i32,
+    aplicado: bool,
+    updated_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query(
+        "UPDATE TERMINOS_COTIZACION SET aplicado = ? WHERE termino_id = ? AND cotizacion_id = ?"
+    )
+    .bind(aplicado)
+    .bind(termino_id)
+    .bind(cotizacion_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Relación término-cotización no encontrada".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "UPDATE_TERMINO_COTIZACION_RELATION",
+        Some(updated_by),
+        "TERMINOS_COTIZACION",
+        Some(cotizacion_id),
+        None,
+        Some(&format!("Término {} {} para cotización {}", 
+            termino_id, 
+            if aplicado { "activado" } else { "desactivado" }, 
+            cotizacion_id
+        ))
+    ).await;
+    
+    Ok(())
+}
+
+/// Eliminar relación término-informe
+#[tauri::command]
+pub async fn delete_termino_informe_relation(
+    termino_id: i32,
+    informe_id: i32,
+    deleted_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query(
+        "DELETE FROM TERMINOS_INFORME WHERE termino_id = ? AND informe_id = ?"
+    )
+    .bind(termino_id)
+    .bind(informe_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Relación término-informe no encontrada".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "DELETE_TERMINO_INFORME_RELATION",
+        Some(deleted_by),
+        "TERMINOS_INFORME",
+        Some(informe_id),
+        None,
+        Some(&format!("Eliminada relación término {} con informe {}", termino_id, informe_id))
+    ).await;
+    
+    Ok(())
+}
+
+/// Eliminar relación término-cotización
+#[tauri::command]
+pub async fn delete_termino_cotizacion_relation(
+    termino_id: i32,
+    cotizacion_id: i32,
+    deleted_by: i32
+) -> Result<(), String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query(
+        "DELETE FROM TERMINOS_COTIZACION WHERE termino_id = ? AND cotizacion_id = ?"
+    )
+    .bind(termino_id)
+    .bind(cotizacion_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Relación término-cotización no encontrada".to_string());
+    }
+    
+    // Registrar en el log de auditoría
+    let _ = log_action(
+        "DELETE_TERMINO_COTIZACION_RELATION",
+        Some(deleted_by),
+        "TERMINOS_COTIZACION",
+        Some(cotizacion_id),
+        None,
+        Some(&format!("Eliminada relación término {} con cotización {}", termino_id, cotizacion_id))
+    ).await;
+    
+    Ok(())
+}
+
+/// Obtener todos los informes que tienen un término específico aplicado
+#[tauri::command]
+pub async fn get_informes_by_termino(termino_id: i32) -> Result<Vec<TerminoInforme>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let informes = sqlx::query_as::<_, TerminoInforme>(
+        "SELECT ti.termino_id, ti.informe_id, ti.aplicado, ti.created_at,
+                tc.termino_nombre, tc.termino_descripcion
+         FROM TERMINOS_INFORME ti
+         JOIN TERMINOS_CONDICIONES tc ON ti.termino_id = tc.termino_id
+         WHERE ti.termino_id = ?
+         ORDER BY ti.created_at DESC"
+    )
+    .bind(termino_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(informes)
+}
+
+/// Obtener todas las cotizaciones que tienen un término específico aplicado
+#[tauri::command]
+pub async fn get_cotizaciones_by_termino(termino_id: i32) -> Result<Vec<TerminoCotizacion>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let cotizaciones = sqlx::query_as::<_, TerminoCotizacion>(
+        "SELECT tc.termino_id, tc.cotizacion_id, tc.aplicado, tc.created_at,
+                t.termino_nombre, t.termino_descripcion
+         FROM TERMINOS_COTIZACION tc
+         JOIN TERMINOS_CONDICIONES t ON tc.termino_id = t.termino_id
+         WHERE tc.termino_id = ?
+         ORDER BY tc.created_at DESC"
+    )
+    .bind(termino_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(cotizaciones)
+}
+
+/// Verificar si un término está aplicado a un informe específico
+#[tauri::command]
+pub async fn check_termino_in_informe(
+    termino_id: i32,
+    informe_id: i32
+) -> Result<Option<bool>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query_scalar::<_, Option<bool>>(
+        "SELECT aplicado FROM TERMINOS_INFORME WHERE termino_id = ? AND informe_id = ?"
+    )
+    .bind(termino_id)
+    .bind(informe_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(result.flatten())
+}
+
+/// Verificar si un término está aplicado a una cotización específica
+#[tauri::command]
+pub async fn check_termino_in_cotizacion(
+    termino_id: i32,
+    cotizacion_id: i32
+) -> Result<Option<bool>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query_scalar::<_, Option<bool>>(
+        "SELECT aplicado FROM TERMINOS_COTIZACION WHERE termino_id = ? AND cotizacion_id = ?"
+    )
+    .bind(termino_id)
+    .bind(cotizacion_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(result.flatten())
+}
