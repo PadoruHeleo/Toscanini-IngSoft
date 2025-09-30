@@ -180,7 +180,7 @@ export default function InformeFormDialog({
       // Si es un nuevo informe, aplicar términos por defecto automáticamente
       if (!isEditing) {
         const terminosDefecto = terminos
-          .filter((termino) => termino.es_default)
+          .filter((termino) => termino.is_default)
           .map((termino) => termino.termino_id);
         setSelectedTerminos(terminosDefecto);
       }
@@ -1085,77 +1085,159 @@ export default function InformeFormDialog({
                           <TableHeader>
                             <TableRow>
                               <TableHead className="w-12">Aplicar</TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Descripción</TableHead>
-                              <TableHead>Estado</TableHead>
+                              <TableHead className="w-48">
+                                Nombre del Término
+                              </TableHead>
+                              <TableHead>Descripción Completa</TableHead>
+                              <TableHead className="w-24">Estado</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {terminosCondiciones.map((termino) => (
-                              <TableRow key={termino.termino_id}>
-                                <TableCell>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedTerminos.includes(
-                                      termino.termino_id
-                                    )}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedTerminos((prev) => [
-                                          ...prev,
-                                          termino.termino_id,
-                                        ]);
-                                      } else {
-                                        setSelectedTerminos((prev) =>
-                                          prev.filter(
-                                            (id) => id !== termino.termino_id
-                                          )
-                                        );
-                                      }
-                                    }}
-                                    className="rounded"
-                                  />
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  {termino.tipo_termino || "General"}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="max-w-md">
-                                    <p className="text-sm">
-                                      {termino.descripcion}
-                                    </p>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <span
-                                    className={`px-2 py-1 rounded-full text-xs ${
-                                      termino.es_default
-                                        ? "bg-green-100 text-green-800"
-                                        : "bg-gray-100 text-gray-800"
-                                    }`}
-                                  >
-                                    {termino.es_default
-                                      ? "Por defecto"
-                                      : "Opcional"}
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {terminosCondiciones.map((termino) => {
+                              const isSelected = selectedTerminos.includes(
+                                termino.termino_id
+                              );
+                              const isDefault = termino.is_default;
+                              return (
+                                <TableRow
+                                  key={termino.termino_id}
+                                  className={`${
+                                    isSelected
+                                      ? "bg-blue-50 border-blue-200"
+                                      : ""
+                                  } ${
+                                    isDefault
+                                      ? "border-l-4 border-l-green-500"
+                                      : ""
+                                  }`}
+                                >
+                                  <TableCell>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedTerminos((prev) => [
+                                            ...prev,
+                                            termino.termino_id,
+                                          ]);
+                                        } else {
+                                          setSelectedTerminos((prev) =>
+                                            prev.filter(
+                                              (id) => id !== termino.termino_id
+                                            )
+                                          );
+                                        }
+                                      }}
+                                      className="rounded w-4 h-4"
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1">
+                                      <p className="font-semibold text-sm">
+                                        {termino.termino_nombre ||
+                                          "Término General"}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Tipo:{" "}
+                                        {termino.tipo_referencia || "General"}
+                                      </p>
+                                      {isDefault && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                          ✓ Por defecto
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="max-w-lg">
+                                      <p className="text-sm text-gray-700 leading-relaxed">
+                                        {termino.termino_descripcion ||
+                                          "Sin descripción disponible"}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-center">
+                                      {isSelected ? (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                          ✓ Aplicado
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                          No aplicado
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
                     )}
 
+                    {selectedTerminos.length === 0 &&
+                      terminosCondiciones.length > 0 && (
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                          <div className="flex items-start space-x-2">
+                            <span className="text-yellow-500 text-lg">⚠️</span>
+                            <div>
+                              <p className="text-sm text-yellow-800 font-medium">
+                                No hay términos y condiciones seleccionados
+                              </p>
+                              <p className="text-xs text-yellow-700 mt-1">
+                                Se recomienda seleccionar al menos los términos
+                                por defecto para el informe. Puedes hacer clic
+                                en los checkboxes de la tabla superior para
+                                seleccionarlos.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                     {selectedTerminos.length > 0 && (
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <p className="text-sm text-blue-800">
-                          <strong>Términos seleccionados:</strong>{" "}
-                          {selectedTerminos.length}
-                        </p>
-                        <p className="text-xs text-blue-600 mt-1">
-                          Estos términos y condiciones se aplicarán al informe
-                          cuando se guarde.
-                        </p>
+                        <div className="space-y-2">
+                          <p className="text-sm text-blue-800">
+                            <strong>✓ Términos seleccionados:</strong>{" "}
+                            {selectedTerminos.length} de{" "}
+                            {terminosCondiciones.length}
+                          </p>
+                          <div className="text-xs text-blue-700">
+                            <p className="font-medium mb-1">
+                              Términos que se aplicarán:
+                            </p>
+                            <ul className="list-disc list-inside space-y-0.5 pl-2">
+                              {terminosCondiciones
+                                .filter((termino) =>
+                                  selectedTerminos.includes(termino.termino_id)
+                                )
+                                .map((termino) => (
+                                  <li
+                                    key={termino.termino_id}
+                                    className="truncate"
+                                  >
+                                    <span className="font-medium">
+                                      {termino.termino_nombre ||
+                                        "Término General"}
+                                    </span>
+                                    {termino.is_default && (
+                                      <span className="ml-1 text-green-600">
+                                        (Por defecto)
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                            </ul>
+                          </div>
+                          <p className="text-xs text-blue-600 mt-2">
+                            📝 Estos términos y condiciones se aplicarán
+                            automáticamente al informe cuando se guarde.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
