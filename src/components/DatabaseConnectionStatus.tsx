@@ -45,6 +45,45 @@ export function DatabaseConnectionStatus() {
     }
   };
 
+  const [debugMessage, setDebugMessage] = useState<string>("");
+  const [isDebugging, setIsDebugging] = useState(false);
+
+  const checkDataCounts = async () => {
+    try {
+      setIsDebugging(true);
+      const result = await invoke<string>("insert_test_data");
+      setDebugMessage(result);
+    } catch (error) {
+      setDebugMessage(`Error: ${error}`);
+    } finally {
+      setIsDebugging(false);
+    }
+  };
+
+  const checkEquipoIds = async () => {
+    try {
+      setIsDebugging(true);
+      const result = await invoke<string>("check_equipo_ids");
+      setDebugMessage(result);
+    } catch (error) {
+      setDebugMessage(`Error: ${error}`);
+    } finally {
+      setIsDebugging(false);
+    }
+  };
+
+  const runMigrations = async () => {
+    try {
+      setIsDebugging(true);
+      const result = await invoke<string>("force_run_migrations");
+      setDebugMessage(result);
+    } catch (error) {
+      setDebugMessage(`Error: ${error}`);
+    } finally {
+      setIsDebugging(false);
+    }
+  };
+
   const retryConnection = async () => {
     try {
       setIsRetrying(true);
@@ -151,38 +190,85 @@ export function DatabaseConnectionStatus() {
           </Alert>
         )}
 
-        <div className="flex gap-2">
-          <Button
-            onClick={recheckConnection}
-            disabled={isChecking}
-            variant="outline"
-            size="sm"
-            className="flex-1"
-          >
-            {isChecking ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Verificar
-          </Button>
+        {debugMessage && (
+          <Alert>
+            <AlertDescription>
+              <pre className="whitespace-pre-wrap text-xs">{debugMessage}</pre>
+            </AlertDescription>
+          </Alert>
+        )}
 
-          {!status.is_connected && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
             <Button
-              onClick={retryConnection}
-              disabled={isRetrying}
-              variant="default"
+              onClick={recheckConnection}
+              disabled={isChecking}
+              variant="outline"
               size="sm"
               className="flex-1"
             >
-              {isRetrying ? (
+              {isChecking ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Verificar
+            </Button>
+
+            {!status.is_connected && (
+              <Button
+                onClick={retryConnection}
+                disabled={isRetrying}
+                variant="default"
+                size="sm"
+                className="flex-1"
+              >
+                {isRetrying ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Database className="h-4 w-4 mr-2" />
+                )}
+                Reconectar
+              </Button>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              onClick={runMigrations}
+              disabled={isDebugging}
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+            >
+              {isDebugging ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Database className="h-4 w-4 mr-2" />
               )}
-              Reconectar
+              Ejecutar Migraciones
             </Button>
-          )}
+
+            <Button
+              onClick={checkDataCounts}
+              disabled={isDebugging}
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+            >
+              Conteos
+            </Button>
+          </div>
+
+          <Button
+            onClick={checkEquipoIds}
+            disabled={isDebugging}
+            variant="secondary"
+            size="sm"
+            className="w-full"
+          >
+            Ver IDs Equipos
+          </Button>
         </div>
       </CardContent>
     </Card>

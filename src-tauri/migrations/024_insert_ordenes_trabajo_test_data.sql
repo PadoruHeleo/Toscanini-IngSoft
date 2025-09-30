@@ -1,0 +1,7 @@
+-- Insertar órdenes de trabajo de prueba (solo las primeras 5 para asegurar que los equipos existan)
+INSERT IGNORE INTO ORDEN_TRABAJO (orden_codigo, orden_desc, prioridad, estado, has_garantia, equipo_id, created_by, cotizacion_id, informe_id, pre_informe) VALUES
+('OT-001-2024', 'Radio Motorola presenta problemas de audio intermitente', 'media', 'entregado', TRUE, 1, 1, 1, 1, 'Cliente reporta que el micrófono funciona de manera intermitente. Equipo en uso diario desde hace 2 años.'),
+('OT-002-2024', 'Falla de potencia en radio Kenwood, no transmite', 'alta', 'cotizacion_enviada', FALSE, 2, 2, 2, 2, 'Equipo no transmite, posible falla en etapa de potencia. Cliente reporta olor a quemado.'),
+('OT-003-2024', 'Calibración anual preventiva para radio Icom', 'baja', 'entregado', FALSE, 3, 1, 3, 3, 'Mantenimiento preventivo programado. Equipo funcionando normalmente pero requiere calibración.'),
+('OT-004-2024', 'Display con líneas, dificultad para leer información', 'media', 'cotizacion_enviada', TRUE, 4, 2, 4, 4, 'Pantalla presenta líneas verticales que impiden lectura correcta. Posible infiltración de humedad.'),
+('OT-005-2024', 'Mantenimiento preventivo programado', 'baja', 'entregado', TRUE, 5, 1, 5, 5, 'Mantenimiento semestral programado. Equipo en buen estado, solo requiere limpieza y verificación.');
