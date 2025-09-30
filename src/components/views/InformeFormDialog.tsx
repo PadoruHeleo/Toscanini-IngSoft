@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { Plus, Trash2, FileText } from "lucide-react";
@@ -110,8 +111,13 @@ export default function InformeFormDialog({
   const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
   const [cantidad, setCantidad] = useState<string>("1");
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
-  const [showEliminarInformeDialog, setShowEliminarInformeDialog] = useState(false);
+  const [showEliminarInformeDialog, setShowEliminarInformeDialog] =
+    useState(false);
   const [motivoEliminacion, setMotivoEliminacion] = useState("");
+  const [activeTab, setActiveTab] = useState("informacion");
+  const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
+  const [loadingTerminos, setLoadingTerminos] = useState(false);
+  const [selectedTerminos, setSelectedTerminos] = useState<number[]>([]);
   const [formData, setFormData] = useState<FormData>({
     diagnostico: "",
     recomendaciones: "",
@@ -123,49 +129,91 @@ export default function InformeFormDialog({
   // Estado para el diálogo de confirmación de eliminación
   // Función para manejar la eliminación del informe
   const handleEliminarInforme = async () => {
-  if (!informe?.informe_id || !user) {
-    showError("Error", "No se puede eliminar el informe.");
-    return;
-  }
-  try {
-    setLoading(true);
-    // Actualizar la orden de trabajo para quitar la referencia al informe
-    const ordenResult = await invoke<boolean>("remove_informe_from_ordenes", {
-      informeId: informe.informe_id,
-      updatedBy: user.usuario_id,
-    });
-
-    if (!ordenResult) { // <-- Cambia aquí la condición
-      showError("Error", "No se pudo desvincular el informe de la orden de trabajo.");
-      setLoading(false);
+    if (!informe?.informe_id || !user) {
+      showError("Error", "No se puede eliminar el informe.");
       return;
     }
-    // Eliminar el informe
-    const result = await invoke<boolean>("delete_informe", {
-      informeId: informe.informe_id,
-      deletedBy: user.usuario_id,
-    });
+    try {
+      setLoading(true);
+      // Actualizar la orden de trabajo para quitar la referencia al informe
+      const ordenResult = await invoke<boolean>("remove_informe_from_ordenes", {
+        informeId: informe.informe_id,
+        updatedBy: user.usuario_id,
+      });
 
-    if (result) {
-      success("Informe eliminado", "El informe fue eliminado exitosamente.");
-      onInformeAdded();
-      onOpenChange(false);
-    } else {
-      showError("Error", "No se pudo eliminar el informe.");
+      if (!ordenResult) {
+        // <-- Cambia aquí la condición
+        showError(
+          "Error",
+          "No se pudo desvincular el informe de la orden de trabajo."
+        );
+        setLoading(false);
+        return;
+      }
+      // Eliminar el informe
+      const result = await invoke<boolean>("delete_informe", {
+        informeId: informe.informe_id,
+        deletedBy: user.usuario_id,
+      });
+
+      if (result) {
+        success("Informe eliminado", "El informe fue eliminado exitosamente.");
+        onInformeAdded();
+        onOpenChange(false);
+      } else {
+        showError("Error", "No se pudo eliminar el informe.");
+      }
+    } catch (error) {
+      showError("Error", "Ocurrió un error al eliminar el informe.");
+      console.log(error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    showError("Error", "Ocurrió un error al eliminar el informe.");
-    console.log(error);
-  } finally {
-    setLoading(false);
-  }
+  };
+
+  const loadTerminosCondiciones = async () => {
+    try {
+      setLoadingTerminos(true);
+      const terminos = await invoke<any[]>("get_terminos_condiciones_activos");
+      setTerminosCondiciones(terminos);
+
+      // Si es un nuevo informe, aplicar términos por defecto automáticamente
+      if (!isEditing) {
+        const terminosDefecto = terminos
+          .filter((termino) => termino.es_default)
+          .map((termino) => termino.termino_id);
+        setSelectedTerminos(terminosDefecto);
+      }
+    } catch (error) {
+      console.error("Error cargando términos y condiciones:", error);
+      showError("Error", "No se pudieron cargar los términos y condiciones.");
+    } finally {
+      setLoadingTerminos(false);
+    }
+  };
+
+  const loadTerminosInforme = async () => {
+    if (!informe?.informe_id) return;
+    try {
+      const terminosInforme = await invoke<number[]>(
+        "get_terminos_by_informe",
+        {
+          informeId: informe.informe_id,
+        }
+      );
+      setSelectedTerminos(terminosInforme);
+    } catch (error) {
+      console.error("Error cargando términos del informe:", error);
+    }
   };
 
   useEffect(() => {
     if (open) {
       loadPiezas();
+      loadTerminosCondiciones();
       if (isEditing && informe) {
         loadInformePiezas();
+        loadTerminosInforme();
       } else if (!isEditing && ordenTrabajoId) {
         // Cargar diagnóstico y piezas de la cotización asociada a la orden de trabajo
         loadDataFromOrdenTrabajo();
@@ -436,6 +484,22 @@ export default function InformeFormDialog({
         });
 
         if (result) {
+          // Aplicar términos y condiciones seleccionados
+          if (selectedTerminos.length > 0) {
+            try {
+              await invoke("apply_terminos_to_informe", {
+                informeId: informe.informe_id,
+                terminoIds: selectedTerminos,
+              });
+            } catch (error) {
+              console.error("Error aplicando términos y condiciones:", error);
+              showError(
+                "Advertencia",
+                "El informe se actualizó pero no se pudieron aplicar todos los términos y condiciones."
+              );
+            }
+          }
+
           success(
             "Informe actualizado",
             `El informe ha sido actualizado exitosamente.`
@@ -506,6 +570,22 @@ export default function InformeFormDialog({
           }
         }
 
+        // Aplicar términos y condiciones seleccionados
+        if (selectedTerminos.length > 0) {
+          try {
+            await invoke("apply_terminos_to_informe", {
+              informeId: informeId,
+              terminoIds: selectedTerminos,
+            });
+          } catch (error) {
+            console.error("Error aplicando términos y condiciones:", error);
+            showError(
+              "Advertencia",
+              "El informe se creó pero no se pudieron aplicar todos los términos y condiciones."
+            );
+          }
+        }
+
         success(
           "Informe creado",
           `El informe ha sido creado exitosamente.` +
@@ -544,7 +624,10 @@ export default function InformeFormDialog({
         updatedBy: user.usuario_id,
       });
       if (result) {
-        success("Informe eliminado", "El informe en borrador ha sido eliminado.");
+        success(
+          "Informe eliminado",
+          "El informe en borrador ha sido eliminado."
+        );
         onInformeAdded(); // Refresca la lista
         onOpenChange(false); // Cierra el diálogo
       } else {
@@ -773,7 +856,7 @@ export default function InformeFormDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Editar Informe" : "Crear Nuevo Informe"}
@@ -785,295 +868,410 @@ export default function InformeFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Código del informe (solo mostrar en edición) */}
-          {isEditing && informe?.informe_codigo && (
-            <div className="space-y-2">
-              <Label htmlFor="codigo">Código del Informe</Label>
-              <Input
-                id="codigo"
-                value={informe.informe_codigo}
-                disabled
-                className="bg-gray-100"
-              />
-            </div>
-          )}
-          {/* Campos del formulario */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="diagnostico">
-                Diagnóstico <span className="text-red-500">*</span>
-              </Label>
-              <Textarea
-                id="diagnostico"
-                value={formData.diagnostico}
-                onChange={(e) =>
-                  handleInputChange("diagnostico", e.target.value)
-                }
-                placeholder="Describa el diagnóstico del equipo..."
-                rows={4}
-                className={errors.diagnostico ? "border-red-500" : ""}
-              />
-              {errors.diagnostico && (
-                <p className="text-sm text-red-500">{errors.diagnostico}</p>
-              )}
-            </div>{" "}
-            <div className="space-y-2">
-              <Label htmlFor="tecnico_responsable">
-                Técnico Responsable <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="tecnico_responsable"
-                value={formData.tecnico_responsable}
-                placeholder="Nombre del técnico responsable"
-                disabled
-                className={`bg-gray-100 ${
-                  errors.tecnico_responsable ? "border-red-500" : ""
-                }`}
-              />
-              {errors.tecnico_responsable && (
-                <p className="text-sm text-red-500">
-                  {errors.tecnico_responsable}
-                </p>
-              )}{" "}
-            </div>
-          </div>{" "}
-          <div className="space-y-2">
-            <Label htmlFor="solucion_aplicada">
-              Solución Aplicada <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              id="solucion_aplicada"
-              value={formData.solucion_aplicada}
-              onChange={(e) =>
-                handleInputChange("solucion_aplicada", e.target.value)
-              }
-              placeholder="Describa la solución aplicada..."
-              rows={3}
-              className={errors.solucion_aplicada ? "border-red-500" : ""}
-            />
-            {errors.solucion_aplicada && (
-              <p className="text-sm text-red-500">{errors.solucion_aplicada}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="recomendaciones">Recomendaciones</Label>
-            <Textarea
-              id="recomendaciones"
-              value={formData.recomendaciones}
-              onChange={(e) =>
-                handleInputChange("recomendaciones", e.target.value)
-              }
-              placeholder="Recomendaciones para el cliente..."
-              rows={3}
-            />
-          </div>
-          {/* Sección de piezas utilizadas */}
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="text-lg font-semibold">Piezas Utilizadas</h3>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="informacion">Información General</TabsTrigger>
+            <TabsTrigger value="terminos">Términos y Condiciones</TabsTrigger>
+          </TabsList>
 
-            {/* Agregar pieza */}
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <Label htmlFor="pieza">Seleccionar Pieza</Label>
-                <Select
-                  value={selectedPiezaId}
-                  onValueChange={setSelectedPiezaId}
-                  disabled={loadingPiezas}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una pieza..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {piezas.map((pieza) => (
-                      <SelectItem
-                        key={pieza.pieza_id}
-                        value={pieza.pieza_id.toString()}
-                      >
-                        {getPiezaDisplayName(pieza)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <TabsContent value="informacion" className="space-y-6 mt-6">
+              {/* Código del informe (solo mostrar en edición) */}
+              {isEditing && informe?.informe_codigo && (
+                <div className="space-y-2">
+                  <Label htmlFor="codigo">Código del Informe</Label>
+                  <Input
+                    id="codigo"
+                    value={informe.informe_codigo}
+                    disabled
+                    className="bg-gray-100"
+                  />
+                </div>
+              )}
+              {/* Campos del formulario */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="diagnostico">
+                    Diagnóstico <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="diagnostico"
+                    value={formData.diagnostico}
+                    onChange={(e) =>
+                      handleInputChange("diagnostico", e.target.value)
+                    }
+                    placeholder="Describa el diagnóstico del equipo..."
+                    rows={4}
+                    className={errors.diagnostico ? "border-red-500" : ""}
+                  />
+                  {errors.diagnostico && (
+                    <p className="text-sm text-red-500">{errors.diagnostico}</p>
+                  )}
+                </div>{" "}
+                <div className="space-y-2">
+                  <Label htmlFor="tecnico_responsable">
+                    Técnico Responsable <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="tecnico_responsable"
+                    value={formData.tecnico_responsable}
+                    placeholder="Nombre del técnico responsable"
+                    disabled
+                    className={`bg-gray-100 ${
+                      errors.tecnico_responsable ? "border-red-500" : ""
+                    }`}
+                  />
+                  {errors.tecnico_responsable && (
+                    <p className="text-sm text-red-500">
+                      {errors.tecnico_responsable}
+                    </p>
+                  )}{" "}
+                </div>
+              </div>{" "}
+              <div className="space-y-2">
+                <Label htmlFor="solucion_aplicada">
+                  Solución Aplicada <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="solucion_aplicada"
+                  value={formData.solucion_aplicada}
+                  onChange={(e) =>
+                    handleInputChange("solucion_aplicada", e.target.value)
+                  }
+                  placeholder="Describa la solución aplicada..."
+                  rows={3}
+                  className={errors.solucion_aplicada ? "border-red-500" : ""}
+                />
+                {errors.solucion_aplicada && (
+                  <p className="text-sm text-red-500">
+                    {errors.solucion_aplicada}
+                  </p>
+                )}
               </div>
-              <div className="w-24">
-                <Label htmlFor="cantidad">Cantidad</Label>
-                <Input
-                  id="cantidad"
-                  type="number"
-                  min="1"
-                  value={cantidad}
-                  onChange={(e) => setCantidad(e.target.value)}
+              <div className="space-y-2">
+                <Label htmlFor="recomendaciones">Recomendaciones</Label>
+                <Textarea
+                  id="recomendaciones"
+                  value={formData.recomendaciones}
+                  onChange={(e) =>
+                    handleInputChange("recomendaciones", e.target.value)
+                  }
+                  placeholder="Recomendaciones para el cliente..."
+                  rows={3}
                 />
               </div>
-              <Button
-                type="button"
-                onClick={handleAddPieza}
-                disabled={!selectedPiezaId || !cantidad || loadingPiezas}
-                className="mb-0"
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
+              {/* Sección de piezas utilizadas */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="text-lg font-semibold">Piezas Utilizadas</h3>
 
-            {/* Lista de piezas seleccionadas */}
-            {selectedPiezas.length > 0 && (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  {" "}
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Pieza</TableHead>
-                      <TableHead>Marca</TableHead>
-                      <TableHead>Cantidad</TableHead>
-                      <TableHead>Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedPiezas.map((pieza) => (
-                      <TableRow key={pieza.pieza_id}>
-                        <TableCell>{pieza.pieza_nombre}</TableCell>
-                        <TableCell>{pieza.pieza_marca || "N/A"}</TableCell>{" "}
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={pieza.cantidad}
-                            onChange={(e) =>
-                              handleUpdateCantidad(
-                                pieza.pieza_id,
-                                e.target.value
-                              )
-                            }
-                            className="w-20"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRemovePieza(pieza.pieza_id)}
+                {/* Agregar pieza */}
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Label htmlFor="pieza">Seleccionar Pieza</Label>
+                    <Select
+                      value={selectedPiezaId}
+                      onValueChange={setSelectedPiezaId}
+                      disabled={loadingPiezas}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una pieza..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {piezas.map((pieza) => (
+                          <SelectItem
+                            key={pieza.pieza_id}
+                            value={pieza.pieza_id.toString()}
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>{" "}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={
-                loading ||
-                loadingSendToClient ||
-                loadingSendExisting ||
-                loadingPdf
-              }
-            >
-              Cancelar
-            </Button>{" "}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePreviewPdf}
-              disabled={
-                loading ||
-                loadingSendToClient ||
-                loadingSendExisting ||
-                loadingPdf
-              }
-              className="bg-orange-600 hover:bg-orange-700 text-white"
-            >
-              {loadingPdf ? (
-                "Generando..."
-              ) : (
-                <>
-                  <FileText className="w-4 h-4 mr-1" />
-                  PDF
-                </>
-              )}
-            </Button>
-              {isEditing && informe && (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => setShowEliminarInformeDialog(true)}
-              disabled={loading}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Eliminar Informe
-            </Button>
-          )}
-            <Button
-              type="submit"
-              disabled={
-                loading ||
-                loadingSendToClient ||
-                loadingSendExisting ||
-                loadingPdf
-              }
-            >
-              {loading
-                ? "Procesando..."
-                : isEditing
-                ? "Actualizar Informe"
-                : "Guardar Informe"}
-            </Button>
-            {isEditing && informe?.is_borrador && (
-              <Button
-                type="button"
-                onClick={handleSendExistingToClient}
-                disabled={
-                  loading ||
-                  loadingSendToClient ||
-                  loadingSendExisting ||
-                  loadingPdf
-                }
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {loadingSendExisting
-                  ? "Enviando..."
-                  : "Enviar Informe a Cliente"}
-              </Button>
-            )}
+                            {getPiezaDisplayName(pieza)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-24">
+                    <Label htmlFor="cantidad">Cantidad</Label>
+                    <Input
+                      id="cantidad"
+                      type="number"
+                      min="1"
+                      value={cantidad}
+                      onChange={(e) => setCantidad(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleAddPieza}
+                    disabled={!selectedPiezaId || !cantidad || loadingPiezas}
+                    className="mb-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
 
-            {isEditing && informe?.is_borrador && (
+                {/* Lista de piezas seleccionadas */}
+                {selectedPiezas.length > 0 && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      {" "}
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Pieza</TableHead>
+                          <TableHead>Marca</TableHead>
+                          <TableHead>Cantidad</TableHead>
+                          <TableHead>Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedPiezas.map((pieza) => (
+                          <TableRow key={pieza.pieza_id}>
+                            <TableCell>{pieza.pieza_nombre}</TableCell>
+                            <TableCell>
+                              {pieza.pieza_marca || "N/A"}
+                            </TableCell>{" "}
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={pieza.cantidad}
+                                onChange={(e) =>
+                                  handleUpdateCantidad(
+                                    pieza.pieza_id,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-20"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleRemovePieza(pieza.pieza_id)
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="terminos" className="space-y-6 mt-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">
+                  Términos y Condiciones del Informe
+                </h3>
+
+                {loadingTerminos ? (
+                  <div className="text-center py-4">
+                    Cargando términos y condiciones...
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {terminosCondiciones.length === 0 ? (
+                      <p className="text-gray-500">
+                        No hay términos y condiciones disponibles
+                      </p>
+                    ) : (
+                      <div className="border rounded-lg">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-12">Aplicar</TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Descripción</TableHead>
+                              <TableHead>Estado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {terminosCondiciones.map((termino) => (
+                              <TableRow key={termino.termino_id}>
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTerminos.includes(
+                                      termino.termino_id
+                                    )}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedTerminos((prev) => [
+                                          ...prev,
+                                          termino.termino_id,
+                                        ]);
+                                      } else {
+                                        setSelectedTerminos((prev) =>
+                                          prev.filter(
+                                            (id) => id !== termino.termino_id
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="rounded"
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {termino.tipo_termino || "General"}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="max-w-md">
+                                    <p className="text-sm">
+                                      {termino.descripcion}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs ${
+                                      termino.es_default
+                                        ? "bg-green-100 text-green-800"
+                                        : "bg-gray-100 text-gray-800"
+                                    }`}
+                                  >
+                                    {termino.es_default
+                                      ? "Por defecto"
+                                      : "Opcional"}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {selectedTerminos.length > 0 && (
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-800">
+                          <strong>Términos seleccionados:</strong>{" "}
+                          {selectedTerminos.length}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          Estos términos y condiciones se aplicarán al informe
+                          cuando se guarde.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <DialogFooter>
               <Button
                 type="button"
-                variant="destructive"
-                onClick={() => setShowEliminarInformeDialog(true)}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {loading ? "Eliminando..." : "Eliminar Informe"}
-              </Button>
-            )}
-            {!isEditing && (
-              <Button
-                type="button"
-                onClick={handleSubmitAndSendToClient}
+                variant="outline"
+                onClick={() => onOpenChange(false)}
                 disabled={
                   loading ||
                   loadingSendToClient ||
                   loadingSendExisting ||
                   loadingPdf
                 }
-                className="bg-green-600 hover:bg-green-700"
               >
-                {loadingSendToClient
-                  ? "Enviando..."
-                  : "Guardar y Enviar al Cliente"}
+                Cancelar
+              </Button>{" "}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePreviewPdf}
+                disabled={
+                  loading ||
+                  loadingSendToClient ||
+                  loadingSendExisting ||
+                  loadingPdf
+                }
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                {loadingPdf ? (
+                  "Generando..."
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4 mr-1" />
+                    PDF
+                  </>
+                )}
               </Button>
-            )}
-          </DialogFooter>{" "}
-        </form>
+              {isEditing && informe && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowEliminarInformeDialog(true)}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Eliminar Informe
+                </Button>
+              )}
+              <Button
+                type="submit"
+                disabled={
+                  loading ||
+                  loadingSendToClient ||
+                  loadingSendExisting ||
+                  loadingPdf
+                }
+              >
+                {loading
+                  ? "Procesando..."
+                  : isEditing
+                  ? "Actualizar Informe"
+                  : "Guardar Informe"}
+              </Button>
+              {isEditing && informe?.is_borrador && (
+                <Button
+                  type="button"
+                  onClick={handleSendExistingToClient}
+                  disabled={
+                    loading ||
+                    loadingSendToClient ||
+                    loadingSendExisting ||
+                    loadingPdf
+                  }
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {loadingSendExisting
+                    ? "Enviando..."
+                    : "Enviar Informe a Cliente"}
+                </Button>
+              )}
+              {isEditing && informe?.is_borrador && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowEliminarInformeDialog(true)}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? "Eliminando..." : "Eliminar Informe"}
+                </Button>
+              )}
+              {!isEditing && (
+                <Button
+                  type="button"
+                  onClick={handleSubmitAndSendToClient}
+                  disabled={
+                    loading ||
+                    loadingSendToClient ||
+                    loadingSendExisting ||
+                    loadingPdf
+                  }
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {loadingSendToClient
+                    ? "Enviando..."
+                    : "Guardar y Enviar al Cliente"}
+                </Button>
+              )}
+            </DialogFooter>
+          </form>
+        </Tabs>
       </DialogContent>
 
       {/* Diálogo de confirmación para eliminar informe */}
@@ -1084,7 +1282,7 @@ export default function InformeFormDialog({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Confirmar Eliminación</DialogTitle>
-            <DialogDescription> 
+            <DialogDescription>
               ¿Está seguro que desea eliminar este informe? Esta acción no se
               puede deshacer.
             </DialogDescription>
@@ -1101,7 +1299,7 @@ export default function InformeFormDialog({
             <Button
               type="button"
               variant="destructive"
-              onClick={ async () => {
+              onClick={async () => {
                 setShowEliminarInformeDialog(false);
                 await handleEliminarInforme();
               }}
@@ -1196,16 +1394,19 @@ export default function InformeFormDialog({
           <DialogHeader>
             <DialogTitle>Confirmar eliminación</DialogTitle>
             <DialogDescription>
-              ¿Está seguro que desea <b>eliminar</b> este informe en borrador?<br />
+              ¿Está seguro que desea <b>eliminar</b> este informe en borrador?
+              <br />
               Podrá crear un nuevo informe para esta orden.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Label htmlFor="motivo_eliminacion">Motivo de la eliminación *</Label>
+            <Label htmlFor="motivo_eliminacion">
+              Motivo de la eliminación *
+            </Label>
             <Textarea
               id="motivo_eliminacion"
               value={motivoEliminacion}
-              onChange={e => setMotivoEliminacion(e.target.value)}
+              onChange={(e) => setMotivoEliminacion(e.target.value)}
               placeholder="Ingrese el motivo de la eliminación..."
               rows={3}
               required

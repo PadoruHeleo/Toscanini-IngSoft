@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { Plus, Trash2 } from "lucide-react";
@@ -123,6 +124,10 @@ export default function CotizacionFormDialog({
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [ordenCreatedAt, setOrdenCreatedAt] = useState<string | null>(null);
   const [puedeAbandonar, setPuedeAbandonar] = useState(false);
+  const [activeTab, setActiveTab] = useState("informacion");
+  const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
+  const [loadingTerminos, setLoadingTerminos] = useState(false);
+  const [selectedTerminos, setSelectedTerminos] = useState<number[]>([]);
   const [formData, setFormData] = useState<FormData>({
     costo_revision: "25000",
     costo_reparacion: "0",
@@ -147,8 +152,10 @@ export default function CotizacionFormDialog({
   useEffect(() => {
     if (open) {
       loadPiezas();
+      loadTerminosCondiciones();
       if (isEditing && cotizacion) {
         loadCotizacionPiezas();
+        loadTerminosCotizacion();
       }
       // Si hay ordenTrabajoId, obtener el estado de la orden
       console.log("ordenTrabajoId:", ordenTrabajoId);
@@ -245,6 +252,42 @@ export default function CotizacionFormDialog({
         errorMsg += `\n${(error as any).message}`;
       }
       showError("Error", errorMsg);
+    }
+  };
+
+  const loadTerminosCondiciones = async () => {
+    try {
+      setLoadingTerminos(true);
+      const terminos = await invoke<any[]>("get_terminos_condiciones_activos");
+      setTerminosCondiciones(terminos);
+
+      // Si es una nueva cotización, aplicar términos por defecto automáticamente
+      if (!isEditing) {
+        const terminosDefecto = terminos
+          .filter((termino) => termino.es_default)
+          .map((termino) => termino.termino_id);
+        setSelectedTerminos(terminosDefecto);
+      }
+    } catch (error) {
+      console.error("Error cargando términos y condiciones:", error);
+      showError("Error", "No se pudieron cargar los términos y condiciones.");
+    } finally {
+      setLoadingTerminos(false);
+    }
+  };
+
+  const loadTerminosCotizacion = async () => {
+    if (!cotizacion?.cotizacion_id) return;
+    try {
+      const terminosCotizacion = await invoke<number[]>(
+        "get_terminos_by_cotizacion",
+        {
+          cotizacionId: cotizacion.cotizacion_id,
+        }
+      );
+      setSelectedTerminos(terminosCotizacion);
+    } catch (error) {
+      console.error("Error cargando términos de la cotización:", error);
     }
   };
 
@@ -397,6 +440,22 @@ export default function CotizacionFormDialog({
           // Actualizar piezas
           await updateCotizacionPiezas(cotizacion.cotizacion_id);
 
+          // Aplicar términos y condiciones seleccionados
+          if (selectedTerminos.length > 0) {
+            try {
+              await invoke("apply_terminos_to_cotizacion", {
+                cotizacionId: cotizacion.cotizacion_id,
+                terminoIds: selectedTerminos,
+              });
+            } catch (error) {
+              console.error("Error aplicando términos y condiciones:", error);
+              showError(
+                "Advertencia",
+                "La cotización se actualizó pero no se pudieron aplicar todos los términos y condiciones."
+              );
+            }
+          }
+
           success(
             "Cotización actualizada",
             `La cotización ha sido actualizada exitosamente.`
@@ -466,6 +525,22 @@ export default function CotizacionFormDialog({
             showError(
               "Advertencia",
               "La cotización se creó pero no se pudo asociar a la orden de trabajo."
+            );
+          }
+        }
+
+        // Aplicar términos y condiciones seleccionados
+        if (selectedTerminos.length > 0) {
+          try {
+            await invoke("apply_terminos_to_cotizacion", {
+              cotizacionId: cotizacionId,
+              terminoIds: selectedTerminos,
+            });
+          } catch (error) {
+            console.error("Error aplicando términos y condiciones:", error);
+            showError(
+              "Advertencia",
+              "La cotización se creó pero no se pudieron aplicar todos los términos y condiciones."
             );
           }
         }
@@ -753,7 +828,7 @@ export default function CotizacionFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        style={{ maxWidth: "38vw", width: "38vw", minWidth: "340px" }}
+        style={{ maxWidth: "50vw", width: "50vw", minWidth: "400px" }}
         className="max-h-[90vh] overflow-y-auto"
       >
         <DialogHeader>
@@ -767,307 +842,425 @@ export default function CotizacionFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Datos básicos */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Código de cotización (solo lectura si existe) */}
-            <div className="space-y-2">
-              <Label htmlFor="cotizacion_codigo">Código de Cotización</Label>
-              <Input
-                id="cotizacion_codigo"
-                type="text"
-                value={
-                  cotizacion?.cotizacion_codigo ||
-                  "(Se generará automáticamente)"
-                }
-                readOnly
-                className="bg-gray-50 font-semibold"
-              />
-            </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="informacion">Información General</TabsTrigger>
+            <TabsTrigger value="terminos">Términos y Condiciones</TabsTrigger>
+          </TabsList>
 
-            {/* Costo total (solo lectura) */}
-            <div className="space-y-2">
-              <Label htmlFor="costo_total">Costo Total</Label>
-              <Input
-                id="costo_total"
-                type="text"
-                value={`$${calculateTotal()}`}
-                readOnly
-                className="bg-gray-50 font-semibold"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {/* Costo de revisión */}
-            <div className="space-y-2">
-              <Label htmlFor="costo_revision">Costo de Revisión *</Label>
-              <Input
-                id="costo_revision"
-                type="number"
-                min="0"
-                value={formData.costo_revision}
-                onChange={(e) =>
-                  handleInputChange("costo_revision", e.target.value)
-                }
-                placeholder="25000"
-                className={errors.costo_revision ? "border-red-500" : ""}
-              />
-              {errors.costo_revision && (
-                <p className="text-sm text-red-500">{errors.costo_revision}</p>
-              )}
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <TabsContent value="informacion" className="space-y-6 mt-6">
+              {/* Datos básicos */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Código de cotización (solo lectura si existe) */}
+                <div className="space-y-2">
+                  <Label htmlFor="cotizacion_codigo">
+                    Código de Cotización
+                  </Label>
+                  <Input
+                    id="cotizacion_codigo"
+                    type="text"
+                    value={
+                      cotizacion?.cotizacion_codigo ||
+                      "(Se generará automáticamente)"
+                    }
+                    readOnly
+                    className="bg-gray-50 font-semibold"
+                  />
+                </div>
 
-            {/* Costo de reparación */}
-            <div className="space-y-2">
-              <Label htmlFor="costo_reparacion">Costo de Reparación *</Label>
-              <Input
-                id="costo_reparacion"
-                type="number"
-                min="0"
-                value={formData.costo_reparacion}
-                onChange={(e) =>
-                  handleInputChange("costo_reparacion", e.target.value)
-                }
-                placeholder="0"
-                className={errors.costo_reparacion ? "border-red-500" : ""}
-              />
-              {errors.costo_reparacion && (
-                <p className="text-sm text-red-500">
-                  {errors.costo_reparacion}
-                </p>
-              )}
-            </div>
-          </div>{" "}
-          {/* Informe */}
-          <div className="col-span-2 space-y-2">
-            <Label htmlFor="informe">Informe *</Label>
-            <Textarea
-              id="informe"
-              value={formData.informe}
-              onChange={(e) => handleInputChange("informe", e.target.value)}
-              placeholder="Redacte aquí el informe técnico de la cotización"
-              className={errors.informe ? "border-red-500" : ""}
-              rows={5}
-              required
-            />
-            {errors.informe && (
-              <p className="text-sm text-red-500">{errors.informe}</p>
-            )}
-          </div>
-          {/* Gestión de piezas */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Piezas</Label>
-            </div>
-
-            {/* Agregar pieza */}
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <Label htmlFor="pieza_select">Seleccionar Pieza</Label>
-                <Select
-                  value={selectedPiezaId}
-                  onValueChange={setSelectedPiezaId}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        loadingPiezas
-                          ? "Cargando piezas..."
-                          : "Seleccionar pieza"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {piezas.map((pieza) => (
-                      <SelectItem
-                        key={pieza.pieza_id}
-                        value={pieza.pieza_id.toString()}
-                      >
-                        {getPiezaDisplayName(pieza)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Costo total (solo lectura) */}
+                <div className="space-y-2">
+                  <Label htmlFor="costo_total">Costo Total</Label>
+                  <Input
+                    id="costo_total"
+                    type="text"
+                    value={`$${calculateTotal()}`}
+                    readOnly
+                    className="bg-gray-50 font-semibold"
+                  />
+                </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Costo de revisión */}
+                <div className="space-y-2">
+                  <Label htmlFor="costo_revision">Costo de Revisión *</Label>
+                  <Input
+                    id="costo_revision"
+                    type="number"
+                    min="0"
+                    value={formData.costo_revision}
+                    onChange={(e) =>
+                      handleInputChange("costo_revision", e.target.value)
+                    }
+                    placeholder="25000"
+                    className={errors.costo_revision ? "border-red-500" : ""}
+                  />
+                  {errors.costo_revision && (
+                    <p className="text-sm text-red-500">
+                      {errors.costo_revision}
+                    </p>
+                  )}
+                </div>
 
-              <div className="w-24">
-                <Label htmlFor="cantidad">Cantidad</Label>
-                <Input
-                  id="cantidad"
-                  type="number"
-                  min="1"
-                  value={cantidad}
-                  onChange={(e) => setCantidad(e.target.value)}
+                {/* Costo de reparación */}
+                <div className="space-y-2">
+                  <Label htmlFor="costo_reparacion">
+                    Costo de Reparación *
+                  </Label>
+                  <Input
+                    id="costo_reparacion"
+                    type="number"
+                    min="0"
+                    value={formData.costo_reparacion}
+                    onChange={(e) =>
+                      handleInputChange("costo_reparacion", e.target.value)
+                    }
+                    placeholder="0"
+                    className={errors.costo_reparacion ? "border-red-500" : ""}
+                  />
+                  {errors.costo_reparacion && (
+                    <p className="text-sm text-red-500">
+                      {errors.costo_reparacion}
+                    </p>
+                  )}
+                </div>
+              </div>{" "}
+              {/* Informe */}
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="informe">Informe *</Label>
+                <Textarea
+                  id="informe"
+                  value={formData.informe}
+                  onChange={(e) => handleInputChange("informe", e.target.value)}
+                  placeholder="Redacte aquí el informe técnico de la cotización"
+                  className={errors.informe ? "border-red-500" : ""}
+                  rows={5}
+                  required
                 />
+                {errors.informe && (
+                  <p className="text-sm text-red-500">{errors.informe}</p>
+                )}
               </div>
+              {/* Gestión de piezas */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Piezas</Label>
+                </div>
 
-              <Button
-                type="button"
-                onClick={handleAddPieza}
-                disabled={!selectedPiezaId || !cantidad}
-                className="mb-0"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Tabla de piezas seleccionadas */}
-            {selectedPiezas.length > 0 && (
-              <div className="border rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Pieza</TableHead>
-                      <TableHead>Marca</TableHead>
-                      <TableHead>Precio Unit.</TableHead>
-                      <TableHead>Cantidad</TableHead>
-                      <TableHead>Subtotal</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedPiezas.map((pieza) => (
-                      <TableRow key={pieza.pieza_id}>
-                        <TableCell>{pieza.pieza_nombre}</TableCell>
-                        <TableCell>{pieza.pieza_marca || "N/A"}</TableCell>
-                        <TableCell>${pieza.pieza_precio}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={pieza.cantidad}
-                            onChange={(e) =>
-                              handleUpdateCantidad(
-                                pieza.pieza_id,
-                                e.target.value
-                              )
-                            }
-                            className="w-16"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          ${pieza.pieza_precio * pieza.cantidad}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemovePieza(pieza.pieza_id)}
+                {/* Agregar pieza */}
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Label htmlFor="pieza_select">Seleccionar Pieza</Label>
+                    <Select
+                      value={selectedPiezaId}
+                      onValueChange={setSelectedPiezaId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            loadingPiezas
+                              ? "Cargando piezas..."
+                              : "Seleccionar pieza"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {piezas.map((pieza) => (
+                          <SelectItem
+                            key={pieza.pieza_id}
+                            value={pieza.pieza_id.toString()}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-          {Object.keys(errors).length > 0 && (
-            <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
-              Por favor, corrija los errores antes de continuar.
-            </div>
-          )}{" "}
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
+                            {getPiezaDisplayName(pieza)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            {isEditing && cotizacion?.is_borrador && (
-              <Button
-                type="button"
-                variant="default"
-                onClick={handleSendToClient}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {loading ? "Enviando..." : "Enviar al Cliente"}
-              </Button>
-            )}
+                  <div className="w-24">
+                    <Label htmlFor="cantidad">Cantidad</Label>
+                    <Input
+                      id="cantidad"
+                      type="number"
+                      min="1"
+                      value={cantidad}
+                      onChange={(e) => setCantidad(e.target.value)}
+                    />
+                  </div>
 
-            {isEditing && cotizacion?.is_borrador && (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setShowRechazarConfirmDialog(true)}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {loading ? "Eliminando..." : "Eliminar Borrador"}
-              </Button>
-            )}
-
-            {isEditing &&
-              estadoOrden &&
-              estadoOrden
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .replace(/\s+/g, " ")
-                .trim() === "cotizacion_enviada" && (
-                <>
                   <Button
                     type="button"
-                    variant="default"
-                    onClick={() => setShowAprobarConfirmDialog(true)}
-                    disabled={loading}
-                    className="bg-green-600 hover:bg-green-700"
+                    onClick={handleAddPieza}
+                    disabled={!selectedPiezaId || !cantidad}
+                    className="mb-0"
                   >
-                    {loading ? "Aprobando..." : "Aprobar Cotización"}
+                    <Plus className="h-4 w-4" />
                   </Button>
+                </div>
+
+                {/* Tabla de piezas seleccionadas */}
+                {selectedPiezas.length > 0 && (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Pieza</TableHead>
+                          <TableHead>Marca</TableHead>
+                          <TableHead>Precio Unit.</TableHead>
+                          <TableHead>Cantidad</TableHead>
+                          <TableHead>Subtotal</TableHead>
+                          <TableHead className="w-12"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedPiezas.map((pieza) => (
+                          <TableRow key={pieza.pieza_id}>
+                            <TableCell>{pieza.pieza_nombre}</TableCell>
+                            <TableCell>{pieza.pieza_marca || "N/A"}</TableCell>
+                            <TableCell>${pieza.pieza_precio}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={pieza.cantidad}
+                                onChange={(e) =>
+                                  handleUpdateCantidad(
+                                    pieza.pieza_id,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-16"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              ${pieza.pieza_precio * pieza.cantidad}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleRemovePieza(pieza.pieza_id)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+              {Object.keys(errors).length > 0 && (
+                <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
+                  Por favor, corrija los errores antes de continuar.
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="terminos" className="space-y-6 mt-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">
+                  Términos y Condiciones de la Cotización
+                </h3>
+
+                {loadingTerminos ? (
+                  <div className="text-center py-4">
+                    Cargando términos y condiciones...
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {terminosCondiciones.length === 0 ? (
+                      <p className="text-gray-500">
+                        No hay términos y condiciones disponibles
+                      </p>
+                    ) : (
+                      <div className="border rounded-lg">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-12">Aplicar</TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Descripción</TableHead>
+                              <TableHead>Estado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {terminosCondiciones.map((termino) => (
+                              <TableRow key={termino.termino_id}>
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTerminos.includes(
+                                      termino.termino_id
+                                    )}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedTerminos((prev) => [
+                                          ...prev,
+                                          termino.termino_id,
+                                        ]);
+                                      } else {
+                                        setSelectedTerminos((prev) =>
+                                          prev.filter(
+                                            (id) => id !== termino.termino_id
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="rounded"
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {termino.tipo_termino || "General"}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="max-w-md">
+                                    <p className="text-sm">
+                                      {termino.descripcion}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs ${
+                                      termino.es_default
+                                        ? "bg-green-100 text-green-800"
+                                        : "bg-gray-100 text-gray-800"
+                                    }`}
+                                  >
+                                    {termino.es_default
+                                      ? "Por defecto"
+                                      : "Opcional"}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {selectedTerminos.length > 0 && (
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-800">
+                          <strong>Términos seleccionados:</strong>{" "}
+                          {selectedTerminos.length}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          Estos términos y condiciones se aplicarán a la
+                          cotización cuando se guarde.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+
+              {isEditing && cotizacion?.is_borrador && (
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={handleSendToClient}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {loading ? "Enviando..." : "Enviar al Cliente"}
+                </Button>
+              )}
+
+              {isEditing && cotizacion?.is_borrador && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowRechazarConfirmDialog(true)}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? "Eliminando..." : "Eliminar Borrador"}
+                </Button>
+              )}
+
+              {isEditing &&
+                estadoOrden &&
+                estadoOrden
+                  .toLowerCase()
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/\s+/g, " ")
+                  .trim() === "cotizacion_enviada" && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={() => setShowAprobarConfirmDialog(true)}
+                      disabled={loading}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {loading ? "Aprobando..." : "Aprobar Cotización"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => setShowRechazarConfirmDialog(true)}
+                      disabled={loading}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {loading ? "Rechazando..." : "Rechazar Cotización"}
+                    </Button>
+                  </>
+                )}
+
+              {isEditing &&
+                estadoOrden &&
+                estadoOrden.toLowerCase().trim() === "recibido" && (
                   <Button
                     type="button"
                     variant="destructive"
-                    onClick={() => setShowRechazarConfirmDialog(true)}
+                    onClick={() => setShowNoReparableConfirmDialog(true)}
                     disabled={loading}
-                    className="bg-red-600 hover:bg-red-700"
+                    className="bg-gray-800 hover:bg-gray-900"
                   >
-                    {loading ? "Rechazando..." : "Rechazar Cotización"}
+                    {loading ? "Procesando..." : "No Reparable"}
                   </Button>
-                </>
-              )}
+                )}
 
-            {isEditing &&
-              estadoOrden &&
-              estadoOrden.toLowerCase().trim() === "recibido" && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setShowNoReparableConfirmDialog(true)}
-                  disabled={loading}
-                  className="bg-gray-800 hover:bg-gray-900"
-                >
-                  {loading ? "Procesando..." : "No Reparable"}
-                </Button>
-              )}
+              {isEditing &&
+                estadoOrden.toLowerCase() !== "recibido" &&
+                estadoOrden.toLowerCase() !== "abandonado" &&
+                puedeAbandonar && ( // Solo si han pasado más de 168 horas
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setShowAbandonoConfirmDialog(true)}
+                    disabled={loading}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    Declarar Abandono
+                  </Button>
+                )}
 
-            {isEditing &&
-              estadoOrden.toLowerCase() !== "recibido" &&
-              estadoOrden.toLowerCase() !== "abandonado" &&
-              puedeAbandonar && ( // Solo si han pasado más de 168 horas
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setShowAbandonoConfirmDialog(true)}
-                  disabled={loading}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  Declarar Abandono
-                </Button>
-              )}
-
-            <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
-            </Button>
-          </DialogFooter>{" "}
-        </form>
+              <Button type="submit" disabled={loading}>
+                {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Tabs>
       </DialogContent>
 
       {/* Modal de confirmación */}
