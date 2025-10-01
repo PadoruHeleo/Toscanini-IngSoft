@@ -407,10 +407,7 @@ export function PdfViewer({
           </TabsList>
 
           {/* Pestaña de Cotización */}
-          <TabsContent
-            value="cotizacion"
-            className="flex-1 flex flex-col mt-4"
-          >
+          <TabsContent value="cotizacion" className="flex-1 flex flex-col mt-4">
             {cotizacionId ? (
               renderPdfSection(
                 "cotizacion",
@@ -431,7 +428,8 @@ export function PdfViewer({
                       Cotización no disponible
                     </h3>
                     <p className="text-gray-600 text-sm">
-                      Aún no se ha creado una cotización para esta orden de trabajo.
+                      Aún no se ha creado una cotización para esta orden de
+                      trabajo.
                     </p>
                   </div>
                 </div>
@@ -461,7 +459,8 @@ export function PdfViewer({
                       Informe técnico no disponible
                     </h3>
                     <p className="text-gray-600 text-sm">
-                      Aún no se ha creado un informe técnico para esta orden de trabajo.
+                      Aún no se ha creado un informe técnico para esta orden de
+                      trabajo.
                     </p>
                   </div>
                 </div>
