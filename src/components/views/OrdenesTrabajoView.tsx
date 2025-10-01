@@ -163,9 +163,10 @@ export function OrdenesTrabajoView() {
   const [editingInforme, setEditingInforme] = useState<any>(null);
   const [now, setNow] = useState(Date.now());
 
-  // Estados para PDF Viewer de Informes
+  // Estados para PDF Viewer de Informes y Cotizaciones
   const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
   const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
+  const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
   const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
 
   // Actualizar el tiempo cada minuto
@@ -402,11 +403,15 @@ export function OrdenesTrabajoView() {
   };
 
   const handleVerInformePdf = (orden: OrdenTrabajo) => {
-    if (!orden.informe_id) {
-      showError("Sin informe", "Esta orden no tiene un informe asociado.");
+    if (!orden.informe_id && !orden.cotizacion_id) {
+      showError(
+        "Sin documentos",
+        "Esta orden no tiene informe ni cotización asociados."
+      );
       return;
     }
-    setPdfInformeId(orden.informe_id);
+    setPdfInformeId(orden.informe_id || null);
+    setPdfCotizacionId(orden.cotizacion_id || null);
     setPdfOrdenCodigo(orden.orden_codigo || "Sin código");
     setShowInformePdfViewer(true);
   };
@@ -772,14 +777,13 @@ export function OrdenesTrabajoView() {
         ordenTrabajoId={selectedOrdenForInforme?.orden_id}
       />
       {/* PDF Viewer para Informes */}
-      {pdfInformeId && (
+      {(pdfInformeId || pdfCotizacionId) && (
         <PdfViewer
           open={showInformePdfViewer}
           onOpenChange={setShowInformePdfViewer}
-          title={`Informe - Orden ${pdfOrdenCodigo}`}
-          documentType="informe"
-          documentId={pdfInformeId}
-          filename={`informe_orden_${pdfOrdenCodigo}.pdf`}
+          title={`Documentos - Orden ${pdfOrdenCodigo}`}
+          informeId={pdfInformeId || undefined}
+          cotizacionId={pdfCotizacionId || undefined}
         />
       )}
     </div>

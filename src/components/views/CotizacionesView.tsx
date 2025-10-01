@@ -410,10 +410,8 @@ export function CotizacionesView() {
         <PdfViewer
           open={showPdfViewer}
           onOpenChange={setShowPdfViewer}
-          title={`Cotización ${pdfCotizacionCodigo}`}
-          documentType="cotizacion"
-          documentId={pdfCotizacionId}
-          filename={`cotizacion_${pdfCotizacionCodigo}.pdf`}
+          title={`Documentos - Cotización ${pdfCotizacionCodigo}`}
+          cotizacionId={pdfCotizacionId}
         />
       )}
     </div>
