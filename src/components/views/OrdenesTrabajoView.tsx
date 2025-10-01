@@ -11,10 +11,11 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
+import { Search, Plus, Eye, Trash2, Edit, FileText } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
+import { PdfViewer } from "@/components/PdfViewer";
 import { UnificarFiltros } from "./UnificarFiltros";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -161,6 +162,12 @@ export function OrdenesTrabajoView() {
     useState<OrdenTrabajo | null>(null);
   const [editingInforme, setEditingInforme] = useState<any>(null);
   const [now, setNow] = useState(Date.now());
+
+  // Estados para PDF Viewer de Informes y Cotizaciones
+  const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
+  const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
+  const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
+  const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
 
   // Actualizar el tiempo cada minuto
   useEffect(() => {
@@ -395,6 +402,20 @@ export function OrdenesTrabajoView() {
     }
   };
 
+  const handleVerInformePdf = (orden: OrdenTrabajo) => {
+    if (!orden.informe_id && !orden.cotizacion_id) {
+      showError(
+        "Sin documentos",
+        "Esta orden no tiene informe ni cotización asociados."
+      );
+      return;
+    }
+    setPdfInformeId(orden.informe_id || null);
+    setPdfCotizacionId(orden.cotizacion_id || null);
+    setPdfOrdenCodigo(orden.orden_codigo || "Sin código");
+    setShowInformePdfViewer(true);
+  };
+
   const handleCrearInforme = async (orden: OrdenTrabajo) => {
     if (orden.informe_id) {
       showError(
@@ -626,6 +647,19 @@ export function OrdenesTrabajoView() {
                               </Button>
                             )}
 
+                            {/* Botón PDF - visible si hay cotización O informe */}
+                            {(orden.cotizacion_id || orden.informe_id) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleVerInformePdf(orden)}
+                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                title="Ver PDF (Cotización e Informe)"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </Button>
+                            )}
+
                             {/* Botón editar - siempre visible */}
                             <Button
                               variant="outline"
@@ -744,6 +778,16 @@ export function OrdenesTrabajoView() {
         isEditing={!!editingInforme}
         ordenTrabajoId={selectedOrdenForInforme?.orden_id}
       />
+      {/* PDF Viewer para Informes */}
+      {(pdfInformeId || pdfCotizacionId) && (
+        <PdfViewer
+          open={showInformePdfViewer}
+          onOpenChange={setShowInformePdfViewer}
+          title={`Documentos - Orden ${pdfOrdenCodigo}`}
+          informeId={pdfInformeId || undefined}
+          cotizacionId={pdfCotizacionId || undefined}
+        />
+      )}
     </div>
   );
 }

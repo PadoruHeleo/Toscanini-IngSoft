@@ -3,6 +3,7 @@ pub mod database;
 pub mod utils;
 pub mod email;
 pub mod config;
+pub mod pdf_generator;
 
 use database::init_database;
 
@@ -164,7 +165,9 @@ pub fn run() {
             commands::config::load_database_config,
             commands::config::test_database_connection,
             commands::config::delete_database_config,
-            commands::config::get_default_database_config
+            commands::config::get_default_database_config,
+            pdf_generator::generate_cotizacion_pdf_command,
+            pdf_generator::generate_informe_pdf_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
