@@ -116,6 +116,34 @@ impl PdfGenerator {
         lines
     }
 
+    // Función para compilar todos los términos y condiciones en un solo texto
+    fn compile_terminos_text(&self, terminos: &[TerminoPdf]) -> String {
+        if terminos.is_empty() {
+            return "No se han definido términos y condiciones específicos para este documento.".to_string();
+        }
+
+        let mut texto_completo = String::new();
+        
+        for (i, termino) in terminos.iter().enumerate() {
+            // Agregar el nombre del término con numeración (formato mejorado para múltiples páginas)
+            texto_completo.push_str(&format!("{}. {}", i + 1, termino.nombre));
+            
+            // Agregar la descripción si existe
+            if !termino.descripcion.is_empty() {
+                texto_completo.push_str(&format!("- {}", termino.descripcion));
+            }
+            
+            // Agregar salto de línea entre términos para mejor legibilidad en múltiples páginas
+            if i < terminos.len() - 1 {
+                texto_completo.push_str(" || ");
+            }
+        }
+        
+        println!("DEBUG: Texto compilado de {} términos: {}", terminos.len(), &texto_completo[..texto_completo.len().min(100)]);
+        println!("DEBUG: Longitud total del texto: {} caracteres", texto_completo.len());
+        texto_completo
+    }
+
     /// Generar PDF de cotización
     pub async fn generate_cotizacion_pdf(&self, data: CotizacionPdfData) -> Result<Vec<u8>, String> {
         self.generate_basic_pdf(&data).await
@@ -279,51 +307,75 @@ impl PdfGenerator {
         current_layer.set_fill_color(black_color.clone());
         current_layer.use_text(&format!("Técnico: {}", data.tecnico_responsable), 10.0, Mm(25.0), Mm(y_final - 12.0), &font_regular);
 
-        // Estado de garantía con colores
-        let garantia_text = if data.tiene_garantia { "✓ TRABAJO CON GARANTÍA" } else { "⚠ TRABAJO SIN GARANTÍA" };
-        let garantia_color = if data.tiene_garantia { green_color.clone() } else { Color::Rgb(Rgb::new(0.9, 0.3, 0.0, None)) };
-        
-        current_layer.set_fill_color(garantia_color);
-        current_layer.use_text(garantia_text, 11.0, Mm(25.0), Mm(y_final - 25.0), &font_bold);
+        // Estado de garantía - solo mostrar si HAY garantía
+        if data.tiene_garantia {
+            current_layer.set_fill_color(green_color.clone());
+            current_layer.use_text("✓ TRABAJO CON GARANTÍA", 11.0, Mm(25.0), Mm(y_final - 25.0), &font_bold);
+        }
 
         // === TÉRMINOS Y CONDICIONES ===
         let mut y_terminos = y_final - 40.0;
-        if !data.terminos_condiciones.is_empty() {
-            current_layer.set_fill_color(blue_color.clone());
-            current_layer.use_text("TÉRMINOS Y CONDICIONES", 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
-            
-            let separator_terminos = Line {
-                points: vec![
-                    (Point::new(Mm(20.0), Mm(y_terminos - 5.0)), false),
-                    (Point::new(Mm(190.0), Mm(y_terminos - 5.0)), false)
-                ],
-                is_closed: false
-            };
-            current_layer.set_outline_color(blue_color.clone());
-            current_layer.add_line(separator_terminos);
+        println!("DEBUG: Renderizando {} términos en informe PDF", data.terminos_condiciones.len());
+        
+        current_layer.set_fill_color(blue_color.clone());
+        current_layer.use_text(&format!("TÉRMINOS Y CONDICIONES ({})", data.terminos_condiciones.len()), 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
+        
+        let separator_terminos = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(y_terminos - 5.0)), false),
+                (Point::new(Mm(190.0), Mm(y_terminos - 5.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_color(blue_color.clone());
+        current_layer.add_line(separator_terminos);
 
-            current_layer.set_fill_color(black_color.clone());
-            y_terminos -= 15.0;
-            for (i, termino) in data.terminos_condiciones.iter().enumerate() {
-                if y_terminos > 60.0 {
-                    current_layer.use_text(&format!("{}. {}", i + 1, termino.nombre), 9.0, Mm(25.0), Mm(y_terminos), &font_regular);
-                    y_terminos -= 6.0;
-                    if !termino.descripcion.is_empty() && y_terminos > 60.0 {
-                        let desc_lines = self.wrap_text(&termino.descripcion, 85);
-                        for line in desc_lines.iter().take(2) {
-                            current_layer.use_text(&format!("   {}", line), 8.0, Mm(28.0), Mm(y_terminos), &font_regular);
-                            y_terminos -= 5.0;
-                            if y_terminos <= 60.0 { break; }
-                        }
-                    }
-                    y_terminos -= 3.0;
-                    if y_terminos <= 60.0 { break; }
-                }
+        // Compilar TODOS los términos en un solo texto
+        let texto_terminos = self.compile_terminos_text(&data.terminos_condiciones);
+        
+        // Renderizar el texto completo con wrapping y soporte para múltiples páginas
+        current_layer.set_fill_color(black_color.clone());
+        y_terminos -= 15.0;
+        let terminos_lines = self.wrap_text(&texto_terminos, 85);
+        
+        // Variables para el manejo de páginas
+        let mut current_page_id = page1;
+        let mut current_layer_id = layer1;
+        let mut current_y = y_terminos;
+        
+        for (i, line) in terminos_lines.iter().enumerate() {
+            let page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
+            
+            if current_y > 50.0 {
+                page_layer.use_text(line, 8.0, Mm(25.0), Mm(current_y), &font_regular);
+                current_y -= 5.0;
+            } else {
+                // Crear nueva página para continuar con los términos
+                println!("DEBUG: Creando nueva página para términos restantes (línea {})", i + 1);
+                
+                let (new_page, new_layer) = doc.add_page(Mm(210.0), Mm(297.0), "Términos - Página 2");
+                current_page_id = new_page;
+                current_layer_id = new_layer;
+                current_y = 280.0; // Empezar desde arriba de la nueva página
+                
+                let new_page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
+                
+                // Header en la nueva página
+                new_page_layer.set_fill_color(blue_color.clone());
+                new_page_layer.use_text("TOSCANINI - Términos y Condiciones (Continuación)", 12.0, Mm(20.0), Mm(current_y), &font_bold);
+                current_y -= 20.0;
+                
+                // Continuar renderizando
+                new_page_layer.set_fill_color(black_color.clone());
+                new_page_layer.use_text(line, 8.0, Mm(25.0), Mm(current_y), &font_regular);
+                current_y -= 5.0;
             }
         }
 
         // === FOOTER PROFESIONAL ===
-        current_layer.set_fill_color(gray_color.clone());
+        // Usar la primera página para el footer (o la última página usada)
+        let footer_layer = doc.get_page(page1).get_layer(layer1);
+        footer_layer.set_fill_color(gray_color.clone());
         let footer_line = Line {
             points: vec![
                 (Point::new(Mm(20.0), Mm(40.0)), false),
@@ -331,12 +383,12 @@ impl PdfGenerator {
             ],
             is_closed: false
         };
-        current_layer.set_outline_thickness(1.0);
-        current_layer.set_outline_color(gray_color.clone());
-        current_layer.add_line(footer_line);
+        footer_layer.set_outline_thickness(1.0);
+        footer_layer.set_outline_color(gray_color.clone());
+        footer_layer.add_line(footer_line);
         
-        current_layer.use_text("TOSCANINI - Servicio Técnico Especializado", 8.0, Mm(20.0), Mm(35.0), &font_regular);
-        current_layer.use_text("Este documento certifica el trabajo realizado y garantiza la calidad del servicio.", 8.0, Mm(20.0), Mm(30.0), &font_regular);
+        footer_layer.use_text("TOSCANINI - Servicio Técnico Especializado", 8.0, Mm(20.0), Mm(35.0), &font_regular);
+        footer_layer.use_text("Este documento certifica el trabajo realizado y garantiza la calidad del servicio.", 8.0, Mm(20.0), Mm(30.0), &font_regular);
 
         // Generar PDF
         doc.save_to_bytes()
@@ -504,42 +556,67 @@ impl PdfGenerator {
 
         // === TÉRMINOS Y CONDICIONES ===
         let mut y_terminos = y_costos - 15.0;
-        if !data.terminos_condiciones.is_empty() {
-            current_layer.set_fill_color(blue_color.clone());
-            current_layer.use_text("TÉRMINOS Y CONDICIONES", 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
-            
-            let separator_terminos = Line {
-                points: vec![
-                    (Point::new(Mm(20.0), Mm(y_terminos - 5.0)), false),
-                    (Point::new(Mm(190.0), Mm(y_terminos - 5.0)), false)
-                ],
-                is_closed: false
-            };
-            current_layer.set_outline_color(blue_color.clone());
-            current_layer.add_line(separator_terminos);
+        println!("DEBUG: Renderizando {} términos en cotización PDF", data.terminos_condiciones.len());
+        
+        current_layer.set_fill_color(blue_color.clone());
+        current_layer.use_text(&format!("TÉRMINOS Y CONDICIONES ({})", data.terminos_condiciones.len()), 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
+        
+        let separator_terminos = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(y_terminos - 5.0)), false),
+                (Point::new(Mm(190.0), Mm(y_terminos - 5.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_color(blue_color.clone());
+        current_layer.add_line(separator_terminos);
 
-            current_layer.set_fill_color(black_color.clone());
-            y_terminos -= 15.0;
-            for (i, termino) in data.terminos_condiciones.iter().enumerate() {
-                if y_terminos > 60.0 {
-                    current_layer.use_text(&format!("{}. {}", i + 1, termino.nombre), 9.0, Mm(25.0), Mm(y_terminos), &font_regular);
-                    y_terminos -= 6.0;
-                    if !termino.descripcion.is_empty() && y_terminos > 60.0 {
-                        let desc_lines = self.wrap_text(&termino.descripcion, 85);
-                        for line in desc_lines.iter().take(2) {
-                            current_layer.use_text(&format!("   {}", line), 8.0, Mm(28.0), Mm(y_terminos), &font_regular);
-                            y_terminos -= 5.0;
-                            if y_terminos <= 60.0 { break; }
-                        }
-                    }
-                    y_terminos -= 3.0;
-                    if y_terminos <= 60.0 { break; }
-                }
+        // Compilar TODOS los términos en un solo texto
+        let texto_terminos = self.compile_terminos_text(&data.terminos_condiciones);
+        
+        // Renderizar el texto completo con wrapping y soporte para múltiples páginas
+        current_layer.set_fill_color(black_color.clone());
+        y_terminos -= 15.0;
+        let terminos_lines = self.wrap_text(&texto_terminos, 85);
+        
+        // Variables para el manejo de páginas
+        let mut current_page_id = page1;
+        let mut current_layer_id = layer1;
+        let mut current_y = y_terminos;
+        
+        for (i, line) in terminos_lines.iter().enumerate() {
+            let page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
+            
+            if current_y > 50.0 {
+                page_layer.use_text(line, 8.0, Mm(25.0), Mm(current_y), &font_regular);
+                current_y -= 5.0;
+            } else {
+                // Crear nueva página para continuar con los términos
+                println!("DEBUG: Creando nueva página para términos restantes (línea {})", i + 1);
+                
+                let (new_page, new_layer) = doc.add_page(Mm(210.0), Mm(297.0), "Términos - Página 2");
+                current_page_id = new_page;
+                current_layer_id = new_layer;
+                current_y = 280.0; // Empezar desde arriba de la nueva página
+                
+                let new_page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
+                
+                // Header en la nueva página
+                new_page_layer.set_fill_color(blue_color.clone());
+                new_page_layer.use_text("TOSCANINI - Términos y Condiciones (Continuación)", 12.0, Mm(20.0), Mm(current_y), &font_bold);
+                current_y -= 20.0;
+                
+                // Continuar renderizando
+                new_page_layer.set_fill_color(black_color.clone());
+                new_page_layer.use_text(line, 8.0, Mm(25.0), Mm(current_y), &font_regular);
+                current_y -= 5.0;
             }
         }
 
         // === FOOTER PROFESIONAL ===
-        current_layer.set_fill_color(gray_color.clone());
+        // Usar la primera página para el footer (o la última página usada)
+        let footer_layer = doc.get_page(page1).get_layer(layer1);
+        footer_layer.set_fill_color(gray_color.clone());
         let footer_line = Line {
             points: vec![
                 (Point::new(Mm(20.0), Mm(40.0)), false),
@@ -547,12 +624,12 @@ impl PdfGenerator {
             ],
             is_closed: false
         };
-        current_layer.set_outline_thickness(1.0);
-        current_layer.set_outline_color(gray_color.clone());
-        current_layer.add_line(footer_line);
+        footer_layer.set_outline_thickness(1.0);
+        footer_layer.set_outline_color(gray_color.clone());
+        footer_layer.add_line(footer_line);
         
-        current_layer.use_text("TOSCANINI - Servicio Técnico Especializado", 8.0, Mm(20.0), Mm(35.0), &font_regular);
-        current_layer.use_text("Esta cotización tiene validez por 30 días a partir de la fecha de emisión.", 8.0, Mm(20.0), Mm(30.0), &font_regular);
+        footer_layer.use_text("TOSCANINI - Servicio Técnico Especializado", 8.0, Mm(20.0), Mm(35.0), &font_regular);
+        footer_layer.use_text("Esta cotización tiene validez por 30 días a partir de la fecha de emisión.", 8.0, Mm(20.0), Mm(30.0), &font_regular);
 
         // Generar PDF
         doc.save_to_bytes()
@@ -613,6 +690,8 @@ pub async fn generate_cotizacion_pdf_command(
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Error obteniendo términos y condiciones: {}", e))?;
+    
+    println!("DEBUG: Encontrados {} términos para cotización {}", terminos_rows.len(), cotizacion_id);
 
     let piezas: Vec<PiezaPdf> = piezas_rows.iter().map(|row| {
         let precio = row.pieza_precio.unwrap_or(0);
@@ -702,12 +781,15 @@ pub async fn generate_informe_pdf_command(
         "SELECT tc.termino_nombre, tc.termino_descripcion
          FROM TERMINOS_INFORME ti
          INNER JOIN TERMINOS_CONDICIONES tc ON ti.termino_id = tc.termino_id
-         WHERE ti.informe_id = ?",
+         WHERE ti.informe_id = ? AND ti.aplicado = TRUE AND tc.is_active = TRUE
+         ORDER BY tc.termino_nombre",
         informe_id
     )
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Error obteniendo términos y condiciones del informe: {}", e))?;
+    
+    println!("DEBUG: Encontrados {} términos para informe {}", terminos_rows.len(), informe_id);
 
     // Obtener piezas del informe
     let piezas_rows = sqlx::query!(
