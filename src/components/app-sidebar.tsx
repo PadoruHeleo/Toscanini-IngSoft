@@ -88,8 +88,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Filtrar elementos según permisos
   const navMain = baseNavItems.filter((item) => {
-    if (!item.requiresPermission) return true; // Elementos públicos siempre visibles
-    return item.hasPermission; // Elementos con restricción solo si tiene permiso
+    // Si tiene hasPermission definido, usarlo para determinar visibilidad
+    if (item.hasPermission !== undefined) return item.hasPermission;
+    // Si no tiene hasPermission pero requiere permisos, no mostrar
+    if (item.requiresPermission) return false;
+    // Elementos públicos sin restricciones siempre visibles
+    return true;
   });
 
   const data = {
