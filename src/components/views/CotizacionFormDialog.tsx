@@ -136,6 +136,16 @@ export default function CotizacionFormDialog({
     informe: "",
   });
 
+  // Función para determinar si se pueden modificar términos según el estado
+  const canModifyTerminos = () => {
+    if (!ordenTrabajoId || !estadoOrden) return true; // Si no hay orden, permitir modificación
+
+    // Estados donde SÍ se pueden modificar términos de cotización
+    const estadosPermitidos = ["recibido", "cotizacion_rechazada"];
+
+    return estadosPermitidos.includes(estadoOrden);
+  };
+
   const [errors, setErrors] = useState<FormErrors>({});
 
   // Calcular costo total automáticamente
@@ -450,6 +460,15 @@ export default function CotizacionFormDialog({
       selectedTerminos,
       selectedTerminosLength: selectedTerminos.length,
     });
+
+    // Verificar si se pueden modificar términos según el estado
+    if (!canModifyTerminos()) {
+      showError(
+        "Modificación no permitida",
+        `No se pueden modificar los términos y condiciones cuando la orden está en estado "${estadoOrden}". Solo se permite modificar en estados iniciales (recibido, cotización rechazada).`
+      );
+      return;
+    }
 
     // Mostrar detalles de los términos seleccionados
     console.log(
@@ -1221,8 +1240,13 @@ export default function CotizacionFormDialog({
             <TabsContent value="terminos" className="space-y-6 mt-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">
+                  <h3 className="text-lg font-semibold flex items-center">
                     Términos y Condiciones de la Cotización
+                    {!canModifyTerminos() && (
+                      <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full">
+                        🔒 Bloqueado
+                      </span>
+                    )}
                   </h3>
 
                   {/* Botón prominente para aplicar términos inmediatamente */}
@@ -1232,9 +1256,13 @@ export default function CotizacionFormDialog({
                       <Button
                         type="button"
                         onClick={handleActualizarTerminos}
-                        disabled={loadingTerminos}
+                        disabled={loadingTerminos || !canModifyTerminos()}
                         size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className={`font-medium ${
+                          !canModifyTerminos()
+                            ? "bg-gray-400 cursor-not-allowed text-gray-700"
+                            : "bg-blue-600 hover:bg-blue-700 text-white"
+                        }`}
                       >
                         {loadingTerminos ? (
                           <>
@@ -1250,6 +1278,21 @@ export default function CotizacionFormDialog({
                       </Button>
                     )}
                 </div>
+
+                {!canModifyTerminos() && (
+                  <div className="mb-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                    <div className="flex">
+                      <div className="ml-3">
+                        <p className="text-sm text-yellow-700">
+                          <strong>⚠️ Modificación restringida:</strong> No se
+                          pueden modificar los términos y condiciones cuando la
+                          orden está en estado "{estadoOrden}". Solo se permite
+                          en estados iniciales.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {loadingTerminos ? (
                   <div className="text-center py-4">
@@ -1337,6 +1380,7 @@ export default function CotizacionFormDialog({
                                           checked={
                                             isSelected || termino.is_default
                                           }
+                                          disabled={!canModifyTerminos()}
                                           onChange={(e) => {
                                             // Prevenir desseleccionar términos por defecto
                                             if (

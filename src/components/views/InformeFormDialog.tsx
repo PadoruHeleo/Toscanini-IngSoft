@@ -119,12 +119,23 @@ export default function InformeFormDialog({
   const [loadingTerminos, setLoadingTerminos] = useState(false);
   const [selectedTerminos, setSelectedTerminos] = useState<number[]>([]);
   const [aplicadosTerminos, setAplicadosTerminos] = useState<number[]>([]); // Términos realmente guardados en BD
+  const [estadoOrden, setEstadoOrden] = useState<string>("");
   const [formData, setFormData] = useState<FormData>({
     diagnostico: "",
     recomendaciones: "",
     solucion_aplicada: "",
     tecnico_responsable: "",
   });
+
+  // Función para determinar si se pueden modificar términos según el estado
+  const canModifyTerminos = () => {
+    if (!ordenTrabajoId || !estadoOrden) return true; // Si no hay orden, permitir modificación
+
+    // Estados donde NO se pueden modificar términos de informe
+    const estadosBloqueados = ["espera_de_retiro", "entregado"];
+
+    return !estadosBloqueados.includes(estadoOrden);
+  };
 
   const [errors, setErrors] = useState<FormErrors>({});
   // Estado para el diálogo de confirmación de eliminación
@@ -248,6 +259,19 @@ export default function InformeFormDialog({
       } else if (!isEditing && ordenTrabajoId) {
         // Cargar diagnóstico y piezas de la cotización asociada a la orden de trabajo
         loadDataFromOrdenTrabajo();
+      }
+
+      // Cargar estado de la orden si existe
+      if (ordenTrabajoId) {
+        invoke<{ estado: string }>("get_orden_trabajo_by_id", {
+          ordenId: ordenTrabajoId,
+        })
+          .then((orden) => {
+            setEstadoOrden(orden.estado);
+          })
+          .catch((err) => {
+            console.error("Error obteniendo estado de orden:", err);
+          });
       }
     }
   }, [open]);
@@ -514,6 +538,15 @@ export default function InformeFormDialog({
       selectedTerminos,
       selectedTerminosLength: selectedTerminos.length,
     });
+
+    // Verificar si se pueden modificar términos según el estado
+    if (!canModifyTerminos()) {
+      showError(
+        "Modificación no permitida",
+        `No se pueden modificar los términos y condiciones cuando la orden está en estado "${estadoOrden}". Los términos no se pueden modificar cuando el equipo está listo para entrega o ya fue entregado.`
+      );
+      return;
+    }
 
     if (!informe?.informe_id) {
       showError(
@@ -1226,8 +1259,13 @@ export default function InformeFormDialog({
             <TabsContent value="terminos" className="space-y-6 mt-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">
+                  <h3 className="text-lg font-semibold flex items-center">
                     Términos y Condiciones del Informe
+                    {!canModifyTerminos() && (
+                      <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full">
+                        🔒 Bloqueado
+                      </span>
+                    )}
                   </h3>
 
                   {/* Botón prominente para aplicar términos inmediatamente */}
@@ -1237,9 +1275,13 @@ export default function InformeFormDialog({
                       <Button
                         type="button"
                         onClick={handleActualizarTerminos}
-                        disabled={loadingTerminos}
+                        disabled={loadingTerminos || !canModifyTerminos()}
                         size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className={`font-medium ${
+                          !canModifyTerminos()
+                            ? "bg-gray-400 cursor-not-allowed text-gray-700"
+                            : "bg-blue-600 hover:bg-blue-700 text-white"
+                        }`}
                       >
                         {loadingTerminos ? (
                           <>
@@ -1255,6 +1297,22 @@ export default function InformeFormDialog({
                       </Button>
                     )}
                 </div>
+
+                {!canModifyTerminos() && (
+                  <div className="mb-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                    <div className="flex">
+                      <div className="ml-3">
+                        <p className="text-sm text-yellow-700">
+                          <strong>⚠️ Modificación restringida:</strong> No se
+                          pueden modificar los términos y condiciones cuando la
+                          orden está en estado "{estadoOrden}". Los términos no
+                          se pueden modificar cuando el equipo está listo para
+                          entrega o ya fue entregado.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {loadingTerminos ? (
                   <div className="text-center py-4">
@@ -1342,6 +1400,7 @@ export default function InformeFormDialog({
                                           checked={
                                             isSelected || termino.is_default
                                           }
+                                          disabled={!canModifyTerminos()}
                                           onChange={(e) => {
                                             // Prevenir desseleccionar términos por defecto
                                             if (
