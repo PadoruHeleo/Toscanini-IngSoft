@@ -36,4 +36,5 @@ keyring = "2.3"
 base64 = "0.22"
 sha2 = "0.10"
 dirs = "5.0"
+printpdf = "0.7"
 

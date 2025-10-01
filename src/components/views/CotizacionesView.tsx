@@ -19,8 +19,10 @@ import {
   Edit,
   CheckCircle,
   XCircle,
+  FileText,
 } from "lucide-react";
 import CotizacionFormDialog from "./CotizacionFormDialog";
+import { PdfViewer } from "@/components/PdfViewer";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -76,6 +78,11 @@ export function CotizacionesView() {
     null
   );
 
+  // Estados para PDF Viewer
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
+  const [pdfCotizacionCodigo, setPdfCotizacionCodigo] = useState<string>("");
+
   const loadCotizaciones = async () => {
     try {
       setLoading(true);
@@ -110,6 +117,12 @@ export function CotizacionesView() {
 
   const handleEditCotizacion = (cotizacion: Cotizacion) => {
     setEditingCotizacion(cotizacion);
+  };
+
+  const handleVerPdf = (cotizacion: CotizacionDetallada) => {
+    setPdfCotizacionId(cotizacion.cotizacion_id);
+    setPdfCotizacionCodigo(cotizacion.cotizacion_codigo || "Sin código");
+    setShowPdfViewer(true);
   };
 
   const handleDeleteCotizacion = async (cotizacion: Cotizacion) => {
@@ -291,6 +304,17 @@ export function CotizacionesView() {
                   </TableCell>{" "}
                   <TableCell>
                     <div className="flex gap-1 justify-end">
+                      {/* Ver PDF */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleVerPdf(cotizacion)}
+                        className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                        title="Ver PDF"
+                      >
+                        <FileText className="h-3 w-3" />
+                      </Button>
+
                       {/* Ver detalles */}
                       <Button
                         variant="outline"
@@ -378,6 +402,18 @@ export function CotizacionesView() {
             console.log(`Cotización ${cotizacionId} enviada al cliente`);
             loadCotizaciones(); // Recargar la lista para ver el cambio de estado
           }}
+        />
+      )}
+
+      {/* PDF Viewer */}
+      {pdfCotizacionId && (
+        <PdfViewer
+          open={showPdfViewer}
+          onOpenChange={setShowPdfViewer}
+          title={`Cotización ${pdfCotizacionCodigo}`}
+          documentType="cotizacion"
+          documentId={pdfCotizacionId}
+          filename={`cotizacion_${pdfCotizacionCodigo}.pdf`}
         />
       )}
     </div>

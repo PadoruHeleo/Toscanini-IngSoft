@@ -11,10 +11,11 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
+import { Search, Plus, Eye, Trash2, Edit, FileText } from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
+import { PdfViewer } from "@/components/PdfViewer";
 import { UnificarFiltros } from "./UnificarFiltros";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -161,6 +162,11 @@ export function OrdenesTrabajoView() {
     useState<OrdenTrabajo | null>(null);
   const [editingInforme, setEditingInforme] = useState<any>(null);
   const [now, setNow] = useState(Date.now());
+
+  // Estados para PDF Viewer de Informes
+  const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
+  const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
+  const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
 
   // Actualizar el tiempo cada minuto
   useEffect(() => {
@@ -395,6 +401,16 @@ export function OrdenesTrabajoView() {
     }
   };
 
+  const handleVerInformePdf = (orden: OrdenTrabajo) => {
+    if (!orden.informe_id) {
+      showError("Sin informe", "Esta orden no tiene un informe asociado.");
+      return;
+    }
+    setPdfInformeId(orden.informe_id);
+    setPdfOrdenCodigo(orden.orden_codigo || "Sin código");
+    setShowInformePdfViewer(true);
+  };
+
   const handleCrearInforme = async (orden: OrdenTrabajo) => {
     if (orden.informe_id) {
       showError(
@@ -614,16 +630,27 @@ export function OrdenesTrabajoView() {
                             )}
 
                             {actions.showViewInforme && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleVerInforme(orden)}
-                                className="text-blue-600 hover:text-blue-700"
-                                title="Ver informe existente"
-                              >
-                                <Eye className="h-3 w-3" />
-                                Ver Informe
-                              </Button>
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleVerInformePdf(orden)}
+                                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                  title="Ver PDF del informe"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleVerInforme(orden)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                  title="Ver informe existente"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  Ver Informe
+                                </Button>
+                              </>
                             )}
 
                             {/* Botón editar - siempre visible */}
@@ -744,6 +771,17 @@ export function OrdenesTrabajoView() {
         isEditing={!!editingInforme}
         ordenTrabajoId={selectedOrdenForInforme?.orden_id}
       />
+      {/* PDF Viewer para Informes */}
+      {pdfInformeId && (
+        <PdfViewer
+          open={showInformePdfViewer}
+          onOpenChange={setShowInformePdfViewer}
+          title={`Informe - Orden ${pdfOrdenCodigo}`}
+          documentType="informe"
+          documentId={pdfInformeId}
+          filename={`informe_orden_${pdfOrdenCodigo}.pdf`}
+        />
+      )}
     </div>
   );
 }
