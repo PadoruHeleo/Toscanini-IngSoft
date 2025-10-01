@@ -635,27 +635,29 @@ export function OrdenesTrabajoView() {
                             )}
 
                             {actions.showViewInforme && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleVerInformePdf(orden)}
-                                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                  title="Ver PDF del informe"
-                                >
-                                  <FileText className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleVerInforme(orden)}
-                                  className="text-blue-600 hover:text-blue-700"
-                                  title="Ver informe existente"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                  Ver Informe
-                                </Button>
-                              </>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleVerInforme(orden)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Ver informe existente"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Ver Informe
+                              </Button>
+                            )}
+
+                            {/* Botón PDF - visible si hay cotización O informe */}
+                            {(orden.cotizacion_id || orden.informe_id) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleVerInformePdf(orden)}
+                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                title="Ver PDF (Cotización e Informe)"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </Button>
                             )}
 
                             {/* Botón editar - siempre visible */}

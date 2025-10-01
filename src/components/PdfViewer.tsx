@@ -40,7 +40,7 @@ export function PdfViewer({
   const [informePdfUrl, setInformePdfUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
   const [activeTab, setActiveTab] = useState(
-    cotizacionId ? "cotizacion" : "informe"
+    cotizacionId ? "cotizacion" : informeId ? "informe" : "cotizacion"
   );
 
   const { success, error: showError } = useToastContext();
@@ -388,74 +388,86 @@ export function PdfViewer({
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col"
         >
-          {cotizacionId && informeId && (
-            <TabsList className="grid w-full grid-cols-2 mb-2">
-              <TabsTrigger
-                value="cotizacion"
-                className="flex items-center gap-2 px-6 py-2"
-              >
-                <FileText className="h-4 w-4" />
-                Cotización
-              </TabsTrigger>
-              <TabsTrigger
-                value="informe"
-                className="flex items-center gap-2 px-6 py-2"
-              >
-                <FileText className="h-4 w-4" />
-                Informe Técnico
-              </TabsTrigger>
-            </TabsList>
-          )}
-
-          {cotizacionId && !informeId && (
-            <TabsList className="grid w-full grid-cols-1">
-              <TabsTrigger
-                value="cotizacion"
-                className="flex items-center gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Cotización
-              </TabsTrigger>
-            </TabsList>
-          )}
-
-          {!cotizacionId && informeId && (
-            <TabsList className="grid w-full grid-cols-1">
-              <TabsTrigger value="informe" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Informe Técnico
-              </TabsTrigger>
-            </TabsList>
-          )}
-
-          {cotizacionId && (
-            <TabsContent
+          {/* Mostrar pestañas siempre - cotización e informe */}
+          <TabsList className="grid w-full grid-cols-2 mb-2">
+            <TabsTrigger
               value="cotizacion"
-              className="flex-1 flex flex-col mt-4"
+              className="flex items-center gap-2 px-6 py-2"
             >
-              {renderPdfSection(
+              <FileText className="h-4 w-4" />
+              Cotización {!cotizacionId && "(No disponible)"}
+            </TabsTrigger>
+            <TabsTrigger
+              value="informe"
+              className="flex items-center gap-2 px-6 py-2"
+            >
+              <FileText className="h-4 w-4" />
+              Informe {!informeId && "(No disponible)"}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Pestaña de Cotización */}
+          <TabsContent
+            value="cotizacion"
+            className="flex-1 flex flex-col mt-4"
+          >
+            {cotizacionId ? (
+              renderPdfSection(
                 "cotizacion",
                 cotizacionLoading,
                 cotizacionError,
                 cotizacionPdfUrl,
                 cotizacionPdfData,
                 generateCotizacionPdf
-              )}
-            </TabsContent>
-          )}
+              )
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                    <div className="text-gray-400 mb-4">
+                      <FileText className="h-12 w-12 mx-auto opacity-50" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">
+                      Cotización no disponible
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      Aún no se ha creado una cotización para esta orden de trabajo.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
 
-          {informeId && (
-            <TabsContent value="informe" className="flex-1 flex flex-col mt-4">
-              {renderPdfSection(
+          {/* Pestaña de Informe */}
+          <TabsContent value="informe" className="flex-1 flex flex-col mt-4">
+            {informeId ? (
+              renderPdfSection(
                 "informe",
                 informeLoading,
                 informeError,
                 informePdfUrl,
                 informePdfData,
                 generateInformePdf
-              )}
-            </TabsContent>
-          )}
+              )
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                    <div className="text-gray-400 mb-4">
+                      <FileText className="h-12 w-12 mx-auto opacity-50" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">
+                      Informe técnico no disponible
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      Aún no se ha creado un informe técnico para esta orden de trabajo.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
