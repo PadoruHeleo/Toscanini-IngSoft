@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Dialog,
@@ -197,8 +197,8 @@ export default function CotizacionFormDialog({
       })),
     });
 
+    // NUEVA LÓGICA: Aplicar términos por defecto SIEMPRE que no haya términos seleccionados
     if (
-      !isEditing &&
       terminosCondiciones.length > 0 &&
       selectedTerminos.length === 0 &&
       open
@@ -206,10 +206,9 @@ export default function CotizacionFormDialog({
       const terminosDefecto = terminosCondiciones
         .filter((termino) => termino.is_default)
         .map((termino) => termino.termino_id);
-      console.log(
-        "✅ Condiciones cumplidas. Términos por defecto encontrados:",
-        terminosDefecto
-      );
+
+      console.log("✅ Términos por defecto encontrados:", terminosDefecto);
+
       if (terminosDefecto.length > 0) {
         console.log(
           "🎯 Aplicando términos por defecto automáticamente:",
@@ -220,11 +219,13 @@ export default function CotizacionFormDialog({
         console.log("⚠️ No se encontraron términos marcados como por defecto");
       }
     } else {
-      console.log(
-        "❌ No se aplican términos por defecto porque no se cumplieron las condiciones"
-      );
+      console.log("❌ No se aplican términos por defecto:", {
+        hayTerminos: terminosCondiciones.length > 0,
+        noHaySeleccionados: selectedTerminos.length === 0,
+        modalAbierto: open,
+      });
     }
-  }, [terminosCondiciones, selectedTerminos, isEditing, open]);
+  }, [terminosCondiciones, selectedTerminos, open]);
 
   // Inicializar formulario cuando se pasa una cotización para editar
   useEffect(() => {
@@ -306,7 +307,20 @@ export default function CotizacionFormDialog({
       const terminos = await invoke<any[]>("get_terminos_condiciones_activos");
       setTerminosCondiciones(terminos);
 
-      // Los términos por defecto se aplicarán en useEffect separado
+      // Aplicar términos por defecto inmediatamente al cargar (solo si no hay términos seleccionados)
+      if (selectedTerminos.length === 0) {
+        const terminosDefecto = terminos
+          .filter((termino) => termino.is_default)
+          .map((termino) => termino.termino_id);
+
+        if (terminosDefecto.length > 0) {
+          console.log(
+            "🎯 Aplicando términos por defecto al cargar:",
+            terminosDefecto
+          );
+          setSelectedTerminos(terminosDefecto);
+        }
+      }
     } catch (error) {
       console.error("Error cargando términos y condiciones:", error);
       showError("Error", "No se pudieron cargar los términos y condiciones.");
@@ -418,6 +432,72 @@ export default function CotizacionFormDialog({
       )
     );
   };
+
+  const handleActualizarTerminos = async () => {
+    console.log("🔍 Iniciando actualización de términos:", {
+      cotizacionId: cotizacion?.cotizacion_id,
+      selectedTerminos,
+      selectedTerminosLength: selectedTerminos.length,
+    });
+
+    if (!cotizacion?.cotizacion_id) {
+      showError(
+        "Error",
+        "No se puede actualizar términos sin una cotización guardada"
+      );
+      return;
+    }
+
+    if (selectedTerminos.length === 0) {
+      showError("Error", "No hay términos seleccionados para aplicar");
+      return;
+    }
+
+    try {
+      setLoadingTerminos(true);
+
+      const terminoRequests = selectedTerminos.map((id) => ({
+        termino_id: id,
+        aplicado: true,
+      }));
+
+      console.log("📡 Llamando comando apply_terminos_to_cotizacion con:", {
+        cotizacionId: cotizacion.cotizacion_id,
+        terminos: terminoRequests,
+        appliedBy: user?.usuario_id || 1,
+      });
+
+      // Aplicar términos seleccionados a la cotización
+      await invoke("apply_terminos_to_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        terminos: terminoRequests,
+        appliedBy: user?.usuario_id || 1,
+      });
+
+      console.log("✅ Comando ejecutado exitosamente");
+
+      success(
+        "Términos actualizados",
+        `Se han aplicado ${selectedTerminos.length} términos y condiciones a la cotización`
+      );
+
+      // Recargar términos para mostrar el estado actualizado
+      await loadTerminosCotizacion();
+    } catch (error) {
+      console.error("❌ Error detallado actualizando términos:", {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      showError(
+        "Error",
+        "No se pudieron actualizar los términos y condiciones"
+      );
+    } finally {
+      setLoadingTerminos(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1133,86 +1213,139 @@ export default function CotizacionFormDialog({
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {terminosCondiciones.map((termino) => {
-                              const isSelected = selectedTerminos.includes(
-                                termino.termino_id
-                              );
-                              const isDefault = termino.is_default;
-                              return (
-                                <TableRow
-                                  key={termino.termino_id}
-                                  className={`h-24 ${
-                                    isSelected
-                                      ? "bg-blue-50 border-blue-200"
-                                      : ""
-                                  } ${
-                                    isDefault
-                                      ? "border-l-4 border-l-green-500"
-                                      : ""
-                                  }`}
-                                >
-                                  <TableCell className="align-top">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setSelectedTerminos((prev) => [
-                                            ...prev,
-                                            termino.termino_id,
-                                          ]);
-                                        } else {
-                                          setSelectedTerminos((prev) =>
-                                            prev.filter(
-                                              (id) => id !== termino.termino_id
-                                            )
-                                          );
-                                        }
-                                      }}
-                                      className="rounded w-4 h-4"
-                                    />
-                                  </TableCell>
-                                  <TableCell className="align-top">
-                                    <div className="space-y-1">
-                                      <p className="font-semibold text-sm">
-                                        {termino.termino_nombre ||
-                                          "Término General"}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        Tipo:{" "}
-                                        {termino.tipo_referencia || "General"}
-                                      </p>
-                                      {isDefault && (
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                          ✓ Por defecto
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="align-top">
-                                    <div className="max-w-lg max-h-20 overflow-y-auto border rounded-sm bg-gray-50 p-2 scrollbar-thin scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400">
-                                      <p className="text-sm text-gray-700 leading-relaxed">
-                                        {termino.termino_descripcion ||
-                                          "Sin descripción disponible"}
-                                      </p>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="align-top">
-                                    <div className="text-center">
-                                      {isSelected ? (
-                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                          ✓ Aplicado
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                          No aplicado
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
+                            {terminosCondiciones
+                              .sort((a, b) => {
+                                // Ordenar: términos normales primero, por defecto al final
+                                if (a.is_default && !b.is_default) return 1;
+                                if (!a.is_default && b.is_default) return -1;
+                                // Si ambos son del mismo tipo, mantener orden alfabético por nombre
+                                return (a.termino_nombre || "").localeCompare(
+                                  b.termino_nombre || ""
+                                );
+                              })
+                              .map((termino, index, sortedArray) => {
+                                const isSelected = selectedTerminos.includes(
+                                  termino.termino_id
+                                );
+                                const isDefault = termino.is_default;
+
+                                // Detectar si es el primer término por defecto para agregar separador
+                                const previousTermino = sortedArray[index - 1];
+                                const isFirstDefault =
+                                  isDefault &&
+                                  (!previousTermino ||
+                                    !previousTermino.is_default);
+
+                                return (
+                                  <React.Fragment key={termino.termino_id}>
+                                    {/* Fila separadora antes de los términos por defecto */}
+                                    {isFirstDefault && (
+                                      <TableRow className="bg-green-50">
+                                        <TableCell
+                                          colSpan={4}
+                                          className="text-center py-2"
+                                        >
+                                          <div className="flex items-center justify-center space-x-2">
+                                            <div className="h-px bg-green-300 flex-1"></div>
+                                            <span className="text-sm font-medium text-green-700 px-3">
+                                              Términos por Defecto
+                                            </span>
+                                            <div className="h-px bg-green-300 flex-1"></div>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                    <TableRow
+                                      key={termino.termino_id}
+                                      className={`h-24 ${
+                                        isSelected
+                                          ? "bg-blue-50 border-blue-200"
+                                          : ""
+                                      } ${
+                                        isDefault
+                                          ? "border-l-4 border-l-green-500"
+                                          : ""
+                                      }`}
+                                    >
+                                      <TableCell className="align-top">
+                                        <input
+                                          type="checkbox"
+                                          checked={
+                                            isSelected || termino.is_default
+                                          }
+                                          onChange={(e) => {
+                                            // Prevenir desseleccionar términos por defecto
+                                            if (
+                                              !e.target.checked &&
+                                              termino.is_default
+                                            ) {
+                                              showError(
+                                                "Término requerido",
+                                                `El término "${termino.termino_nombre}" es obligatorio y no puede ser deseleccionado`
+                                              );
+                                              return;
+                                            }
+
+                                            if (e.target.checked) {
+                                              setSelectedTerminos((prev) => [
+                                                ...prev,
+                                                termino.termino_id,
+                                              ]);
+                                            } else {
+                                              setSelectedTerminos((prev) =>
+                                                prev.filter(
+                                                  (id) =>
+                                                    id !== termino.termino_id
+                                                )
+                                              );
+                                            }
+                                          }}
+                                          className="rounded w-4 h-4"
+                                        />
+                                      </TableCell>
+                                      <TableCell className="align-top">
+                                        <div className="space-y-1">
+                                          <p className="font-semibold text-sm">
+                                            {termino.termino_nombre ||
+                                              "Término General"}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            Tipo:{" "}
+                                            {termino.tipo_referencia ||
+                                              "General"}
+                                          </p>
+                                          {isDefault && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                              ✓ Por defecto
+                                            </span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="align-top">
+                                        <div className="max-w-lg max-h-20 overflow-y-auto border rounded-sm bg-gray-50 p-2 scrollbar-thin scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400">
+                                          <p className="text-sm text-gray-700 leading-relaxed">
+                                            {termino.termino_descripcion ||
+                                              "Sin descripción disponible"}
+                                          </p>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="align-top">
+                                        <div className="text-center">
+                                          {isSelected ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                              ✓ Aplicado
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                              No aplicado
+                                            </span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  </React.Fragment>
+                                );
+                              })}
                           </TableBody>
                         </Table>
                       </div>
@@ -1223,16 +1356,42 @@ export default function CotizacionFormDialog({
                         <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                           <div className="flex items-start space-x-2">
                             <span className="text-yellow-500 text-lg">⚠️</span>
-                            <div>
+                            <div className="flex-1">
                               <p className="text-sm text-yellow-800 font-medium">
                                 No hay términos y condiciones seleccionados
                               </p>
                               <p className="text-xs text-yellow-700 mt-1">
                                 Se recomienda seleccionar al menos los términos
-                                por defecto para la cotización. Puedes hacer
-                                clic en los checkboxes de la tabla superior para
-                                seleccionarlos.
+                                por defecto para la cotización.
                               </p>
+
+                              {/* Botón para aplicar términos por defecto manualmente */}
+                              <div className="mt-3">
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    const terminosDefecto = terminosCondiciones
+                                      .filter((termino) => termino.is_default)
+                                      .map((termino) => termino.termino_id);
+                                    if (terminosDefecto.length > 0) {
+                                      setSelectedTerminos(terminosDefecto);
+                                      success(
+                                        "Términos aplicados",
+                                        `Se han seleccionado ${terminosDefecto.length} términos por defecto`
+                                      );
+                                    } else {
+                                      showError(
+                                        "Sin términos",
+                                        "No hay términos marcados como por defecto"
+                                      );
+                                    }
+                                  }}
+                                  size="sm"
+                                  className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                                >
+                                  ✨ Aplicar Términos por Defecto
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1277,6 +1436,37 @@ export default function CotizacionFormDialog({
                             📝 Estos términos y condiciones se aplicarán
                             automáticamente a la cotización cuando se guarde.
                           </p>
+
+                          {/* Botón para aplicar términos inmediatamente */}
+                          {isEditing && cotizacion?.cotizacion_id && (
+                            <div className="mt-3 pt-3 border-t border-blue-200">
+                              <Button
+                                type="button"
+                                onClick={handleActualizarTerminos}
+                                disabled={loadingTerminos}
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                              >
+                                {loadingTerminos ? (
+                                  <>
+                                    <span className="animate-spin mr-2">
+                                      ⏳
+                                    </span>
+                                    Actualizando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="mr-2">💾</span>
+                                    Aplicar Términos Ahora
+                                  </>
+                                )}
+                              </Button>
+                              <p className="text-xs text-blue-600 mt-1">
+                                Actualiza inmediatamente los términos y
+                                condiciones sin guardar la cotización completa
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
