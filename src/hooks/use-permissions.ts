@@ -109,3 +109,27 @@ export function useViewPermissions() {
     canAccessAdminViews: isAdmin(),
   };
 }
+
+/**
+ * Hook especializado para permisos específicos de gestión de clientes
+ */
+export function useClientePermissions() {
+  const { userRole, isAdmin, isRecepcion } = usePermissions();
+
+  return {
+    // Crear cliente: solo admin y recepción
+    canCreateCliente: isAdmin() || isRecepcion(),
+
+    // Editar cliente: solo admin y recepción
+    canEditCliente: isAdmin() || isRecepcion(),
+
+    // Ver clientes: todos los roles pueden ver
+    canViewClientes: true,
+
+    // Ver historial completo: todos pueden ver
+    canViewHistorial: true,
+
+    // Información del rol actual para mostrar mensajes apropiados
+    userRole,
+  };
+}
