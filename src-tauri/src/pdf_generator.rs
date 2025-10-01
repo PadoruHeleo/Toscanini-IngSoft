@@ -39,6 +39,12 @@ pub struct PiezaPdf {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct TerminoPdf {
+    pub nombre: String,
+    pub descripcion: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CotizacionPdfData {
     pub cotizacion_codigo: String,
     pub fecha: DateTime<Utc>,
@@ -52,6 +58,7 @@ pub struct CotizacionPdfData {
     pub piezas: Vec<PiezaPdf>,
     pub is_aprobada: bool,
     pub orden_codigo: Option<String>,
+    pub terminos_condiciones: Vec<TerminoPdf>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,6 +75,7 @@ pub struct InformePdfData {
     pub piezas: Vec<PiezaPdf>,
     pub orden_codigo: Option<String>,
     pub tiene_garantia: bool,
+    pub terminos_condiciones: Vec<TerminoPdf>,
 }
 
 pub struct PdfGenerator;
@@ -278,6 +286,42 @@ impl PdfGenerator {
         current_layer.set_fill_color(garantia_color);
         current_layer.use_text(garantia_text, 11.0, Mm(25.0), Mm(y_final - 25.0), &font_bold);
 
+        // === TÉRMINOS Y CONDICIONES ===
+        let mut y_terminos = y_final - 40.0;
+        if !data.terminos_condiciones.is_empty() {
+            current_layer.set_fill_color(blue_color.clone());
+            current_layer.use_text("TÉRMINOS Y CONDICIONES", 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
+            
+            let separator_terminos = Line {
+                points: vec![
+                    (Point::new(Mm(20.0), Mm(y_terminos - 5.0)), false),
+                    (Point::new(Mm(190.0), Mm(y_terminos - 5.0)), false)
+                ],
+                is_closed: false
+            };
+            current_layer.set_outline_color(blue_color.clone());
+            current_layer.add_line(separator_terminos);
+
+            current_layer.set_fill_color(black_color.clone());
+            y_terminos -= 15.0;
+            for (i, termino) in data.terminos_condiciones.iter().enumerate() {
+                if y_terminos > 60.0 {
+                    current_layer.use_text(&format!("{}. {}", i + 1, termino.nombre), 9.0, Mm(25.0), Mm(y_terminos), &font_regular);
+                    y_terminos -= 6.0;
+                    if !termino.descripcion.is_empty() && y_terminos > 60.0 {
+                        let desc_lines = self.wrap_text(&termino.descripcion, 85);
+                        for line in desc_lines.iter().take(2) {
+                            current_layer.use_text(&format!("   {}", line), 8.0, Mm(28.0), Mm(y_terminos), &font_regular);
+                            y_terminos -= 5.0;
+                            if y_terminos <= 60.0 { break; }
+                        }
+                    }
+                    y_terminos -= 3.0;
+                    if y_terminos <= 60.0 { break; }
+                }
+            }
+        }
+
         // === FOOTER PROFESIONAL ===
         current_layer.set_fill_color(gray_color.clone());
         let footer_line = Line {
@@ -458,6 +502,42 @@ impl PdfGenerator {
             }
         }
 
+        // === TÉRMINOS Y CONDICIONES ===
+        let mut y_terminos = y_costos - 15.0;
+        if !data.terminos_condiciones.is_empty() {
+            current_layer.set_fill_color(blue_color.clone());
+            current_layer.use_text("TÉRMINOS Y CONDICIONES", 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
+            
+            let separator_terminos = Line {
+                points: vec![
+                    (Point::new(Mm(20.0), Mm(y_terminos - 5.0)), false),
+                    (Point::new(Mm(190.0), Mm(y_terminos - 5.0)), false)
+                ],
+                is_closed: false
+            };
+            current_layer.set_outline_color(blue_color.clone());
+            current_layer.add_line(separator_terminos);
+
+            current_layer.set_fill_color(black_color.clone());
+            y_terminos -= 15.0;
+            for (i, termino) in data.terminos_condiciones.iter().enumerate() {
+                if y_terminos > 60.0 {
+                    current_layer.use_text(&format!("{}. {}", i + 1, termino.nombre), 9.0, Mm(25.0), Mm(y_terminos), &font_regular);
+                    y_terminos -= 6.0;
+                    if !termino.descripcion.is_empty() && y_terminos > 60.0 {
+                        let desc_lines = self.wrap_text(&termino.descripcion, 85);
+                        for line in desc_lines.iter().take(2) {
+                            current_layer.use_text(&format!("   {}", line), 8.0, Mm(28.0), Mm(y_terminos), &font_regular);
+                            y_terminos -= 5.0;
+                            if y_terminos <= 60.0 { break; }
+                        }
+                    }
+                    y_terminos -= 3.0;
+                    if y_terminos <= 60.0 { break; }
+                }
+            }
+        }
+
         // === FOOTER PROFESIONAL ===
         current_layer.set_fill_color(gray_color.clone());
         let footer_line = Line {
@@ -521,6 +601,19 @@ pub async fn generate_cotizacion_pdf_command(
     .await
     .map_err(|e| format!("Error obteniendo piezas: {}", e))?;
 
+    // Obtener términos y condiciones de la cotización
+    let terminos_rows = sqlx::query!(
+        "SELECT tc.termino_nombre, tc.termino_descripcion
+         FROM TERMINOS_COTIZACION tcot
+         INNER JOIN TERMINOS_CONDICIONES tc ON tcot.termino_id = tc.termino_id
+         WHERE tcot.cotizacion_id = ? AND tcot.aplicado = TRUE AND tc.is_active = TRUE
+         ORDER BY tc.termino_nombre",
+        cotizacion_id
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Error obteniendo términos y condiciones: {}", e))?;
+
     let piezas: Vec<PiezaPdf> = piezas_rows.iter().map(|row| {
         let precio = row.pieza_precio.unwrap_or(0);
         let cantidad = row.cantidad.unwrap_or(1);
@@ -530,6 +623,13 @@ pub async fn generate_cotizacion_pdf_command(
             cantidad,
             precio_unitario: precio,
             subtotal: precio * cantidad,
+        }
+    }).collect();
+
+    let terminos_condiciones: Vec<TerminoPdf> = terminos_rows.iter().map(|row| {
+        TerminoPdf {
+            nombre: row.termino_nombre.clone(),
+            descripcion: row.termino_descripcion.clone(),
         }
     }).collect();
 
@@ -564,6 +664,7 @@ pub async fn generate_cotizacion_pdf_command(
         piezas,
         is_aprobada: cotizacion.is_aprobada.unwrap_or(0) == 1,
         orden_codigo: cotizacion.orden_codigo,
+        terminos_condiciones,
     };
 
     // Generar PDF
@@ -596,6 +697,18 @@ pub async fn generate_informe_pdf_command(
     .map_err(|e| format!("Error obteniendo informe: {}", e))?
     .ok_or_else(|| format!("Informe con ID {} no encontrado", informe_id))?;
 
+    // Obtener términos y condiciones del informe
+    let terminos_rows = sqlx::query!(
+        "SELECT tc.termino_nombre, tc.termino_descripcion
+         FROM TERMINOS_INFORME ti
+         INNER JOIN TERMINOS_CONDICIONES tc ON ti.termino_id = tc.termino_id
+         WHERE ti.informe_id = ?",
+        informe_id
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Error obteniendo términos y condiciones del informe: {}", e))?;
+
     // Obtener piezas del informe
     let piezas_rows = sqlx::query!(
         "SELECT p.pieza_nombre, p.pieza_marca, p.pieza_precio, pi.cantidad
@@ -617,6 +730,13 @@ pub async fn generate_informe_pdf_command(
             cantidad,
             precio_unitario: precio,
             subtotal: precio * cantidad,
+        }
+    }).collect();
+
+    let terminos_condiciones: Vec<TerminoPdf> = terminos_rows.iter().map(|row| {
+        TerminoPdf {
+            nombre: row.termino_nombre.clone(),
+            descripcion: row.termino_descripcion.clone(),
         }
     }).collect();
 
@@ -651,6 +771,7 @@ pub async fn generate_informe_pdf_command(
         piezas,
         orden_codigo: informe.orden_codigo,
         tiene_garantia: informe.has_garantia.unwrap_or(0) == 1,
+        terminos_condiciones,
     };
 
     // Generar PDF
