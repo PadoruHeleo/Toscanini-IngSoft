@@ -154,12 +154,45 @@ export function PdfViewer({
     }
   };
 
-  const handleDownload = (type: "cotizacion" | "informe") => {
+  const handleDownload = async (type: "cotizacion" | "informe") => {
     const pdfData = type === "cotizacion" ? cotizacionPdfData : informePdfData;
-    const downloadFilename =
-      type === "cotizacion"
-        ? `cotizacion_${cotizacionId || "unknown"}.pdf`
-        : `informe_${informeId || "unknown"}.pdf`;
+    let downloadFilename = "";
+
+    if (type === "cotizacion" && cotizacionId) {
+      try {
+        // Obtener datos de la cotización para el nombre del archivo
+        const cotizacionData = await invoke<any>("get_cotizacion_by_id", {
+          cotizacionId: cotizacionId,
+        });
+
+        if (cotizacionData && cotizacionData.cotizacion_codigo) {
+          downloadFilename = `${cotizacionData.cotizacion_codigo}.pdf`;
+        } else {
+          downloadFilename = `COT-${cotizacionId}.pdf`;
+        }
+      } catch (error) {
+        console.error("Error obteniendo datos de cotización:", error);
+        downloadFilename = `COT-${cotizacionId}.pdf`;
+      }
+    } else if (type === "informe" && informeId) {
+      try {
+        // Obtener datos del informe para el nombre del archivo
+        const informeData = await invoke<any>("get_informe_by_id", {
+          informeId: informeId,
+        });
+
+        if (informeData && informeData.informe_codigo) {
+          downloadFilename = `${informeData.informe_codigo}.pdf`;
+        } else {
+          downloadFilename = `IT-${informeId}.pdf`;
+        }
+      } catch (error) {
+        console.error("Error obteniendo datos de informe:", error);
+        downloadFilename = `IT-${informeId}.pdf`;
+      }
+    } else {
+      downloadFilename = `documento_${type}.pdf`;
+    }
 
     if (!pdfData) {
       showError("Error", `No hay datos de PDF de ${type} para descargar`);
