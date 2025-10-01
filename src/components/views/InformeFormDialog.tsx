@@ -118,6 +118,7 @@ export default function InformeFormDialog({
   const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
   const [loadingTerminos, setLoadingTerminos] = useState(false);
   const [selectedTerminos, setSelectedTerminos] = useState<number[]>([]);
+  const [aplicadosTerminos, setAplicadosTerminos] = useState<number[]>([]); // Términos realmente guardados en BD
   const [formData, setFormData] = useState<FormData>({
     diagnostico: "",
     recomendaciones: "",
@@ -209,6 +210,7 @@ export default function InformeFormDialog({
         }
       );
       setSelectedTerminos(terminosInforme);
+      setAplicadosTerminos(terminosInforme); // Los que están en BD son los realmente aplicados
     } catch (error) {
       console.error("Error cargando términos del informe:", error);
     }
@@ -1361,9 +1363,15 @@ export default function InformeFormDialog({
                                       </TableCell>
                                       <TableCell className="align-top">
                                         <div className="text-center">
-                                          {isSelected ? (
-                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                          {aplicadosTerminos.includes(
+                                            termino.termino_id
+                                          ) ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                               ✓ Aplicado
+                                            </span>
+                                          ) : isSelected ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                              Seleccionado
                                             </span>
                                           ) : (
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">

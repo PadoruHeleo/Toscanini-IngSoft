@@ -128,6 +128,7 @@ export default function CotizacionFormDialog({
   const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
   const [loadingTerminos, setLoadingTerminos] = useState(false);
   const [selectedTerminos, setSelectedTerminos] = useState<number[]>([]);
+  const [aplicadosTerminos, setAplicadosTerminos] = useState<number[]>([]); // Términos realmente guardados en BD
   const [formData, setFormData] = useState<FormData>({
     costo_revision: "25000",
     costo_reparacion: "0",
@@ -339,6 +340,7 @@ export default function CotizacionFormDialog({
         }
       );
       setSelectedTerminos(terminosCotizacion);
+      setAplicadosTerminos(terminosCotizacion); // Los que están en BD son los realmente aplicados
     } catch (error) {
       console.error("Error cargando términos de la cotización:", error);
     }
@@ -1358,9 +1360,15 @@ export default function CotizacionFormDialog({
                                       </TableCell>
                                       <TableCell className="align-top">
                                         <div className="text-center">
-                                          {isSelected ? (
-                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                          {aplicadosTerminos.includes(
+                                            termino.termino_id
+                                          ) ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                               ✓ Aplicado
+                                            </span>
+                                          ) : isSelected ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                              Seleccionado
                                             </span>
                                           ) : (
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
