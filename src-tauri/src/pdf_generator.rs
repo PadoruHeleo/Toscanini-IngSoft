@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use printpdf::*;
+use printpdf::{PdfDocument, BuiltinFont, Color, Rgb, Mm, Line, Point};
 
 // Estructuras para datos del PDF
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,6 +77,37 @@ impl PdfGenerator {
         Self
     }
 
+    /// Función auxiliar para dividir texto en líneas
+    fn wrap_text(&self, text: &str, max_chars: usize) -> Vec<String> {
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let mut lines = Vec::new();
+        let mut current_line = String::new();
+
+        for word in words {
+            if current_line.len() + word.len() + 1 > max_chars {
+                if !current_line.is_empty() {
+                    lines.push(current_line.trim().to_string());
+                    current_line = String::new();
+                }
+            }
+            
+            if !current_line.is_empty() {
+                current_line.push(' ');
+            }
+            current_line.push_str(word);
+        }
+        
+        if !current_line.is_empty() {
+            lines.push(current_line.trim().to_string());
+        }
+        
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        
+        lines
+    }
+
     /// Generar PDF de cotización
     pub async fn generate_cotizacion_pdf(&self, data: CotizacionPdfData) -> Result<Vec<u8>, String> {
         self.generate_basic_pdf(&data).await
@@ -92,782 +123,360 @@ impl PdfGenerator {
         let (doc, page1, layer1) = PdfDocument::new("Toscanini - Informe", Mm(210.0), Mm(297.0), "Layer 1");
         let current_layer = doc.get_page(page1).get_layer(layer1);
 
-        // Configurar fuente
-        let font = doc.add_builtin_font(BuiltinFont::HelveticaBold)
-            .map_err(|e| format!("Error cargando fuente: {}", e))?;
+        // Configurar fuentes
+        let font_bold = doc.add_builtin_font(BuiltinFont::HelveticaBold)
+            .map_err(|e| format!("Error cargando fuente bold: {}", e))?;
+        let font_regular = doc.add_builtin_font(BuiltinFont::Helvetica)
+            .map_err(|e| format!("Error cargando fuente regular: {}", e))?;
 
-        // Título
-        current_layer.use_text(&format!("INFORME TÉCNICO {}", data.informe_codigo), 16.0, Mm(20.0), Mm(270.0), &font);
+        // Colores
+        let blue_color = Color::Rgb(Rgb::new(0.2, 0.4, 0.8, None));
+        let green_color = Color::Rgb(Rgb::new(0.2, 0.7, 0.3, None));
+        let gray_color = Color::Rgb(Rgb::new(0.5, 0.5, 0.5, None));
+        let black_color = Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None));
+
+        // === HEADER CORPORATIVO ===
+        current_layer.set_fill_color(blue_color.clone());
         
-        // Información del cliente
-        current_layer.use_text("INFORMACIÓN DEL CLIENTE", 12.0, Mm(20.0), Mm(250.0), &font);
-        current_layer.use_text(&format!("Nombre: {}", data.cliente.nombre), 10.0, Mm(20.0), Mm(240.0), &font);
+        // Línea superior azul
+        let header_line = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(280.0)), false),
+                (Point::new(Mm(190.0), Mm(280.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(3.0);
+        current_layer.add_line(header_line);
+
+        // Título de la empresa
+        current_layer.use_text("TOSCANINI", 20.0, Mm(20.0), Mm(275.0), &font_bold);
+        current_layer.set_fill_color(gray_color.clone());
+        current_layer.use_text("SERVICIO TÉCNICO ESPECIALIZADO", 10.0, Mm(75.0), Mm(275.0), &font_regular);
         
-        if let Some(email) = &data.cliente.email {
-            current_layer.use_text(&format!("Email: {}", email), 10.0, Mm(20.0), Mm(230.0), &font);
+        // === TÍTULO DEL DOCUMENTO ===
+        current_layer.set_fill_color(green_color.clone());
+        current_layer.use_text("INFORME TÉCNICO", 18.0, Mm(20.0), Mm(260.0), &font_bold);
+        current_layer.set_fill_color(black_color.clone());
+        current_layer.use_text(&format!("Código: {}", data.informe_codigo), 12.0, Mm(20.0), Mm(250.0), &font_bold);
+        
+        // Fecha en esquina superior derecha
+        current_layer.set_fill_color(gray_color.clone());
+        current_layer.use_text(&format!("Fecha: {}", data.fecha.format("%d/%m/%Y")), 10.0, Mm(140.0), Mm(270.0), &font_regular);
+        if let Some(orden) = &data.orden_codigo {
+            current_layer.use_text(&format!("Orden: {}", orden), 10.0, Mm(140.0), Mm(260.0), &font_regular);
         }
 
-        // Información del equipo
-        current_layer.use_text("INFORMACIÓN DEL EQUIPO", 12.0, Mm(20.0), Mm(210.0), &font);
+        // === SECCIÓN CLIENTE Y EQUIPO (DOS COLUMNAS) ===
+        current_layer.set_fill_color(blue_color.clone());
+        current_layer.use_text("INFORMACIÓN DEL CLIENTE", 12.0, Mm(20.0), Mm(235.0), &font_bold);
+        current_layer.use_text("INFORMACIÓN DEL EQUIPO", 12.0, Mm(110.0), Mm(235.0), &font_bold);
         
+        // Líneas separadoras
+        let separator_client = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(230.0)), false),
+                (Point::new(Mm(100.0), Mm(230.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(1.0);
+        current_layer.set_outline_color(blue_color.clone());
+        current_layer.add_line(separator_client);
+        
+        let separator_equipo = Line {
+            points: vec![
+                (Point::new(Mm(110.0), Mm(230.0)), false),
+                (Point::new(Mm(190.0), Mm(230.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.add_line(separator_equipo);
+
+        // Información del cliente (columna izquierda)
+        current_layer.set_fill_color(black_color.clone());
+        let mut y_client = 220.0;
+        current_layer.use_text(&format!("• Cliente: {}", data.cliente.nombre), 9.0, Mm(25.0), Mm(y_client), &font_regular);
+        y_client -= 8.0;
+        
+        if let Some(email) = &data.cliente.email {
+            current_layer.use_text(&format!("• Email: {}", email), 9.0, Mm(25.0), Mm(y_client), &font_regular);
+            y_client -= 8.0;
+        }
+        
+        if let Some(telefono) = &data.cliente.telefono {
+            current_layer.use_text(&format!("• Teléfono: {}", telefono), 9.0, Mm(25.0), Mm(y_client), &font_regular);
+        }
+
+        // Información del equipo (columna derecha)
+        let mut y_equipo = 220.0;
         if let Some(marca) = &data.equipo.marca {
-            current_layer.use_text(&format!("Marca: {}", marca), 10.0, Mm(20.0), Mm(200.0), &font);
+            current_layer.use_text(&format!("• Marca: {}", marca), 9.0, Mm(115.0), Mm(y_equipo), &font_regular);
+            y_equipo -= 8.0;
         }
         
         if let Some(modelo) = &data.equipo.modelo {
-            current_layer.use_text(&format!("Modelo: {}", modelo), 10.0, Mm(20.0), Mm(190.0), &font);
+            current_layer.use_text(&format!("• Modelo: {}", modelo), 9.0, Mm(115.0), Mm(y_equipo), &font_regular);
+            y_equipo -= 8.0;
+        }
+        
+        if let Some(numero_serie) = &data.equipo.numero_serie {
+            current_layer.use_text(&format!("• N° Serie: {}", numero_serie), 9.0, Mm(115.0), Mm(y_equipo), &font_regular);
         }
 
-        // Diagnóstico
-        current_layer.use_text("DIAGNÓSTICO", 12.0, Mm(20.0), Mm(170.0), &font);
-        current_layer.use_text(&data.diagnostico, 10.0, Mm(20.0), Mm(160.0), &font);
+        // === SECCIÓN DIAGNÓSTICO ===
+        current_layer.set_fill_color(green_color.clone());
+        current_layer.use_text("DIAGNÓSTICO Y TRABAJO REALIZADO", 12.0, Mm(20.0), Mm(190.0), &font_bold);
+        
+        let separator_diag = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(185.0)), false),
+                (Point::new(Mm(190.0), Mm(185.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_color(green_color.clone());
+        current_layer.add_line(separator_diag);
 
-        // Técnico responsable
-        current_layer.use_text(&format!("Técnico: {}", data.tecnico_responsable), 10.0, Mm(20.0), Mm(140.0), &font);
+        // Diagnóstico con texto envuelto
+        current_layer.set_fill_color(black_color.clone());
+        let diagnostico_lines = self.wrap_text(&data.diagnostico, 90);
+        let mut y_diag = 175.0;
+        for line in diagnostico_lines.iter().take(8) {
+            current_layer.use_text(line, 9.0, Mm(25.0), Mm(y_diag), &font_regular);
+            y_diag -= 6.0;
+        }
 
-        // Fecha
-        current_layer.use_text(&format!("Fecha: {}", data.fecha.format("%d/%m/%Y")), 10.0, Mm(20.0), Mm(120.0), &font);
+        // Solución aplicada si existe
+        if let Some(solucion) = &data.solucion_aplicada {
+            if !solucion.trim().is_empty() {
+                current_layer.set_fill_color(blue_color.clone());
+                current_layer.use_text("Solución Aplicada:", 10.0, Mm(25.0), Mm(y_diag - 8.0), &font_bold);
+                
+                current_layer.set_fill_color(black_color.clone());
+                let solucion_lines = self.wrap_text(solucion, 90);
+                y_diag -= 18.0;
+                for line in solucion_lines.iter().take(6) {
+                    current_layer.use_text(line, 9.0, Mm(25.0), Mm(y_diag), &font_regular);
+                    y_diag -= 6.0;
+                }
+            }
+        }
 
-        // Garantía
-        let garantia = if data.tiene_garantia { "CON GARANTÍA" } else { "SIN GARANTÍA" };
-        current_layer.use_text(&format!("Estado: {}", garantia), 10.0, Mm(20.0), Mm(110.0), &font);
+        // === INFORMACIÓN TÉCNICA ===
+        let y_final = y_diag - 15.0;
+        current_layer.set_fill_color(blue_color.clone());
+        current_layer.use_text("TÉCNICO RESPONSABLE Y GARANTÍA", 11.0, Mm(20.0), Mm(y_final), &font_bold);
+        
+        current_layer.set_fill_color(black_color.clone());
+        current_layer.use_text(&format!("Técnico: {}", data.tecnico_responsable), 10.0, Mm(25.0), Mm(y_final - 12.0), &font_regular);
+
+        // Estado de garantía con colores
+        let garantia_text = if data.tiene_garantia { "✓ TRABAJO CON GARANTÍA" } else { "⚠ TRABAJO SIN GARANTÍA" };
+        let garantia_color = if data.tiene_garantia { green_color.clone() } else { Color::Rgb(Rgb::new(0.9, 0.3, 0.0, None)) };
+        
+        current_layer.set_fill_color(garantia_color);
+        current_layer.use_text(garantia_text, 11.0, Mm(25.0), Mm(y_final - 25.0), &font_bold);
+
+        // === FOOTER PROFESIONAL ===
+        current_layer.set_fill_color(gray_color.clone());
+        let footer_line = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(40.0)), false),
+                (Point::new(Mm(190.0), Mm(40.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(1.0);
+        current_layer.set_outline_color(gray_color.clone());
+        current_layer.add_line(footer_line);
+        
+        current_layer.use_text("TOSCANINI - Servicio Técnico Especializado", 8.0, Mm(20.0), Mm(35.0), &font_regular);
+        current_layer.use_text("Este documento certifica el trabajo realizado y garantiza la calidad del servicio.", 8.0, Mm(20.0), Mm(30.0), &font_regular);
 
         // Generar PDF
         doc.save_to_bytes()
             .map_err(|e| format!("Error generando PDF: {}", e))
     }
 
-    /// Generar PDF básico usando printpdf
     async fn generate_basic_pdf(&self, data: &CotizacionPdfData) -> Result<Vec<u8>, String> {
         let (doc, page1, layer1) = PdfDocument::new("Toscanini - Cotización", Mm(210.0), Mm(297.0), "Layer 1");
         let current_layer = doc.get_page(page1).get_layer(layer1);
 
-        // Configurar fuente
-        let font = doc.add_builtin_font(BuiltinFont::HelveticaBold)
-            .map_err(|e| format!("Error cargando fuente: {}", e))?;
+        // Configurar fuentes
+        let font_bold = doc.add_builtin_font(BuiltinFont::HelveticaBold)
+            .map_err(|e| format!("Error cargando fuente bold: {}", e))?;
+        let font_regular = doc.add_builtin_font(BuiltinFont::Helvetica)
+            .map_err(|e| format!("Error cargando fuente regular: {}", e))?;
 
-        // Título
-        current_layer.use_text(&format!("COTIZACIÓN {}", data.cotizacion_codigo), 16.0, Mm(20.0), Mm(270.0), &font);
+        // Colores
+        let blue_color = Color::Rgb(Rgb::new(0.2, 0.4, 0.8, None));
+        let green_color = Color::Rgb(Rgb::new(0.2, 0.7, 0.3, None));
+        let orange_color = Color::Rgb(Rgb::new(0.9, 0.6, 0.0, None));
+        let gray_color = Color::Rgb(Rgb::new(0.5, 0.5, 0.5, None));
+        let black_color = Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None));
+
+        // === HEADER CORPORATIVO ===
+        current_layer.set_fill_color(blue_color.clone());
         
-        // Información del cliente
-        current_layer.use_text("INFORMACIÓN DEL CLIENTE", 12.0, Mm(20.0), Mm(250.0), &font);
-        current_layer.use_text(&format!("Nombre: {}", data.cliente.nombre), 10.0, Mm(20.0), Mm(240.0), &font);
+        // Línea superior azul
+        let header_line = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(280.0)), false),
+                (Point::new(Mm(190.0), Mm(280.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(3.0);
+        current_layer.add_line(header_line);
+
+        // Título de la empresa
+        current_layer.use_text("TOSCANINI", 20.0, Mm(20.0), Mm(275.0), &font_bold);
+        current_layer.set_fill_color(gray_color.clone());
+        current_layer.use_text("SERVICIO TÉCNICO ESPECIALIZADO", 10.0, Mm(75.0), Mm(275.0), &font_regular);
+        
+        // === TÍTULO DEL DOCUMENTO ===
+        current_layer.set_fill_color(blue_color.clone());
+        current_layer.use_text("COTIZACIÓN", 18.0, Mm(20.0), Mm(260.0), &font_bold);
+        current_layer.set_fill_color(black_color.clone());
+        current_layer.use_text(&format!("Código: {}", data.cotizacion_codigo), 12.0, Mm(20.0), Mm(250.0), &font_bold);
+        
+        // Fecha y estado en esquina superior derecha
+        current_layer.set_fill_color(gray_color.clone());
+        current_layer.use_text(&format!("Fecha: {}", data.fecha.format("%d/%m/%Y")), 10.0, Mm(140.0), Mm(270.0), &font_regular);
+        
+        let (estado_text, estado_color) = if data.is_aprobada { 
+            ("✓ APROBADA", green_color.clone()) 
+        } else { 
+            ("⏳ PENDIENTE", orange_color.clone()) 
+        };
+        current_layer.set_fill_color(estado_color);
+        current_layer.use_text(estado_text, 10.0, Mm(140.0), Mm(260.0), &font_bold);
+
+        // === SECCIÓN CLIENTE Y EQUIPO (DOS COLUMNAS) ===
+        current_layer.set_fill_color(blue_color.clone());
+        current_layer.use_text("INFORMACIÓN DEL CLIENTE", 12.0, Mm(20.0), Mm(235.0), &font_bold);
+        current_layer.use_text("INFORMACIÓN DEL EQUIPO", 12.0, Mm(110.0), Mm(235.0), &font_bold);
+        
+        // Líneas separadoras
+        let separator_client = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(230.0)), false),
+                (Point::new(Mm(100.0), Mm(230.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(1.0);
+        current_layer.set_outline_color(blue_color.clone());
+        current_layer.add_line(separator_client);
+        
+        let separator_equipo = Line {
+            points: vec![
+                (Point::new(Mm(110.0), Mm(230.0)), false),
+                (Point::new(Mm(190.0), Mm(230.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.add_line(separator_equipo);
+
+        // Información del cliente (columna izquierda)
+        current_layer.set_fill_color(black_color.clone());
+        let mut y_client = 220.0;
+        current_layer.use_text(&format!("• Cliente: {}", data.cliente.nombre), 9.0, Mm(25.0), Mm(y_client), &font_regular);
+        y_client -= 8.0;
         
         if let Some(email) = &data.cliente.email {
-            current_layer.use_text(&format!("Email: {}", email), 10.0, Mm(20.0), Mm(230.0), &font);
+            current_layer.use_text(&format!("• Email: {}", email), 9.0, Mm(25.0), Mm(y_client), &font_regular);
+            y_client -= 8.0;
         }
         
         if let Some(telefono) = &data.cliente.telefono {
-            current_layer.use_text(&format!("Teléfono: {}", telefono), 10.0, Mm(20.0), Mm(220.0), &font);
+            current_layer.use_text(&format!("• Teléfono: {}", telefono), 9.0, Mm(25.0), Mm(y_client), &font_regular);
         }
 
-        // Información del equipo
-        current_layer.use_text("INFORMACIÓN DEL EQUIPO", 12.0, Mm(20.0), Mm(200.0), &font);
-        
+        // Información del equipo (columna derecha)
+        let mut y_equipo = 220.0;
         if let Some(marca) = &data.equipo.marca {
-            current_layer.use_text(&format!("Marca: {}", marca), 10.0, Mm(20.0), Mm(190.0), &font);
+            current_layer.use_text(&format!("• Marca: {}", marca), 9.0, Mm(115.0), Mm(y_equipo), &font_regular);
+            y_equipo -= 8.0;
         }
         
         if let Some(modelo) = &data.equipo.modelo {
-            current_layer.use_text(&format!("Modelo: {}", modelo), 10.0, Mm(20.0), Mm(180.0), &font);
+            current_layer.use_text(&format!("• Modelo: {}", modelo), 9.0, Mm(115.0), Mm(y_equipo), &font_regular);
+            y_equipo -= 8.0;
+        }
+        
+        if let Some(tipo) = &data.equipo.tipo {
+            current_layer.use_text(&format!("• Tipo: {}", tipo), 9.0, Mm(115.0), Mm(y_equipo), &font_regular);
         }
 
-        // Costos
-        current_layer.use_text("COSTOS", 12.0, Mm(20.0), Mm(160.0), &font);
+        // === SECCIÓN COSTOS ===
+        current_layer.set_fill_color(green_color.clone());
+        current_layer.use_text("DETALLE DE COSTOS", 12.0, Mm(20.0), Mm(190.0), &font_bold);
+        
+        let separator_costos = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(185.0)), false),
+                (Point::new(Mm(190.0), Mm(185.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_color(green_color.clone());
+        current_layer.add_line(separator_costos);
+
+        // Costos individuales
+        current_layer.set_fill_color(black_color.clone());
+        let mut y_costos = 175.0;
         
         if let Some(revision) = data.costo_revision {
-            current_layer.use_text(&format!("Costo de Revisión: ${}", revision), 10.0, Mm(20.0), Mm(150.0), &font);
+            current_layer.use_text(&format!("• Costo de Revisión: ${}", revision), 10.0, Mm(25.0), Mm(y_costos), &font_regular);
+            y_costos -= 10.0;
         }
         
         if let Some(reparacion) = data.costo_reparacion {
-            current_layer.use_text(&format!("Costo de Reparación: ${}", reparacion), 10.0, Mm(20.0), Mm(140.0), &font);
+            current_layer.use_text(&format!("• Costo de Reparación: ${}", reparacion), 10.0, Mm(25.0), Mm(y_costos), &font_regular);
+            y_costos -= 10.0;
         }
+
+        // Total destacado
+        y_costos -= 5.0;
+        current_layer.set_fill_color(green_color.clone());
+        current_layer.use_text(&format!("TOTAL: ${}", data.costo_total), 14.0, Mm(25.0), Mm(y_costos), &font_bold);
+
+        // === INFORME TÉCNICO ===
+        if !data.informe_tecnico.trim().is_empty() {
+            y_costos -= 25.0;
+            current_layer.set_fill_color(blue_color.clone());
+            current_layer.use_text("INFORME TÉCNICO", 11.0, Mm(20.0), Mm(y_costos), &font_bold);
+            
+            current_layer.set_fill_color(black_color.clone());
+            let informe_lines = self.wrap_text(&data.informe_tecnico, 90);
+            y_costos -= 12.0;
+            for line in informe_lines.iter().take(6) {
+                current_layer.use_text(line, 9.0, Mm(25.0), Mm(y_costos), &font_regular);
+                y_costos -= 6.0;
+            }
+        }
+
+        // === FOOTER PROFESIONAL ===
+        current_layer.set_fill_color(gray_color.clone());
+        let footer_line = Line {
+            points: vec![
+                (Point::new(Mm(20.0), Mm(40.0)), false),
+                (Point::new(Mm(190.0), Mm(40.0)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(1.0);
+        current_layer.set_outline_color(gray_color.clone());
+        current_layer.add_line(footer_line);
         
-        current_layer.use_text(&format!("TOTAL: ${}", data.costo_total), 12.0, Mm(20.0), Mm(120.0), &font);
-
-        // Fecha
-        current_layer.use_text(&format!("Fecha: {}", data.fecha.format("%d/%m/%Y")), 10.0, Mm(20.0), Mm(100.0), &font);
-
-        // Estado
-        let estado = if data.is_aprobada { "APROBADA" } else { "PENDIENTE" };
-        current_layer.use_text(&format!("Estado: {}", estado), 10.0, Mm(20.0), Mm(90.0), &font);
+        current_layer.use_text("TOSCANINI - Servicio Técnico Especializado", 8.0, Mm(20.0), Mm(35.0), &font_regular);
+        current_layer.use_text("Esta cotización tiene validez por 30 días a partir de la fecha de emisión.", 8.0, Mm(20.0), Mm(30.0), &font_regular);
 
         // Generar PDF
         doc.save_to_bytes()
             .map_err(|e| format!("Error generando PDF: {}", e))
-    }
-
-    /// Generar HTML para cotización
-    fn generate_cotizacion_html(&self, data: &CotizacionPdfData) -> Result<String, String> {
-        let estado = if data.is_aprobada { "APROBADA" } else { "PENDIENTE" };
-        let estado_color = if data.is_aprobada { "#28a745" } else { "#ffc107" };
-
-        let piezas_html = if data.piezas.is_empty() {
-            "<tr><td colspan='5' style='text-align: center; font-style: italic; color: #666;'>No se requieren piezas adicionales</td></tr>".to_string()
-        } else {
-            data.piezas.iter().map(|pieza| {
-                format!(
-                    "<tr>
-                        <td>{}</td>
-                        <td>{}</td>
-                        <td style='text-align: center;'>{}</td>
-                        <td style='text-align: right;'>${}</td>
-                        <td style='text-align: right;'>${}</td>
-                    </tr>",
-                    pieza.nombre,
-                    pieza.marca.as_deref().unwrap_or("N/A"),
-                    pieza.cantidad,
-                    pieza.precio_unitario,
-                    pieza.subtotal
-                )
-            }).collect::<Vec<String>>().join("")
-        };
-
-        let total_piezas: i32 = data.piezas.iter().map(|p| p.subtotal).sum();
-
-        let html = format!(
-            r#"<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotización - Toscanini</title>
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }}
-        .header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }}
-        .company-name {{
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }}
-        .company-tagline {{
-            font-size: 14px;
-            opacity: 0.9;
-        }}
-        .document-title {{
-            background: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-            border-bottom: 3px solid #007bff;
-        }}
-        .document-title h1 {{
-            margin: 0;
-            color: #007bff;
-            font-size: 24px;
-        }}
-        .status-badge {{
-            background: {};
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-top: 10px;
-            display: inline-block;
-        }}
-        .content {{
-            padding: 30px;
-        }}
-        .info-section {{
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 30px;
-        }}
-        .info-box {{
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 20px;
-            width: 48%;
-        }}
-        .info-box h3 {{
-            margin-top: 0;
-            color: #495057;
-            border-bottom: 2px solid #007bff;
-            padding-bottom: 5px;
-        }}
-        .info-item {{
-            margin-bottom: 8px;
-        }}
-        .info-label {{
-            font-weight: bold;
-            color: #495057;
-        }}
-        .section {{
-            margin-bottom: 30px;
-        }}
-        .section h3 {{
-            background: #007bff;
-            color: white;
-            padding: 10px 15px;
-            margin: 0 0 15px 0;
-            border-radius: 5px;
-        }}
-        .equipment-info {{
-            background: #e8f4f8;
-            border-left: 4px solid #17a2b8;
-            padding: 15px;
-            margin-bottom: 20px;
-        }}
-        .technical-report {{
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 5px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }}
-        th, td {{
-            border: 1px solid #dee2e6;
-            padding: 12px;
-            text-align: left;
-        }}
-        th {{
-            background: #f8f9fa;
-            font-weight: bold;
-            color: #495057;
-        }}
-        .costs-summary {{
-            background: #e8f5e8;
-            border: 2px solid #28a745;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-        }}
-        .cost-row {{
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 5px 0;
-        }}
-        .cost-label {{
-            font-weight: bold;
-        }}
-        .cost-value {{
-            font-weight: bold;
-        }}
-        .total-row {{
-            border-top: 2px solid #28a745;
-            padding-top: 10px;
-            font-size: 18px;
-            color: #28a745;
-        }}
-        .footer {{
-            background: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-            border-top: 1px solid #dee2e6;
-            font-size: 12px;
-            color: #6c757d;
-        }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="company-name">{}</div>
-        <div class="company-tagline">Servicio Técnico Especializado</div>
-        <div>{}</div>
-        <div>{}</div>
-    </div>
-
-        <div class="document-title">
-            <h1>COTIZACIÓN {}</h1>
-            <div class="status-badge">Estado: {}</div>
-            <div style="margin-top: 10px; font-size: 14px;">
-                Fecha: {}
-            </div>
-        </div>    <div class="content">
-        <div class="info-section">
-            <div class="info-box">
-                <h3>Información del Cliente</h3>
-                <div class="info-item">
-                    <span class="info-label">Nombre:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Email:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Teléfono:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Dirección:</span> {}
-                </div>
-            </div>
-            
-            <div class="info-box">
-                <h3>Información del Equipo</h3>
-                <div class="info-item">
-                    <span class="info-label">Marca:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Modelo:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Tipo:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">N° Serie:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Ubicación:</span> {}
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Informe Técnico</h3>
-            <div class="technical-report">
-                {}
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Detalle de Piezas</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Pieza</th>
-                        <th>Marca</th>
-                        <th>Cantidad</th>
-                        <th>Precio Unitario</th>
-                        <th>Subtotal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="costs-summary">
-            <h3 style="margin-top: 0; color: #28a745;">Resumen de Costos</h3>
-            {}
-            {}
-            <div class="cost-row">
-                <span class="cost-label">Subtotal Piezas:</span>
-                <span class="cost-value">${}</span>
-            </div>
-            <div class="cost-row total-row">
-                <span class="cost-label">TOTAL:</span>
-                <span class="cost-value">${}</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <p><strong>Toscanini - Servicio Técnico Especializado</strong></p>
-        <p>Esta cotización es válida por 30 días desde la fecha de emisión.</p>
-        <p>Para consultas o aprobación de la cotización, contáctenos a través de los medios indicados.</p>
-    </div>
-</body>
-</html>"#,
-            // CSS estado color
-            estado_color,
-            // Header empresa
-            data.empresa.nombre,
-            data.empresa.telefono.as_deref().unwrap_or(""),
-            data.empresa.email.as_deref().unwrap_or(""),
-            // Title
-            data.cotizacion_codigo,
-            estado,
-            format!("{} | {}", data.fecha.format("%d/%m/%Y").to_string(), data.orden_codigo.as_deref().unwrap_or("Sin orden asociada")),
-            // Cliente info
-            data.cliente.nombre,
-            data.cliente.email.as_deref().unwrap_or("No especificado"),
-            data.cliente.telefono.as_deref().unwrap_or("No especificado"),
-            data.cliente.direccion.as_deref().unwrap_or("No especificada"),
-            // Equipo info
-            data.equipo.marca.as_deref().unwrap_or("No especificada"),
-            data.equipo.modelo.as_deref().unwrap_or("No especificado"),
-            data.equipo.tipo.as_deref().unwrap_or("No especificado"),
-            data.equipo.numero_serie.as_deref().unwrap_or("No especificado"),
-            data.equipo.ubicacion.as_deref().unwrap_or("No especificada"),
-            // Informe técnico
-            data.informe_tecnico,
-            // Piezas
-            piezas_html,
-            // Costos
-            if let Some(revision) = data.costo_revision {
-                format!("<div class=\"cost-row\"><span class=\"cost-label\">Costo de Revisión:</span><span class=\"cost-value\">${}</span></div>", revision)
-            } else { String::new() },
-            if let Some(reparacion) = data.costo_reparacion {
-                format!("<div class=\"cost-row\"><span class=\"cost-label\">Costo de Reparación:</span><span class=\"cost-value\">${}</span></div>", reparacion)
-            } else { String::new() },
-            total_piezas,
-            data.costo_total
-        );
-
-        Ok(html)
-    }
-
-    /// Generar HTML para informe técnico
-    fn generate_informe_html(&self, data: &InformePdfData) -> Result<String, String> {
-        let garantia_badge = if data.tiene_garantia { 
-            "<span style='background: #28a745; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px;'>CON GARANTÍA</span>"
-        } else { 
-            "<span style='background: #dc3545; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px;'>SIN GARANTÍA</span>"
-        };
-
-        let piezas_html = if data.piezas.is_empty() {
-            "<tr><td colspan='5' style='text-align: center; font-style: italic; color: #666;'>No se utilizaron piezas en este servicio</td></tr>".to_string()
-        } else {
-            data.piezas.iter().map(|pieza| {
-                format!(
-                    "<tr>
-                        <td>{}</td>
-                        <td>{}</td>
-                        <td style='text-align: center;'>{}</td>
-                        <td style='text-align: right;'>${}</td>
-                        <td style='text-align: right;'>${}</td>
-                    </tr>",
-                    pieza.nombre,
-                    pieza.marca.as_deref().unwrap_or("N/A"),
-                    pieza.cantidad,
-                    pieza.precio_unitario,
-                    pieza.subtotal
-                )
-            }).collect::<Vec<String>>().join("")
-        };
-
-        let total_piezas: i32 = data.piezas.iter().map(|p| p.subtotal).sum();
-
-        let html = format!(
-            r#"<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Informe Técnico - Toscanini</title>
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }}
-        .header {{
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }}
-        .company-name {{
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }}
-        .company-tagline {{
-            font-size: 14px;
-            opacity: 0.9;
-        }}
-        .document-title {{
-            background: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-            border-bottom: 3px solid #28a745;
-        }}
-        .document-title h1 {{
-            margin: 0;
-            color: #28a745;
-            font-size: 24px;
-        }}
-        .content {{
-            padding: 30px;
-        }}
-        .info-section {{
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 30px;
-        }}
-        .info-box {{
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 20px;
-            width: 48%;
-        }}
-        .info-box h3 {{
-            margin-top: 0;
-            color: #495057;
-            border-bottom: 2px solid #28a745;
-            padding-bottom: 5px;
-        }}
-        .info-item {{
-            margin-bottom: 8px;
-        }}
-        .info-label {{
-            font-weight: bold;
-            color: #495057;
-        }}
-        .section {{
-            margin-bottom: 30px;
-        }}
-        .section h3 {{
-            background: #28a745;
-            color: white;
-            padding: 10px 15px;
-            margin: 0 0 15px 0;
-            border-radius: 5px;
-        }}
-        .diagnostic-box {{
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        .recommendations-box {{
-            background: #d1ecf1;
-            border-left: 4px solid #17a2b8;
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        .solution-box {{
-            background: #d4edda;
-            border-left: 4px solid #28a745;
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        .technician-info {{
-            background: #e2e3e5;
-            border: 1px solid #d6d8db;
-            border-radius: 5px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }}
-        th, td {{
-            border: 1px solid #dee2e6;
-            padding: 12px;
-            text-align: left;
-        }}
-        th {{
-            background: #f8f9fa;
-            font-weight: bold;
-            color: #495057;
-        }}
-        .parts-summary {{
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 10px;
-            text-align: right;
-        }}
-        .footer {{
-            background: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-            border-top: 1px solid #dee2e6;
-            font-size: 12px;
-            color: #6c757d;
-        }}
-        .signature-section {{
-            margin-top: 40px;
-            border-top: 1px solid #dee2e6;
-            padding-top: 20px;
-        }}
-        .signature-box {{
-            border: 1px solid #dee2e6;
-            height: 80px;
-            margin-top: 10px;
-            background: #f8f9fa;
-        }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="company-name">{}</div>
-        <div class="company-tagline">Servicio Técnico Especializado</div>
-        <div>{}</div>
-        <div>{}</div>
-    </div>
-
-        <div class="document-title">
-            <h1>INFORME TÉCNICO {}</h1>
-            <div style="margin-top: 10px; font-size: 14px;">
-                Fecha: {}
-            </div>
-        </div>    <div class="content">
-        <div class="info-section">
-            <div class="info-box">
-                <h3>Información del Cliente</h3>
-                <div class="info-item">
-                    <span class="info-label">Nombre:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Email:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Teléfono:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Dirección:</span> {}
-                </div>
-            </div>
-            
-            <div class="info-box">
-                <h3>Información del Equipo</h3>
-                <div class="info-item">
-                    <span class="info-label">Marca:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Modelo:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Tipo:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">N° Serie:</span> {}
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Ubicación:</span> {}
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Diagnóstico del Problema</h3>
-            <div class="diagnostic-box">
-                <strong>Diagnóstico:</strong><br>
-                {}
-            </div>
-        </div>
-
-        {}
-
-        {}
-
-        <div class="section">
-            <h3>Técnico Responsable</h3>
-            <div class="technician-info">
-                <strong>Técnico a cargo:</strong> {}
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Piezas Utilizadas</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Pieza</th>
-                        <th>Marca</th>
-                        <th>Cantidad</th>
-                        <th>Precio Unitario</th>
-                        <th>Subtotal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {}
-                </tbody>
-            </table>
-            {}
-        </div>
-
-        <div class="signature-section">
-            <h3>Conformidad del Cliente</h3>
-            <p>Con mi firma certifico que he recibido el equipo en las condiciones descritas y que el trabajo realizado es satisfactorio:</p>
-            
-            <div style="display: flex; justify-content: space-between; margin-top: 30px;">
-                <div style="width: 45%;">
-                    <p><strong>Firma del Cliente:</strong></p>
-                    <div class="signature-box"></div>
-                    <p style="text-align: center; margin-top: 5px; font-size: 12px;">Firma</p>
-                </div>
-                <div style="width: 45%;">
-                    <p><strong>Firma del Técnico:</strong></p>
-                    <div class="signature-box"></div>
-                    <p style="text-align: center; margin-top: 5px; font-size: 12px;">Firma y RUT</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <p><strong>Toscanini - Servicio Técnico Especializado</strong></p>
-        <p>Este documento certifica los trabajos realizados en el equipo del cliente.</p>
-        <p>Para consultas sobre este informe, contáctenos a través de los medios indicados.</p>
-    </div>
-</body>
-</html>"#,
-            // Header empresa
-            data.empresa.nombre,
-            data.empresa.telefono.as_deref().unwrap_or(""),
-            data.empresa.email.as_deref().unwrap_or(""),
-            // Title
-            data.informe_codigo,
-            format!("{} | {} | {}", data.fecha.format("%d/%m/%Y").to_string(), data.orden_codigo.as_deref().unwrap_or("Sin orden asociada"), garantia_badge),
-            // Cliente info
-            data.cliente.nombre,
-            data.cliente.email.as_deref().unwrap_or("No especificado"),
-            data.cliente.telefono.as_deref().unwrap_or("No especificado"),
-            data.cliente.direccion.as_deref().unwrap_or("No especificada"),
-            // Equipo info
-            data.equipo.marca.as_deref().unwrap_or("No especificada"),
-            data.equipo.modelo.as_deref().unwrap_or("No especificado"),
-            data.equipo.tipo.as_deref().unwrap_or("No especificado"),
-            data.equipo.numero_serie.as_deref().unwrap_or("No especificado"),
-            data.equipo.ubicacion.as_deref().unwrap_or("No especificada"),
-            // Diagnóstico
-            data.diagnostico,
-            // Recomendaciones (opcional)
-            if let Some(ref recomendaciones) = data.recomendaciones {
-                format!(
-                    r#"<div class="section">
-                        <h3>Recomendaciones</h3>
-                        <div class="recommendations-box">
-                            <strong>Recomendaciones:</strong><br>
-                            {}
-                        </div>
-                    </div>"#,
-                    recomendaciones
-                )
-            } else { String::new() },
-            // Solución aplicada (opcional)
-            if let Some(ref solucion) = data.solucion_aplicada {
-                format!(
-                    r#"<div class="section">
-                        <h3>Solución Aplicada</h3>
-                        <div class="solution-box">
-                            <strong>Trabajo realizado:</strong><br>
-                            {}
-                        </div>
-                    </div>"#,
-                    solucion
-                )
-            } else { String::new() },
-            // Técnico
-            data.tecnico_responsable,
-            // Piezas
-            piezas_html,
-            // Summary de piezas
-            if !data.piezas.is_empty() {
-                format!(r#"<div class="parts-summary">
-                    <strong>Total en piezas: ${}</strong>
-                </div>"#, total_piezas)
-            } else { String::new() }
-        );
-
-        Ok(html)
     }
 }
 
