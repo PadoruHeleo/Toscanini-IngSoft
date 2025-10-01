@@ -341,9 +341,9 @@ export function PdfViewer({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="!max-w-[90vw] !w-[90vw] !h-[90vh] flex flex-col p-3">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
             {title}
           </DialogTitle>
@@ -356,15 +356,18 @@ export function PdfViewer({
           className="flex-1 flex flex-col"
         >
           {cotizacionId && informeId && (
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-2 mb-2">
               <TabsTrigger
                 value="cotizacion"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 px-6 py-2"
               >
                 <FileText className="h-4 w-4" />
                 Cotización
               </TabsTrigger>
-              <TabsTrigger value="informe" className="flex items-center gap-2">
+              <TabsTrigger
+                value="informe"
+                className="flex items-center gap-2 px-6 py-2"
+              >
                 <FileText className="h-4 w-4" />
                 Informe Técnico
               </TabsTrigger>
