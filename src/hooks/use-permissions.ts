@@ -157,3 +157,87 @@ export function usePiezasPermissions() {
     userRole,
   };
 }
+
+/**
+ * Hook especializado para permisos específicos de órdenes de trabajo
+ */
+export function useOrdenTrabajoPermissions() {
+  const { userRole, isAdmin, isTecnico, isRecepcion } = usePermissions();
+
+  return {
+    // Crear/editar órdenes de trabajo: todos los roles pueden
+    canCreateOrden: true,
+    canEditOrden: true,
+
+    // Eliminar órdenes: solo admin y técnico
+    canDeleteOrden: isAdmin() || isTecnico(),
+
+    // Crear cotizaciones: solo admin y técnico
+    canCreateCotizacion: isAdmin() || isTecnico(),
+
+    // Crear informes: solo admin y técnico
+    canCreateInforme: isAdmin() || isTecnico(),
+
+    // Ver cotizaciones/informes existentes: todos pueden ver si existen
+    canViewCotizacion: true,
+    canViewInforme: true,
+
+    // Editar cotizaciones/informes: solo admin y técnico
+    canEditCotizacion: isAdmin() || isTecnico(),
+    canEditInforme: isAdmin() || isTecnico(),
+
+    // Aprobar/rechazar cotizaciones: recepción, admin y técnico
+    canApproveCotizacion: true, // Todos los roles pueden aprobar/rechazar
+
+    // Función para determinar qué botones debe ver según el estado de la orden
+    getVisibleActions: (orden: {
+      cotizacion_id?: number;
+      informe_id?: number;
+    }) => {
+      return {
+        // Botones de cotización
+        showCreateCotizacion:
+          !orden.cotizacion_id && (isAdmin() || isTecnico()),
+        showViewCotizacion: !!orden.cotizacion_id,
+
+        // Botones de informe
+        showCreateInforme: !orden.informe_id && (isAdmin() || isTecnico()),
+        showViewInforme: !!orden.informe_id,
+
+        // Botón de eliminar orden
+        showDeleteOrden: isAdmin() || isTecnico(),
+      };
+    },
+
+    // Función para determinar acciones disponibles en cotizaciones según el estado y rol
+    getCotizacionActions: (cotizacion: {
+      is_aprobada?: boolean;
+      is_borrador?: boolean;
+      estado_orden?: string;
+    }) => {
+      const isAdmin = userRole === "admin";
+      const isTecnico = userRole === "tecnico";
+      const isRecepcion = userRole === "recepcion";
+
+      return {
+        // Crear/editar cotización: solo admin y técnico
+        canCreate: isAdmin || isTecnico,
+        canEdit: isAdmin || isTecnico,
+
+        // Ver cotización: todos pueden ver
+        canView: true,
+
+        // Aprobar/rechazar: recepción puede hacerlo si la cotización está enviada (no es borrador)
+        canApprove:
+          !cotizacion.is_borrador && (isRecepcion || isAdmin || isTecnico),
+
+        // Solo lectura para recepción en borradores y cotizaciones no enviadas
+        isReadOnly: isRecepcion && (cotizacion.is_borrador || false),
+      };
+    },
+
+    // Información del rol actual
+    userRole,
+    isRecepcion: isRecepcion(),
+  };
+}
