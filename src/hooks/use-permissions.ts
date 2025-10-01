@@ -133,3 +133,27 @@ export function useClientePermissions() {
     userRole,
   };
 }
+
+/**
+ * Hook especializado para permisos específicos de gestión de piezas
+ */
+export function usePiezasPermissions() {
+  const { userRole, hasPermission } = usePermissions();
+
+  return {
+    // Ver piezas: solo admin y técnico
+    canViewPiezas: hasPermission("canManageParts"),
+
+    // Crear pieza: solo admin y técnico
+    canCreatePieza: hasPermission("canManageParts"),
+
+    // Editar pieza: solo admin y técnico
+    canEditPieza: hasPermission("canManageParts"),
+
+    // Eliminar pieza: solo admin y técnico
+    canDeletePieza: hasPermission("canManageParts"),
+
+    // Información del rol actual para mostrar mensajes apropiados
+    userRole,
+  };
+}
