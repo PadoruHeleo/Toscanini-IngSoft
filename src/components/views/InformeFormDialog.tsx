@@ -1186,9 +1186,36 @@ export default function InformeFormDialog({
 
             <TabsContent value="terminos" className="space-y-6 mt-6">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">
-                  Términos y Condiciones del Informe
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">
+                    Términos y Condiciones del Informe
+                  </h3>
+
+                  {/* Botón prominente para aplicar términos inmediatamente */}
+                  {isEditing &&
+                    informe?.informe_id &&
+                    selectedTerminos.length > 0 && (
+                      <Button
+                        type="button"
+                        onClick={handleActualizarTerminos}
+                        disabled={loadingTerminos}
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                      >
+                        {loadingTerminos ? (
+                          <>
+                            <span className="animate-spin mr-2">⏳</span>
+                            Actualizando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="mr-2">💾</span>
+                            Aplicar Términos Ahora
+                          </>
+                        )}
+                      </Button>
+                    )}
+                </div>
 
                 {loadingTerminos ? (
                   <div className="text-center py-4">
@@ -1399,80 +1426,6 @@ export default function InformeFormDialog({
                           </div>
                         </div>
                       )}
-
-                    {selectedTerminos.length > 0 && (
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <div className="space-y-2">
-                          <p className="text-sm text-blue-800">
-                            <strong>✓ Términos seleccionados:</strong>{" "}
-                            {selectedTerminos.length} de{" "}
-                            {terminosCondiciones.length}
-                          </p>
-                          <div className="text-xs text-blue-700">
-                            <p className="font-medium mb-1">
-                              Términos que se aplicarán:
-                            </p>
-                            <ul className="list-disc list-inside space-y-0.5 pl-2">
-                              {terminosCondiciones
-                                .filter((termino) =>
-                                  selectedTerminos.includes(termino.termino_id)
-                                )
-                                .map((termino) => (
-                                  <li
-                                    key={termino.termino_id}
-                                    className="truncate"
-                                  >
-                                    <span className="font-medium">
-                                      {termino.termino_nombre ||
-                                        "Término General"}
-                                    </span>
-                                    {termino.is_default && (
-                                      <span className="ml-1 text-green-600">
-                                        (Por defecto)
-                                      </span>
-                                    )}
-                                  </li>
-                                ))}
-                            </ul>
-                          </div>
-                          <p className="text-xs text-blue-600 mt-2">
-                            📝 Estos términos y condiciones se aplicarán
-                            automáticamente al informe cuando se guarde.
-                          </p>
-
-                          {/* Botón para aplicar términos inmediatamente */}
-                          {isEditing && informe?.informe_id && (
-                            <div className="mt-3 pt-3 border-t border-blue-200">
-                              <Button
-                                type="button"
-                                onClick={handleActualizarTerminos}
-                                disabled={loadingTerminos}
-                                size="sm"
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                {loadingTerminos ? (
-                                  <>
-                                    <span className="animate-spin mr-2">
-                                      ⏳
-                                    </span>
-                                    Actualizando...
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="mr-2">💾</span>
-                                    Aplicar Términos Ahora
-                                  </>
-                                )}
-                              </Button>
-                              <p className="text-xs text-blue-600 mt-1">
-                                Actualiza inmediatamente los términos y
-                                condiciones sin guardar el informe completo
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
