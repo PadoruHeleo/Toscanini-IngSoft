@@ -175,7 +175,19 @@ export default function InformeFormDialog({
   const loadTerminosCondiciones = async () => {
     try {
       setLoadingTerminos(true);
-      const terminos = await invoke<any[]>("get_terminos_condiciones_activos");
+      // Cargar solo términos aplicables a informes
+      const terminos = await invoke<any[]>("get_terminos_condiciones_by_tipo", {
+        tipo: "informe",
+      });
+      console.log(
+        "📋 Términos cargados para informes:",
+        terminos.map((t) => ({
+          id: t.termino_id,
+          nombre: t.termino_nombre,
+          tipo: t.tipo_referencia,
+          isDefault: t.is_default,
+        }))
+      );
       setTerminosCondiciones(terminos);
 
       // Aplicar términos por defecto inmediatamente al cargar (solo si no hay términos seleccionados)
@@ -203,16 +215,26 @@ export default function InformeFormDialog({
   const loadTerminosInforme = async () => {
     if (!informe?.informe_id) return;
     try {
-      const terminosInforme = await invoke<number[]>(
-        "get_terminos_by_informe",
-        {
-          informeId: informe.informe_id,
-        }
-      );
-      setSelectedTerminos(terminosInforme);
-      setAplicadosTerminos(terminosInforme); // Los que están en BD son los realmente aplicados
+      console.log("🔍 Cargando términos del informe:", informe.informe_id);
+
+      const terminosInforme = await invoke<any[]>("get_terminos_by_informe", {
+        informeId: informe.informe_id,
+      });
+
+      console.log("📋 Términos recibidos del backend:", terminosInforme);
+
+      // Extraer solo los IDs de los términos devueltos por el backend
+      const terminoIds = terminosInforme.map((t) => t.termino_id);
+
+      console.log("🎯 IDs de términos aplicados:", terminoIds);
+
+      setSelectedTerminos(terminoIds);
+      setAplicadosTerminos(terminoIds); // Los que están en BD son los realmente aplicados
+
+      console.log("✅ Estado actualizado correctamente");
     } catch (error) {
-      console.error("Error cargando términos del informe:", error);
+      console.error("❌ Error cargando términos del informe:", error);
+      showError("Error", "No se pudieron cargar los términos del informe");
     }
   };
 
@@ -529,13 +551,28 @@ export default function InformeFormDialog({
 
       console.log("✅ Comando ejecutado exitosamente");
 
+      // Primero actualizar el estado local inmediatamente
+      setAplicadosTerminos([...selectedTerminos]);
+
       success(
         "Términos actualizados",
         `Se han aplicado ${selectedTerminos.length} términos y condiciones al informe`
       );
 
-      // Recargar términos para mostrar el estado actualizado
+      // Recargar términos para mostrar el estado actualizado desde la base de datos
+      console.log("🔄 Recargando términos desde la base de datos...");
+
+      // Pequeño delay para asegurar que la transacción se complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       await loadTerminosInforme();
+      console.log("✅ Términos recargados exitosamente");
+
+      // Verificación final
+      setTimeout(async () => {
+        await loadTerminosInforme();
+        console.log("🔍 Verificación final completada");
+      }, 500);
     } catch (error) {
       console.error("❌ Error detallado actualizando términos:", {
         error,

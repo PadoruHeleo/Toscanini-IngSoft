@@ -186,23 +186,12 @@ export default function CotizacionFormDialog({
 
   // Aplicar términos por defecto cuando se tienen los datos necesarios
   useEffect(() => {
-    console.log("🔍 CotizacionFormDialog - useEffect términos por defecto:", {
-      isEditing,
-      terminosCondicionesLength: terminosCondiciones.length,
-      selectedTerminosLength: selectedTerminos.length,
-      open,
-      terminosCondiciones: terminosCondiciones.map((t) => ({
-        id: t.termino_id,
-        nombre: t.termino_nombre,
-        isDefault: t.is_default,
-      })),
-    });
-
-    // NUEVA LÓGICA: Aplicar términos por defecto SIEMPRE que no haya términos seleccionados
+    // Solo aplicar términos por defecto si no estamos editando o si editando pero no hay términos cargados
     if (
       terminosCondiciones.length > 0 &&
       selectedTerminos.length === 0 &&
-      open
+      open &&
+      !isEditing // Solo para nuevas cotizaciones
     ) {
       const terminosDefecto = terminosCondiciones
         .filter((termino) => termino.is_default)
@@ -216,17 +205,9 @@ export default function CotizacionFormDialog({
           terminosDefecto
         );
         setSelectedTerminos(terminosDefecto);
-      } else {
-        console.log("⚠️ No se encontraron términos marcados como por defecto");
       }
-    } else {
-      console.log("❌ No se aplican términos por defecto:", {
-        hayTerminos: terminosCondiciones.length > 0,
-        noHaySeleccionados: selectedTerminos.length === 0,
-        modalAbierto: open,
-      });
     }
-  }, [terminosCondiciones, selectedTerminos, open]);
+  }, [terminosCondiciones, open, isEditing]); // Removido selectedTerminos de las dependencias
 
   // Inicializar formulario cuando se pasa una cotización para editar
   useEffect(() => {
@@ -305,7 +286,19 @@ export default function CotizacionFormDialog({
   const loadTerminosCondiciones = async () => {
     try {
       setLoadingTerminos(true);
-      const terminos = await invoke<any[]>("get_terminos_condiciones_activos");
+      // Cargar solo términos aplicables a cotizaciones
+      const terminos = await invoke<any[]>("get_terminos_condiciones_by_tipo", {
+        tipo: "cotizacion",
+      });
+      console.log(
+        "📋 Términos cargados para cotizaciones:",
+        terminos.map((t) => ({
+          id: t.termino_id,
+          nombre: t.termino_nombre,
+          tipo: t.tipo_referencia,
+          isDefault: t.is_default,
+        }))
+      );
       setTerminosCondiciones(terminos);
 
       // Aplicar términos por defecto inmediatamente al cargar (solo si no hay términos seleccionados)
@@ -333,16 +326,32 @@ export default function CotizacionFormDialog({
   const loadTerminosCotizacion = async () => {
     if (!cotizacion?.cotizacion_id) return;
     try {
-      const terminosCotizacion = await invoke<number[]>(
+      console.log(
+        "🔍 Cargando términos de la cotización:",
+        cotizacion.cotizacion_id
+      );
+
+      const terminosCotizacion = await invoke<any[]>(
         "get_terminos_by_cotizacion",
         {
           cotizacionId: cotizacion.cotizacion_id,
         }
       );
-      setSelectedTerminos(terminosCotizacion);
-      setAplicadosTerminos(terminosCotizacion); // Los que están en BD son los realmente aplicados
+
+      console.log("📋 Términos recibidos del backend:", terminosCotizacion);
+
+      // Extraer solo los IDs de los términos devueltos por el backend
+      const terminoIds = terminosCotizacion.map((t) => t.termino_id);
+
+      console.log("🎯 IDs de términos aplicados:", terminoIds);
+
+      setSelectedTerminos(terminoIds);
+      setAplicadosTerminos(terminoIds); // Los que están en BD son los realmente aplicados
+
+      console.log("✅ Estado actualizado correctamente");
     } catch (error) {
-      console.error("Error cargando términos de la cotización:", error);
+      console.error("❌ Error cargando términos de la cotización:", error);
+      showError("Error", "No se pudieron cargar los términos de la cotización");
     }
   };
 
@@ -442,6 +451,20 @@ export default function CotizacionFormDialog({
       selectedTerminosLength: selectedTerminos.length,
     });
 
+    // Mostrar detalles de los términos seleccionados
+    console.log(
+      "📋 Detalles de términos seleccionados:",
+      selectedTerminos.map((id) => {
+        const termino = terminosCondiciones.find((t) => t.termino_id === id);
+        return {
+          id,
+          nombre: termino?.termino_nombre,
+          tipo: termino?.tipo_referencia,
+          isDefault: termino?.is_default,
+        };
+      })
+    );
+
     if (!cotizacion?.cotizacion_id) {
       showError(
         "Error",
@@ -478,13 +501,28 @@ export default function CotizacionFormDialog({
 
       console.log("✅ Comando ejecutado exitosamente");
 
+      // Primero actualizar el estado local inmediatamente
+      setAplicadosTerminos([...selectedTerminos]);
+
       success(
         "Términos actualizados",
         `Se han aplicado ${selectedTerminos.length} términos y condiciones a la cotización`
       );
 
-      // Recargar términos para mostrar el estado actualizado
+      // Recargar términos para mostrar el estado actualizado desde la base de datos
+      console.log("🔄 Recargando términos desde la base de datos...");
+
+      // Pequeño delay para asegurar que la transacción se complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       await loadTerminosCotizacion();
+      console.log("✅ Términos recargados exitosamente");
+
+      // Verificación final deshabilitada - ya no es necesaria
+      // setTimeout(async () => {
+      //   await loadTerminosCotizacion();
+      //   console.log("🔍 Verificación final completada");
+      // }, 500);
     } catch (error) {
       console.error("❌ Error detallado actualizando términos:", {
         error,
@@ -942,9 +980,6 @@ export default function CotizacionFormDialog({
       setLoading(false);
     }
   };
-
-  console.log("Render CotizacionFormDialog, ordenTrabajoId:", ordenTrabajoId);
-  console.log("Render CotizacionFormDialog, estadoOrden:", estadoOrden);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
