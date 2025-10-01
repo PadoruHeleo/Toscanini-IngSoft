@@ -18,6 +18,7 @@ import InformeFormDialog from "./InformeFormDialog";
 import { UnificarFiltros } from "./UnificarFiltros";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -112,13 +113,13 @@ const getCotizacionButtonInfo = (orden: OrdenTrabajo) => {
   const isSent = orden.estado === "cotizacion_enviada";
   return {
     hasQuote: true,
-    text: isSent ? "Ver Cotización ✓" : "Ver Cotización",
+    text: isSent ? "Ver Cotización" : "Ver Cotización",
     icon: "eye",
     className: isSent
-      ? "text-purple-600 hover:text-purple-700"
+      ? "text-purple-600 hover:text-purple-700 font-medium"
       : "text-blue-600 hover:text-blue-700",
     title: isSent
-      ? "Ver cotización enviada al cliente"
+      ? "Cotización enviada - Pendiente de aprobación/rechazo"
       : "Ver cotización (borrador)",
   };
 };
@@ -141,6 +142,7 @@ const getTiempoEnEstado = (createdAt?: string) => {
 export function OrdenesTrabajoView() {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
+  const { getVisibleActions } = useOrdenTrabajoPermissions();
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshFilters, setRefreshFilters] = useState(0);
@@ -541,78 +543,115 @@ export function OrdenesTrabajoView() {
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end flex-wrap">
-                      {" "}
-                      {/* Botones de cotización */}
                       {(() => {
-                        const buttonInfo = getCotizacionButtonInfo(orden);
+                        const actions = getVisibleActions(orden);
+
                         return (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              buttonInfo.hasQuote
-                                ? handleVerCotizacion(orden)
-                                : handleCrearCotizacion(orden)
-                            }
-                            disabled={loadingCotizacion === orden.orden_id}
-                            className={`${buttonInfo.className} disabled:opacity-50`}
-                            title={buttonInfo.title}
-                          >
-                            {loadingCotizacion === orden.orden_id ? (
-                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                            ) : buttonInfo.icon === "eye" ? (
-                              <Eye className="h-3 w-3" />
-                            ) : (
-                              <Plus className="h-3 w-3" />
+                          <>
+                            {/* Botones de cotización */}
+                            {actions.showCreateCotizacion &&
+                              (() => {
+                                const buttonInfo =
+                                  getCotizacionButtonInfo(orden);
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleCrearCotizacion(orden)}
+                                    disabled={
+                                      loadingCotizacion === orden.orden_id
+                                    }
+                                    className={`${buttonInfo.className} disabled:opacity-50`}
+                                    title={buttonInfo.title}
+                                  >
+                                    {loadingCotizacion === orden.orden_id ? (
+                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                      <Plus className="h-3 w-3" />
+                                    )}
+                                    {buttonInfo.text}
+                                  </Button>
+                                );
+                              })()}
+
+                            {actions.showViewCotizacion &&
+                              (() => {
+                                const buttonInfo =
+                                  getCotizacionButtonInfo(orden);
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVerCotizacion(orden)}
+                                    disabled={
+                                      loadingCotizacion === orden.orden_id
+                                    }
+                                    className={`${buttonInfo.className} disabled:opacity-50`}
+                                    title={buttonInfo.title}
+                                  >
+                                    {loadingCotizacion === orden.orden_id ? (
+                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                      <Eye className="h-3 w-3" />
+                                    )}
+                                    {buttonInfo.text}
+                                  </Button>
+                                );
+                              })()}
+
+                            {/* Botones de informe */}
+                            {actions.showCreateInforme && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCrearInforme(orden)}
+                                className="text-green-600 hover:text-green-700"
+                                title="Crear nuevo informe"
+                              >
+                                <Plus className="h-3 w-3" />
+                                Crear Informe
+                              </Button>
                             )}
-                            {buttonInfo.text}
-                          </Button>
+
+                            {actions.showViewInforme && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleVerInforme(orden)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Ver informe existente"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Ver Informe
+                              </Button>
+                            )}
+
+                            {/* Botón editar - siempre visible */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditOrden(orden)}
+                              className="text-gray-600 hover:text-gray-700"
+                              title="Editar orden"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+
+                            {/* Botón eliminar - solo para admin y técnico */}
+                            {actions.showDeleteOrden && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteOrden(orden)}
+                                className="text-red-600 hover:text-red-700"
+                                title="Eliminar orden"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </>
                         );
                       })()}
-                      {/* Botones de informe */}
-                      {orden.informe_id ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleVerInforme(orden)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Ver informe"
-                        >
-                          <Eye className="h-3 w-3" />
-                          Informe
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCrearInforme(orden)}
-                          className="text-green-600 hover:text-green-700"
-                          title="Crear informe"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Informe
-                        </Button>
-                      )}
-                      {/* Botón editar */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditOrden(orden)}
-                        className="text-gray-600 hover:text-gray-700"
-                        title="Editar orden"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      {/* Botón eliminar */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteOrden(orden)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Eliminar orden"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

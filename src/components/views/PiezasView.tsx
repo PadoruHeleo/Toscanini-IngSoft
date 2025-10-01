@@ -19,6 +19,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { usePiezasPermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/AccessDenied";
 
 interface Pieza {
   pieza_id: number;
@@ -37,6 +39,7 @@ interface FormData {
 }
 
 export default function PiezasView() {
+  const { canViewPiezas } = usePiezasPermissions();
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -152,6 +155,11 @@ export default function PiezasView() {
       // Manejo de error
     }
   };
+
+  // Verificar permisos antes de renderizar la vista
+  if (!canViewPiezas) {
+    return <AccessDenied />;
+  }
 
   return (
     <div className="p-4">

@@ -10,6 +10,8 @@ import {
   UsuarioView,
   TerminosCondicionesView,
 } from "@/components/views";
+import { AccessDenied } from "@/components/AccessDenied";
+import { useViewPermissions } from "@/hooks/use-permissions";
 import { usePeriodicNotification } from "@/hooks/use-periodic-notification";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
@@ -30,6 +32,8 @@ function PeriodicNotifications() {
 // Componente para renderizar la vista activa
 function ViewRenderer() {
   const { currentView } = useView();
+  const { canViewUsers, canViewTermsConditions } = useViewPermissions();
+
   switch (currentView) {
     case "dashboard":
     case "inicio":
@@ -44,8 +48,14 @@ function ViewRenderer() {
     case "piezas":
       return <PiezasView />;
     case "usuarios":
+      if (!canViewUsers) {
+        return <AccessDenied />;
+      }
       return <UsuarioView />;
     case "términos y condiciones":
+      if (!canViewTermsConditions) {
+        return <AccessDenied />;
+      }
       return <TerminosCondicionesView />;
     case "projects":
     case "Ajustes de Cuenta":

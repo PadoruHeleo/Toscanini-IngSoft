@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
+import { useClientePermissions } from "@/hooks/use-permissions";
 
 interface Cliente {
   cliente_id: number;
@@ -59,6 +60,8 @@ export function ClienteFormDialog({
 }: ClienteFormDialogProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
+  const { canCreateCliente, canEditCliente, userRole } =
+    useClientePermissions();
   const [loading, setLoading] = useState(false);
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [formData, setFormData] = useState({
@@ -191,6 +194,24 @@ export function ClienteFormDialog({
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar permisos antes de proceder
+    if (isEditing && !canEditCliente) {
+      showError(
+        "Acceso denegado",
+        `Su rol '${userRole}' no tiene permisos para editar clientes.`
+      );
+      return;
+    }
+
+    if (!isEditing && !canCreateCliente) {
+      showError(
+        "Acceso denegado",
+        `Su rol '${userRole}' no tiene permisos para crear clientes.`
+      );
+      return;
+    }
+
     if (!validateForm()) return;
 
     const isUnique = await validateUniqueCliente();
@@ -202,6 +223,19 @@ export function ClienteFormDialog({
   const handleConfirmSubmit = async () => {
     if (!user) {
       showError("Error de autenticación", "Usuario no autenticado");
+      setShowConfirmationDialog(false);
+      return;
+    }
+
+    // Validación adicional de permisos antes de la operación final
+    if (isEditing && !canEditCliente) {
+      showError("Acceso denegado", "No tiene permisos para editar clientes.");
+      setShowConfirmationDialog(false);
+      return;
+    }
+
+    if (!isEditing && !canCreateCliente) {
+      showError("Acceso denegado", "No tiene permisos para crear clientes.");
       setShowConfirmationDialog(false);
       return;
     }
@@ -276,6 +310,47 @@ export function ClienteFormDialog({
       setShowConfirmationDialog(false);
     }
   };
+
+  // Verificar permisos antes de renderizar el formulario
+  if (isEditing && !canEditCliente) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acceso Denegado</DialogTitle>
+            <DialogDescription>
+              Su rol '{userRole}' no tiene permisos para editar clientes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (!isEditing && !canCreateCliente) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acceso Denegado</DialogTitle>
+            <DialogDescription>
+              Su rol '{userRole}' no tiene permisos para crear clientes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

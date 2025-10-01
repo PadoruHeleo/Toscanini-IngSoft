@@ -29,6 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
+import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
 import { Plus, Trash2, FileText } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -101,6 +102,7 @@ export default function InformeFormDialog({
 }: InformeFormDialogProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
+  const { isRecepcion, canEditInforme } = useOrdenTrabajoPermissions();
   const [loading, setLoading] = useState(false);
   const [loadingSendToClient, setLoadingSendToClient] = useState(false);
   const [loadingSendExisting, setLoadingSendExisting] = useState(false);
@@ -1044,6 +1046,58 @@ export default function InformeFormDialog({
     if (pieza.pieza_marca) parts.push(`(${pieza.pieza_marca})`);
     return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
   };
+
+  // Verificar permisos para recepción - solo lectura
+  if (isRecepcion && !canEditInforme) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Informe - Solo Lectura</DialogTitle>
+            <DialogDescription>
+              Como usuario de recepción, solo puede visualizar los informes
+              existentes. No tiene permisos para crear o editar informes.
+            </DialogDescription>
+          </DialogHeader>
+          {informe && (
+            <div className="space-y-4">
+              <div>
+                <strong>Código:</strong> {informe.informe_codigo || "N/A"}
+              </div>
+              <div>
+                <strong>Técnico Responsable:</strong>{" "}
+                {informe.tecnico_responsable || "N/A"}
+              </div>
+              <div>
+                <strong>Diagnóstico:</strong>
+                <div className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                  {informe.diagnostico || "N/A"}
+                </div>
+              </div>
+              <div>
+                <strong>Recomendaciones:</strong>
+                <div className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                  {informe.recomendaciones || "N/A"}
+                </div>
+              </div>
+              <div>
+                <strong>Solución Aplicada:</strong>
+                <div className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                  {informe.solucion_aplicada || "N/A"}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

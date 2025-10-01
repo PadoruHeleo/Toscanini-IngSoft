@@ -29,8 +29,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
-import { Plus, Trash2 } from "lucide-react";
+import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
+import { Plus, Trash2, Info } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Cotizacion {
   cotizacion_id: number;
@@ -103,6 +105,7 @@ export default function CotizacionFormDialog({
 }: CotizacionFormDialogProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
+  const { getCotizacionActions } = useOrdenTrabajoPermissions();
   const [loading, setLoading] = useState(false);
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
@@ -1000,6 +1003,80 @@ export default function CotizacionFormDialog({
     }
   };
 
+  // Determinar permisos según el estado de la cotización y rol del usuario
+  const cotizacionActions = getCotizacionActions({
+    is_aprobada: cotizacion?.is_aprobada,
+    is_borrador: cotizacion?.is_borrador,
+  });
+
+  // Determinar si los campos deben estar en solo lectura para recepción
+  const shouldFieldsBeReadOnly = () => {
+    if (!cotizacion || user?.usuario_rol !== "recepcion") return false;
+    return cotizacionActions.canApprove && !cotizacionActions.canEdit;
+  };
+
+  // Si es solo lectura (recepción viendo borrador), mostrar diálogo simplificado
+  if (cotizacionActions.isReadOnly && cotizacion) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cotización - Solo Lectura</DialogTitle>
+            <DialogDescription>
+              Esta cotización está en borrador. Como usuario de recepción, solo
+              puede ver cotizaciones enviadas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <strong>Código:</strong> {cotizacion.cotizacion_codigo || "N/A"}
+            </div>
+            <div>
+              <strong>Costo Revisión:</strong> ${cotizacion.costo_revision || 0}
+            </div>
+            <div>
+              <strong>Costo Reparación:</strong> $
+              {cotizacion.costo_reparacion || 0}
+            </div>
+            <div>
+              <strong>Costo Total:</strong> ${cotizacion.costo_total || 0}
+            </div>
+            <div>
+              <strong>Estado:</strong> Borrador
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Si recepción no puede crear cotizaciones nuevas
+  if (!isEditing && !cotizacionActions.canCreate) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acceso Denegado</DialogTitle>
+            <DialogDescription>
+              No tiene permisos para crear cotizaciones. Solo el personal
+              técnico y administrativo puede crear cotizaciones.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -1016,6 +1093,49 @@ export default function CotizacionFormDialog({
               : "Completa los datos para crear una nueva cotización"}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Mensaje informativo para recepción con cotización en solo lectura */}
+        {shouldFieldsBeReadOnly() && (
+          <Alert className="mb-4">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              Como recepcionista, puedes aprobar o rechazar esta cotización
+              enviada, pero no modificar su contenido técnico.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Mensaje informativo para recepción */}
+        {cotizacionActions.canApprove &&
+          !cotizacionActions.canEdit &&
+          estadoOrden === "cotizacion_enviada" && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-green-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-green-800">
+                    Cotización Lista para Aprobación
+                  </h3>
+                  <div className="mt-1 text-sm text-green-700">
+                    Esta cotización ha sido enviada al cliente. Puede aprobarla
+                    o rechazarla usando los botones al final del formulario.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
@@ -1069,7 +1189,10 @@ export default function CotizacionFormDialog({
                       handleInputChange("costo_revision", e.target.value)
                     }
                     placeholder="25000"
-                    className={errors.costo_revision ? "border-red-500" : ""}
+                    readOnly={shouldFieldsBeReadOnly()}
+                    className={`${
+                      errors.costo_revision ? "border-red-500" : ""
+                    } ${shouldFieldsBeReadOnly() ? "bg-gray-50" : ""}`}
                   />
                   {errors.costo_revision && (
                     <p className="text-sm text-red-500">
@@ -1092,7 +1215,10 @@ export default function CotizacionFormDialog({
                       handleInputChange("costo_reparacion", e.target.value)
                     }
                     placeholder="0"
-                    className={errors.costo_reparacion ? "border-red-500" : ""}
+                    readOnly={shouldFieldsBeReadOnly()}
+                    className={`${
+                      errors.costo_reparacion ? "border-red-500" : ""
+                    } ${shouldFieldsBeReadOnly() ? "bg-gray-50" : ""}`}
                   />
                   {errors.costo_reparacion && (
                     <p className="text-sm text-red-500">
@@ -1109,7 +1235,10 @@ export default function CotizacionFormDialog({
                   value={formData.informe}
                   onChange={(e) => handleInputChange("informe", e.target.value)}
                   placeholder="Redacte aquí el informe técnico de la cotización"
-                  className={errors.informe ? "border-red-500" : ""}
+                  readOnly={shouldFieldsBeReadOnly()}
+                  className={`${errors.informe ? "border-red-500" : ""} ${
+                    shouldFieldsBeReadOnly() ? "bg-gray-50" : ""
+                  }`}
                   rows={5}
                   required
                 />
@@ -1124,55 +1253,57 @@ export default function CotizacionFormDialog({
                 </div>
 
                 {/* Agregar pieza */}
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <Label htmlFor="pieza_select">Seleccionar Pieza</Label>
-                    <Select
-                      value={selectedPiezaId}
-                      onValueChange={setSelectedPiezaId}
+                {!shouldFieldsBeReadOnly() && (
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Label htmlFor="pieza_select">Seleccionar Pieza</Label>
+                      <Select
+                        value={selectedPiezaId}
+                        onValueChange={setSelectedPiezaId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              loadingPiezas
+                                ? "Cargando piezas..."
+                                : "Seleccionar pieza"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {piezas.map((pieza) => (
+                            <SelectItem
+                              key={pieza.pieza_id}
+                              value={pieza.pieza_id.toString()}
+                            >
+                              {getPiezaDisplayName(pieza)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="w-24">
+                      <Label htmlFor="cantidad">Cantidad</Label>
+                      <Input
+                        id="cantidad"
+                        type="number"
+                        min="1"
+                        value={cantidad}
+                        onChange={(e) => setCantidad(e.target.value)}
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleAddPieza}
+                      disabled={!selectedPiezaId || !cantidad}
+                      className="mb-0"
                     >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            loadingPiezas
-                              ? "Cargando piezas..."
-                              : "Seleccionar pieza"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {piezas.map((pieza) => (
-                          <SelectItem
-                            key={pieza.pieza_id}
-                            value={pieza.pieza_id.toString()}
-                          >
-                            {getPiezaDisplayName(pieza)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
-
-                  <div className="w-24">
-                    <Label htmlFor="cantidad">Cantidad</Label>
-                    <Input
-                      id="cantidad"
-                      type="number"
-                      min="1"
-                      value={cantidad}
-                      onChange={(e) => setCantidad(e.target.value)}
-                    />
-                  </div>
-
-                  <Button
-                    type="button"
-                    onClick={handleAddPieza}
-                    disabled={!selectedPiezaId || !cantidad}
-                    className="mb-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                )}
 
                 {/* Tabla de piezas seleccionadas */}
                 {selectedPiezas.length > 0 && (
@@ -1212,16 +1343,18 @@ export default function CotizacionFormDialog({
                               ${pieza.pieza_precio * pieza.cantidad}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  handleRemovePieza(pieza.pieza_id)
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {!shouldFieldsBeReadOnly() && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleRemovePieza(pieza.pieza_id)
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1556,7 +1689,8 @@ export default function CotizacionFormDialog({
                   .normalize("NFD")
                   .replace(/[\u0300-\u036f]/g, "")
                   .replace(/\s+/g, " ")
-                  .trim() === "cotizacion_enviada" && (
+                  .trim() === "cotizacion_enviada" &&
+                cotizacionActions.canApprove && (
                   <>
                     <Button
                       type="button"

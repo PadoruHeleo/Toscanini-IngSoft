@@ -17,6 +17,7 @@ import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
+import { useClientePermissions } from "@/hooks/use-permissions";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,8 @@ interface Cliente {
 export function ClientesView() {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
+  const { canCreateCliente, canEditCliente, userRole } =
+    useClientePermissions();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -182,7 +185,14 @@ export function ClientesView() {
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
         <ViewTitle />
-        <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
+        {canCreateCliente && (
+          <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
+        )}
+        {!canCreateCliente && (
+          <div className="text-sm text-gray-500">
+            Rol actual: {userRole} - Solo visualización permitida
+          </div>
+        )}
       </div>
 
       {/* Barra de búsqueda */}
@@ -249,15 +259,17 @@ export function ClientesView() {
                   <TableCell>{formatDate(cliente.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditCliente(cliente)}
-                        className="text-gray-600 hover:text-gray-700"
-                        title="Editar cliente"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
+                      {canEditCliente && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditCliente(cliente)}
+                          className="text-gray-600 hover:text-gray-700"
+                          title="Editar cliente"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -267,15 +279,17 @@ export function ClientesView() {
                       >
                         <History className="h-3 w-3" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenDeleteDialog(cliente)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Eliminar cliente"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {canEditCliente && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenDeleteDialog(cliente)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Eliminar cliente"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
