@@ -1,0 +1,22 @@
+-- Insertar piezas de repuesto de prueba
+INSERT IGNORE INTO PIEZA (pieza_nombre, pieza_marca, pieza_desc, pieza_precio) VALUES
+('Batería Ion-Litio 7.4V', 'Motorola', 'Batería recargable para radios portátiles DGP series', 85000),
+('Antena Helicoidal VHF', 'Diamond', 'Antena flexible para frecuencias 136-174 MHz', 25000),
+('Micrófono de Solapa', 'Kenwood', 'Micrófono con clip y cable espiral retráctil', 45000),
+('Cargador de Mesa', 'Icom', 'Cargador rápido con indicador LED de estado', 65000),
+('Correa de Transporte', 'Yaesu', 'Correa ajustable con gancho metálico reforzado', 12000),
+('Filtro de Audio', 'Motorola', 'Filtro pasa-bajos para mejora de audio', 35000),
+('Conector SMA Macho', 'Generic', 'Conector de antena SMA dorado', 8000),
+('Placa Principal', 'Hytera', 'Tarjeta madre para repetidores RD series', 450000),
+('Display LCD', 'Kenwood', 'Pantalla de cristal líquido con retroiluminación', 75000),
+('Potenciómetro de Volumen', 'Icom', 'Control de volumen rotatorio con interruptor', 18000),
+('Cristal de Cuarzo', 'Generic', 'Oscilador de frecuencia 14.7456 MHz', 15000),
+('Transistor de RF', 'Mitsubishi', 'Transistor de potencia para etapa final', 95000),
+('Capacitor Electrolítico', 'Panasonic', 'Condensador 1000µF 25V para fuente', 5000),
+('Fusible Cerámico 5A', 'Littelfuse', 'Fusible de protección para circuitos de potencia', 3000),
+('Cable Coaxial RG-58', 'Belden', 'Cable de 50 ohms para conexiones de RF (metro)', 4500),
+('Conector PL-259', 'Amphenol', 'Conector UHF macho para cable coaxial', 12000),
+('O-Ring de Sellado', 'Generic', 'Anillo de goma para sellado hermético', 2500),
+('Tornillo Allen M3x8', 'Generic', 'Tornillo hexagonal inoxidable', 500),
+('Disipador de Calor', 'Aavid', 'Disipador de aluminio para transistores TO-220', 8500),
+('Ventilador 12V', 'Sunon', 'Ventilador axial de refrigeración 40x40mm', 25000);
