@@ -17,7 +17,7 @@ impl EmailService {
     }
 
     pub async fn send_password_reset_email(&self, to_email: &str, reset_code: &str, user_name: &str) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = "Recuperación de Contraseña - Toscanini";
 
@@ -63,7 +63,7 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         piezas: &[crate::commands::informe::PiezaInforme]
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = format!("Informe Técnico {} - Toscanini", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"));
@@ -214,9 +214,46 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         equipo: &crate::commands::equipos::Equipo,
         cliente_nombre: &str
-    ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
-        let to = vec!["benitez.basti0@gmail.com".to_string()];
+    ) -> Result<String, String> {
+        use std::env;
+        
+        // Verificar el entorno de ejecución
+        let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        
+        let (from, to, log_message) = if app_environment == "development" {
+            // En desarrollo: usar email de desarrollo o simular envío
+            let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
+            
+            println!("🔧 MODO DESARROLLO: Simulando envío de notificación de orden de trabajo");
+            println!("📧 En producción se enviaría a los administradores y técnicos de la BD");
+            
+            // Obtener emails para logging (sin enviar)
+            let db_emails = crate::commands::users::get_admin_and_tech_emails().await.unwrap_or_default();
+            println!("📋 Emails que recibirían en producción: {:?}", db_emails);
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![dev_email.clone()],
+                format!("Notificación de orden {} enviada a {} (desarrollo)", 
+                    orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), dev_email)
+            )
+        } else {
+            // En producción: obtener emails reales de la base de datos
+            let notification_emails = crate::commands::users::get_admin_and_tech_emails().await?;
+            
+            if notification_emails.is_empty() {
+                return Err("No hay administradores o técnicos con email configurado para enviar notificaciones".to_string());
+            }
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                notification_emails.clone(),
+                format!("Notificación de orden {} enviada a {} administradores y técnicos", 
+                    orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), 
+                    notification_emails.len())
+            )
+        };
+        
         let subject = format!("Nueva Orden de Trabajo {} - Toscanini", 
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"));
 
@@ -313,13 +350,39 @@ impl EmailService {
             orden_trabajo.pre_informe.as_deref().unwrap_or("Sin pre-informe registrado")
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
+        // En desarrollo, detectar emails de prueba y simular envío
+        let is_test_email = |email: &str| -> bool {
+            email.contains("@toscanini.com") || 
+            email.contains("@test.") || 
+            email.contains("@ejemplo.") || 
+            email.contains("@prueba.") ||
+            email.starts_with("admin@") ||
+            email.starts_with("tecnico") ||
+            email.starts_with("recepcion@")
+        };
+        
+        if app_environment == "development" && to.iter().any(|email| is_test_email(email)) {
+            println!("📧 SIMULANDO envío de email a: {:?}", to);
+            println!("📄 Asunto: {}", subject);
+            println!("✅ Email simulado correctamente (no se envió realmente)");
+            return Ok(log_message);
+        }
+        
+        // Enviar email real (en producción o desarrollo con email válido)
+        let email = CreateEmailBaseOptions::new(&from, to.clone(), &subject)
             .with_html(&html_content);
 
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
-
-        Ok(())
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("📧 Email enviado exitosamente a: {:?}", to);
+                println!("📋 Respuesta: {:?}", response);
+                Ok(log_message)
+            }
+            Err(e) => {
+                eprintln!("❌ Error enviando email: {:?}", e);
+                Err(format!("Error sending email: {}", e))
+            }
+        }
     }
 
     pub async fn send_orden_trabajo_cliente(
@@ -329,7 +392,7 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         equipo: &crate::commands::equipos::Equipo,
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambia por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![cliente_email.to_string()];
         let subject = format!(
             "Orden de Trabajo Creada - Toscanini (Código: {})",
@@ -419,7 +482,7 @@ impl EmailService {
         user_name: &str,
         temp_password: &str,
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambia por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = "Acceso a Toscanini - Credenciales Temporales";
 
@@ -453,9 +516,56 @@ impl EmailService {
         let email = CreateEmailBaseOptions::new(from, to, subject)
             .with_html(&html_content);
 
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
-
-        Ok(())
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("Email enviado exitosamente: {:?}", response);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Error detallado enviando email: {:?}", e);
+                Err(format!("Error sending email: {}", e))
+            }
+        }
     }
+}
+
+/// Comando de Tauri para enviar email de orden de trabajo al cliente
+#[tauri::command]
+pub async fn send_orden_trabajo_cliente(orden_id: i32, _sent_by: i32) -> Result<String, String> {
+    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+
+    // Obtener la orden de trabajo
+    let orden = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+
+    // Obtener el equipo
+    let equipo_id = orden.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id.ok_or_else(|| "El equipo no tiene cliente asociado".to_string())?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| "Cliente no encontrado".to_string())?;
+
+    // Verificar que el cliente tenga email
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+
+    // Enviar el email
+    email_service.send_orden_trabajo_cliente(
+        &cliente.cliente_correo.unwrap(),
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
+        &orden,
+        &equipo,
+    ).await?;
+
+    Ok("Email enviado exitosamente".to_string())
 }

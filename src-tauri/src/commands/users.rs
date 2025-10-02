@@ -976,3 +976,21 @@ pub fn verify_phone(phone: String) -> bool {
     true
 }
 
+/// Obtiene los emails de usuarios con roles de admin y técnico
+pub async fn get_admin_and_tech_emails() -> Result<Vec<String>, String> {
+    let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
+    
+    let emails = sqlx::query_scalar::<_, String>(
+        "SELECT usuario_correo FROM USUARIO 
+         WHERE (usuario_rol = 'admin' OR usuario_rol = 'tecnico') 
+         AND is_active = TRUE 
+         AND usuario_correo IS NOT NULL 
+         AND usuario_correo != ''"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Error obteniendo emails de admins y técnicos: {}", e))?;
+    
+    Ok(emails)
+}
+

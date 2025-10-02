@@ -708,7 +708,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
         .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
     
     // Enviar el email
-    email_service.send_orden_trabajo_notification(
+    let log_message = email_service.send_orden_trabajo_notification(
         &orden_trabajo,
         &equipo,
         &cliente_nombre,
@@ -722,9 +722,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
         "ORDEN_TRABAJO",
         Some(orden_id),
         None,
-        Some(&format!("Notificación de orden {} enviada a benitez.basti0@gmail.com", 
-            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")
-        ))
+        Some(&log_message)
     ).await;
     
     Ok(true)

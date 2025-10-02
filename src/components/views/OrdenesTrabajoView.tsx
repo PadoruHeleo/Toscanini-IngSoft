@@ -11,12 +11,21 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Eye, Trash2, Edit, FileText } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Eye,
+  Trash2,
+  Edit,
+  FileText,
+  LogOut,
+} from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
 import { PdfViewer } from "@/components/PdfViewer";
 import { UnificarFiltros } from "./UnificarFiltros";
+import { RegistrarSalidaDialog } from "./RegistrarSalidaDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
@@ -168,6 +177,14 @@ export function OrdenesTrabajoView() {
   const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
   const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
   const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
+
+  // Estados para Registro de Salida
+  const [showRegistrarSalidaDialog, setShowRegistrarSalidaDialog] =
+    useState(false);
+  const [selectedEquipoForSalida, setSelectedEquipoForSalida] =
+    useState<any>(null);
+  const [selectedOrdenForSalida, setSelectedOrdenForSalida] =
+    useState<OrdenTrabajo | null>(null);
 
   // Actualizar el tiempo cada minuto
   useEffect(() => {
@@ -441,6 +458,39 @@ export function OrdenesTrabajoView() {
     return new Date(dateString).toLocaleDateString("es-CL");
   };
 
+  const handleRegistrarSalida = async (orden: OrdenTrabajo) => {
+    if (!orden.equipo_id) {
+      showError("Error", "Esta orden no tiene un equipo asociado.");
+      return;
+    }
+
+    try {
+      // Obtener información del equipo
+      const equipoData = await invoke<any>("get_equipo_by_id", {
+        equipoId: orden.equipo_id,
+      });
+
+      if (equipoData) {
+        setSelectedEquipoForSalida(equipoData);
+        setSelectedOrdenForSalida(orden);
+        setShowRegistrarSalidaDialog(true);
+      } else {
+        showError("Error", "No se pudo cargar la información del equipo.");
+      }
+    } catch (error) {
+      console.error("Error cargando equipo:", error);
+      showError("Error", `No se pudo cargar el equipo: ${error}`);
+    }
+  };
+
+  const handleSalidaRegistrada = () => {
+    // Recargar las órdenes después de registrar la salida
+    loadOrdenes();
+    // Limpiar estados
+    setSelectedEquipoForSalida(null);
+    setSelectedOrdenForSalida(null);
+  };
+
   if (loading) {
     return (
       <div className="p-4">
@@ -671,6 +721,20 @@ export function OrdenesTrabajoView() {
                               <Edit className="h-3 w-3" />
                             </Button>
 
+                            {/* Botón registrar salida - visible en estados compatibles */}
+                            {actions.showRegistrarSalida && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRegistrarSalida(orden)}
+                                className="text-orange-600 hover:text-orange-700"
+                                title="Registrar salida del equipo"
+                              >
+                                <LogOut className="h-3 w-3" />
+                                Registrar Salida
+                              </Button>
+                            )}
+
                             {/* Botón eliminar - solo para admin y técnico */}
                             {actions.showDeleteOrden && (
                               <Button
@@ -788,6 +852,14 @@ export function OrdenesTrabajoView() {
           cotizacionId={pdfCotizacionId || undefined}
         />
       )}
+      {/* Diálogo para Registrar Salida de Equipo */}
+      <RegistrarSalidaDialog
+        open={showRegistrarSalidaDialog}
+        onOpenChange={setShowRegistrarSalidaDialog}
+        equipo={selectedEquipoForSalida}
+        ordenTrabajo={selectedOrdenForSalida}
+        onSalidaRegistrada={handleSalidaRegistrada}
+      />
     </div>
   );
 }
