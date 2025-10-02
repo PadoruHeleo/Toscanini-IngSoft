@@ -215,8 +215,15 @@ impl EmailService {
         equipo: &crate::commands::equipos::Equipo,
         cliente_nombre: &str
     ) -> Result<(), String> {
+        // Obtener emails de administradores y técnicos de la base de datos
+        let notification_emails = crate::commands::users::get_admin_and_tech_emails().await?;
+        
+        if notification_emails.is_empty() {
+            return Err("No hay administradores o técnicos con email configurado para enviar notificaciones".to_string());
+        }
+        
         let from = "noreply@beniteztech.com";
-        let to = vec!["benitez.basti0@gmail.com".to_string()];
+        let to = notification_emails;
         let subject = format!("Nueva Orden de Trabajo {} - Toscanini", 
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"));
 

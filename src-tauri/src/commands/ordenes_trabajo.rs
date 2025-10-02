@@ -722,7 +722,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
         "ORDEN_TRABAJO",
         Some(orden_id),
         None,
-        Some(&format!("Notificación de orden {} enviada a benitez.basti0@gmail.com", 
+        Some(&format!("Notificación de orden {} enviada a administradores y técnicos", 
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")
         ))
     ).await;
