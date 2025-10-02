@@ -214,16 +214,46 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         equipo: &crate::commands::equipos::Equipo,
         cliente_nombre: &str
-    ) -> Result<(), String> {
-        // Obtener emails de administradores y técnicos de la base de datos
-        let notification_emails = crate::commands::users::get_admin_and_tech_emails().await?;
+    ) -> Result<String, String> {
+        use std::env;
         
-        if notification_emails.is_empty() {
-            return Err("No hay administradores o técnicos con email configurado para enviar notificaciones".to_string());
-        }
+        // Verificar el entorno de ejecución
+        let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
         
-        let from = "noreply@beniteztech.com";
-        let to = notification_emails;
+        let (from, to, log_message) = if app_environment == "development" {
+            // En desarrollo: usar email de desarrollo o simular envío
+            let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
+            
+            println!("🔧 MODO DESARROLLO: Simulando envío de notificación de orden de trabajo");
+            println!("📧 En producción se enviaría a los administradores y técnicos de la BD");
+            
+            // Obtener emails para logging (sin enviar)
+            let db_emails = crate::commands::users::get_admin_and_tech_emails().await.unwrap_or_default();
+            println!("📋 Emails que recibirían en producción: {:?}", db_emails);
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![dev_email.clone()],
+                format!("Notificación de orden {} enviada a {} (desarrollo)", 
+                    orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), dev_email)
+            )
+        } else {
+            // En producción: obtener emails reales de la base de datos
+            let notification_emails = crate::commands::users::get_admin_and_tech_emails().await?;
+            
+            if notification_emails.is_empty() {
+                return Err("No hay administradores o técnicos con email configurado para enviar notificaciones".to_string());
+            }
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                notification_emails.clone(),
+                format!("Notificación de orden {} enviada a {} administradores y técnicos", 
+                    orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), 
+                    notification_emails.len())
+            )
+        };
+        
         let subject = format!("Nueva Orden de Trabajo {} - Toscanini", 
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"));
 
@@ -320,13 +350,39 @@ impl EmailService {
             orden_trabajo.pre_informe.as_deref().unwrap_or("Sin pre-informe registrado")
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
+        // En desarrollo, detectar emails de prueba y simular envío
+        let is_test_email = |email: &str| -> bool {
+            email.contains("@toscanini.com") || 
+            email.contains("@test.") || 
+            email.contains("@ejemplo.") || 
+            email.contains("@prueba.") ||
+            email.starts_with("admin@") ||
+            email.starts_with("tecnico") ||
+            email.starts_with("recepcion@")
+        };
+        
+        if app_environment == "development" && to.iter().any(|email| is_test_email(email)) {
+            println!("📧 SIMULANDO envío de email a: {:?}", to);
+            println!("📄 Asunto: {}", subject);
+            println!("✅ Email simulado correctamente (no se envió realmente)");
+            return Ok(log_message);
+        }
+        
+        // Enviar email real (en producción o desarrollo con email válido)
+        let email = CreateEmailBaseOptions::new(&from, to.clone(), &subject)
             .with_html(&html_content);
 
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
-
-        Ok(())
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("📧 Email enviado exitosamente a: {:?}", to);
+                println!("📋 Respuesta: {:?}", response);
+                Ok(log_message)
+            }
+            Err(e) => {
+                eprintln!("❌ Error enviando email: {:?}", e);
+                Err(format!("Error sending email: {}", e))
+            }
+        }
     }
 
     pub async fn send_orden_trabajo_cliente(
