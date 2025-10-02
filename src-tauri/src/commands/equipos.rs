@@ -695,24 +695,20 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
             ).await?;
         }
         
-        // Registrar la salida en el log de auditoría
-        let log_message = format!(
-            "Registrada salida de equipo {} - Motivo: {} - Estado: {} -> {}{}",
-            equipo.numero_serie.clone().unwrap_or_else(|| format!("ID:{}", equipo.equipo_id)),
-            request.motivo_salida,
-            estado_anterior,
-            nuevo_estado,
-            request.observaciones.as_ref().map_or(String::new(), |obs| format!(" - Obs: {}", obs))
-        );
+        // Registrar la salida en el log de auditoría siguiendo el patrón de otros comandos
+        let equipo_serie = equipo.numero_serie.clone().unwrap_or_else(|| format!("ID{}", equipo.equipo_id));
         
-        let _ = log_action(
+        // Registrar en audit log con mensajes muy cortos para VARCHAR(32)
+        if let Err(e) = log_action(
             "REGISTRAR_SALIDA_EQUIPO",
             Some(request.usuario_id),
             "EQUIPO",
             Some(request.equipo_id),
-            Some(&estado_anterior),
-            Some(&log_message)
-        ).await;
+            Some(&format!("{}_en", &estado_anterior[..std::cmp::min(estado_anterior.len(), 10)])),
+            Some(&format!("{}_out", &nuevo_estado[..std::cmp::min(nuevo_estado.len(), 10)]))
+        ).await {
+            eprintln!("Error al guardar log de auditoría: {}", e);
+        }
         
         Ok(SalidaEquipoResponse {
             success: true,
@@ -723,21 +719,19 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
         })
     } else {
         // Si no hay orden de trabajo, solo registrar en auditoría
-        let log_message = format!(
-            "Registrada salida directa de equipo {} - Motivo: {}{}",
-            equipo.numero_serie.clone().unwrap_or_else(|| format!("ID:{}", equipo.equipo_id)),
-            request.motivo_salida,
-            request.observaciones.as_ref().map_or(String::new(), |obs| format!(" - Obs: {}", obs))
-        );
+        let equipo_serie = equipo.numero_serie.clone().unwrap_or_else(|| format!("ID{}", equipo.equipo_id));
         
-        let _ = log_action(
+        // Registrar en audit log con mensajes muy cortos para VARCHAR(32)
+        if let Err(e) = log_action(
             "REGISTRAR_SALIDA_EQUIPO_DIRECTO",
             Some(request.usuario_id),
             "EQUIPO",
             Some(request.equipo_id),
-            None,
-            Some(&log_message)
-        ).await;
+            Some("en_sistema"),
+            Some("salida_directa")
+        ).await {
+            eprintln!("Error al guardar log de auditoría: {}", e);
+        }
         
         Ok(SalidaEquipoResponse {
             success: true,
