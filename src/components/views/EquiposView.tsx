@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Table,
@@ -11,16 +11,10 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Edit, History, Filter } from "lucide-react";
+import { Search, Edit, History } from "lucide-react";
 import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
 import { EquipoHistorialDialog } from "@/components/views/EquipoHistorialDialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { UnificarFiltrosEquipos } from "@/components/views/UnificarFiltrosEquipos";
 import { Badge } from "@/components/ui/badge";
 
 interface EquipoConEstado {
@@ -67,76 +61,74 @@ export function EquiposView() {
   );
   const [historialEquipo, setHistorialEquipo] =
     useState<EquipoConEstado | null>(null);
+  const [refreshFilters, setRefreshFilters] = useState(0);
 
-  // Estados para filtros
-  const [filtros, setFiltros] = useState<FiltrosEquipos>({});
-  const [marcasDisponibles, setMarcasDisponibles] = useState<string[]>([]);
-  const [tiposDisponibles, setTiposDisponibles] = useState<string[]>([]);
-  const [clientesDisponibles, setClientesDisponibles] = useState<string[]>([]);
-  const [estadosDisponibles, setEstadosDisponibles] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadEquipos = async () => {
-    try {
-      setLoading(true);
-      const filtrosActuales = {
-        ...filtros,
-        search: searchTerm || undefined,
-      };
-      const equiposData = await invoke<EquipoConEstado[]>(
-        "get_equipos_filtrados",
-        {
-          filtros: filtrosActuales,
-        }
-      );
-      setEquipos(equiposData);
-    } catch (error) {
-      console.error("Error cargando equipos:", error);
-    } finally {
-      setLoading(false);
-    }
+  // Validación de texto (permitir letras, números, espacios y algunos caracteres especiales para equipos)
+  const isValidText = (text: string) =>
+    /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s'\-._]*$/.test(text);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (isValidText(value)) setSearchTerm(value);
   };
 
-  const loadFilterData = async () => {
-    try {
-      const [marcas, tipos, clientes, estados] = await Promise.all([
-        invoke<string[]>("get_equipos_marcas"),
-        invoke<string[]>("get_tipos_equipos"),
-        invoke<string[]>("get_clientes_con_equipos"),
-        invoke<string[]>("get_estados_ordenes_trabajo"),
-      ]);
+  const handleClearSearch = () => setSearchTerm("");
 
-      setMarcasDisponibles(marcas);
-      setTiposDisponibles(tipos);
-      setClientesDisponibles(clientes);
-      setEstadosDisponibles(estados);
-    } catch (error) {
-      console.error("Error cargando datos de filtros:", error);
-    }
-  };
-
+  // Cargar equipos inicial
   useEffect(() => {
-    loadEquipos();
-  }, [filtros, searchTerm]);
-
-  useEffect(() => {
-    loadFilterData();
+    const loadInitialEquipos = async () => {
+      try {
+        setLoading(true);
+        const equiposData = await invoke<EquipoConEstado[]>(
+          "get_equipos_con_estado"
+        );
+        setEquipos(equiposData);
+      } catch (error) {
+        console.error("Error cargando equipos:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadInitialEquipos();
   }, []);
 
+  // Debounce búsqueda
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    searchTimeoutRef.current = setTimeout(() => {
+      // UnificarFiltrosEquipos se encarga de filtrar
+    }, 150);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchTerm]);
+
   const handleEquipoAdded = () => {
-    loadEquipos();
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
+  };
+
+  const handleEquipoUpdated = () => {
     setEditingEquipo(null);
+    setRefreshFilters((prev) => prev + 1);
   };
 
-  const handleEditEquipo = (equipo: EquipoConEstado) => {
+  const handleEditEquipo = (equipo: EquipoConEstado) =>
     setEditingEquipo(equipo);
-    setShowAddForm(true);
-  };
+  const handleVerHistorial = (equipo: EquipoConEstado) =>
+    setHistorialEquipo(equipo);
 
-  const clearFilters = () => {
-    setFiltros({});
-    setSearchTerm("");
+  const formatDate = (dateString?: string) =>
+    dateString ? new Date(dateString).toLocaleDateString("es-CL") : "N/A";
+
+  const handleEquiposFiltrados = (equiposFiltrados: EquipoConEstado[]) => {
+    setEquipos(equiposFiltrados);
+    setLoading(false);
   };
 
   const getEstadoBadge = (estado?: string) => {
@@ -185,17 +177,7 @@ export function EquiposView() {
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
         <ViewTitle />
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            Filtros
-          </Button>
-          <Button onClick={() => setShowAddForm(true)}>Agregar Equipo</Button>
-        </div>
+        <Button onClick={() => setShowAddForm(true)}>Agregar Equipo</Button>
       </div>
 
       {/* Barra de búsqueda */}
@@ -203,171 +185,29 @@ export function EquiposView() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             placeholder="Buscar equipos..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="pl-8"
           />
         </div>
-        {(searchTerm || Object.keys(filtros).length > 0) && (
-          <Button variant="outline" onClick={clearFilters}>
-            Limpiar Filtros
+        {searchTerm && (
+          <Button variant="outline" onClick={handleClearSearch}>
+            Limpiar búsqueda
           </Button>
         )}
       </div>
 
-      {/* Panel de filtros avanzados */}
-      {showFilters && (
-        <div className="bg-gray-50 p-4 rounded-lg mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Marca</label>
-            <Select
-              value={filtros.marcas?.[0] || ""}
-              onValueChange={(value) =>
-                setFiltros((prev) => ({
-                  ...prev,
-                  marcas: value ? [value] : undefined,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las marcas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Todas las marcas</SelectItem>
-                {marcasDisponibles.map((marca) => (
-                  <SelectItem key={marca} value={marca}>
-                    {marca}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Tipo</label>
-            <Select
-              value={filtros.tipos?.[0] || ""}
-              onValueChange={(value) =>
-                setFiltros((prev) => ({
-                  ...prev,
-                  tipos: value ? [value] : undefined,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos los tipos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Todos los tipos</SelectItem>
-                {tiposDisponibles.map((tipo) => (
-                  <SelectItem key={tipo} value={tipo}>
-                    {tipo}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Cliente</label>
-            <Select
-              value={filtros.clientes?.[0] || ""}
-              onValueChange={(value) =>
-                setFiltros((prev) => ({
-                  ...prev,
-                  clientes: value ? [value] : undefined,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos los clientes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Todos los clientes</SelectItem>
-                {clientesDisponibles.map((cliente) => (
-                  <SelectItem key={cliente} value={cliente}>
-                    {cliente}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Estado de Orden
-            </label>
-            <Select
-              value={filtros.estados_orden?.[0] || ""}
-              onValueChange={(value) =>
-                setFiltros((prev) => ({
-                  ...prev,
-                  estados_orden: value ? [value] : undefined,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos los estados" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Todos los estados</SelectItem>
-                <SelectItem value="null">Sin órdenes</SelectItem>
-                {estadosDisponibles.map((estado) => (
-                  <SelectItem key={estado} value={estado}>
-                    {estado === "recibido"
-                      ? "Recibido"
-                      : estado === "cotizacion_enviada"
-                      ? "Cotización Enviada"
-                      : estado === "aprobacion_pendiente"
-                      ? "Aprobación Pendiente"
-                      : estado === "en_reparacion"
-                      ? "En Reparación"
-                      : estado === "espera_de_retiro"
-                      ? "Esperando Retiro"
-                      : estado === "entregado"
-                      ? "Entregado"
-                      : estado === "abandonado"
-                      ? "Abandonado"
-                      : estado === "equipo_no_reparable"
-                      ? "No Reparable"
-                      : estado}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Ordenar por
-            </label>
-            <Select
-              value={filtros.ordenamiento || ""}
-              onValueChange={(value) =>
-                setFiltros((prev) => ({
-                  ...prev,
-                  ordenamiento: value || undefined,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Fecha desc." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fecha_desc">Fecha (más reciente)</SelectItem>
-                <SelectItem value="fecha_asc">Fecha (más antigua)</SelectItem>
-                <SelectItem value="marca_asc">Marca (A-Z)</SelectItem>
-                <SelectItem value="marca_desc">Marca (Z-A)</SelectItem>
-                <SelectItem value="cliente_asc">Cliente (A-Z)</SelectItem>
-                <SelectItem value="cliente_desc">Cliente (Z-A)</SelectItem>
-                <SelectItem value="estado_asc">Estado (A-Z)</SelectItem>
-                <SelectItem value="estado_desc">Estado (Z-A)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
+      {/* Panel de filtros unificado */}
+      <div className="mb-4">
+        <UnificarFiltrosEquipos
+          key={refreshFilters}
+          searchTerm={searchTerm}
+          onFiltrar={handleEquiposFiltrados}
+          onClearSearch={handleClearSearch}
+        />
+      </div>
       {/* Tabla de equipos */}
       <div className="rounded-md border">
         <Table>
@@ -390,7 +230,7 @@ export function EquiposView() {
                   colSpan={8}
                   className="text-center py-8 text-gray-500"
                 >
-                  {searchTerm || Object.keys(filtros).length > 0
+                  {searchTerm
                     ? "No se encontraron equipos con los filtros aplicados"
                     : "No hay equipos registrados"}
                 </TableCell>
