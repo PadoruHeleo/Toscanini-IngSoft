@@ -236,7 +236,24 @@ export function RegistrarSalidaDialog({
           {/* Estado de verificación */}
           <Alert variant={canRegister ? "default" : "destructive"}>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{statusMessage}</AlertDescription>
+            <AlertDescription>
+              <div className="space-y-1">
+                <p>{statusMessage}</p>
+                {canRegister && (
+                  <p className="text-xs text-muted-foreground">
+                    Estados válidos para registro de salida: Recibido,
+                    Cotización enviada, Aprobación pendiente, En reparación,
+                    Espera de retiro
+                  </p>
+                )}
+                {!canRegister && statusMessage.includes("Ya se registró") && (
+                  <p className="text-xs text-muted-foreground">
+                    El equipo ya ha salido del sistema. Estados finales:
+                    Entregado, Abandonado, No reparable
+                  </p>
+                )}
+              </div>
+            </AlertDescription>
           </Alert>
 
           {canRegister && (

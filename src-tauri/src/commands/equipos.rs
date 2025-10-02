@@ -648,10 +648,28 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
     
     // Validar estado compatible para salida
     if let Some(ref orden) = orden_trabajo {
-        let estados_compatibles = vec!["espera_de_retiro", "entregado", "abandonado", "equipo_no_reparable"];
+        // Estados que permiten registro de salida (equipo AÚN en sistema)
+        let estados_en_sistema = vec![
+            "recibido",
+            "cotizacion_enviada", 
+            "aprobacion_pendiente",
+            "en_reparacion",
+            "espera_de_retiro"
+        ];
+        
+        // Estados donde ya se registró salida (equipo FUERA del sistema)
+        let estados_fuera_sistema = vec![
+            "entregado",
+            "abandonado", 
+            "equipo_no_reparable"
+        ];
+        
         if let Some(estado_actual) = &orden.estado {
-            if !estados_compatibles.contains(&estado_actual.as_str()) {
-                return Err(format!("El equipo no puede registrar salida en estado '{}'", estado_actual));
+            if estados_fuera_sistema.contains(&estado_actual.as_str()) {
+                return Err(format!("Ya se registró salida del equipo - Estado actual: '{}'", estado_actual));
+            }
+            if !estados_en_sistema.contains(&estado_actual.as_str()) {
+                return Err(format!("Estado '{}' no permite registro de salida", estado_actual));
             }
         }
     }
@@ -745,29 +763,173 @@ pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, Stri
     
     // Si no hay órdenes, se puede registrar salida directa
     if ordenes.is_empty() {
-        return Ok((true, "Puede registrar salida directa".to_string()));
+        return Ok((true, "Puede registrar salida directa - equipo sin órdenes".to_string()));
     }
     
-    // Verificar si alguna orden está en estado compatible
-    let estados_compatibles = vec!["espera_de_retiro", "entregado", "abandonado", "equipo_no_reparable"];
-    let orden_compatible = ordenes.iter().find(|orden| {
+    // Verificar el estado de la orden más reciente
+    let orden_reciente = ordenes.iter()
+        .max_by_key(|o| &o.created_at);
+    
+    if let Some(orden) = orden_reciente {
+        // Estados que permiten registro de salida (equipo AÚN en sistema)
+        let estados_en_sistema = vec![
+            "recibido",
+            "cotizacion_enviada", 
+            "aprobacion_pendiente",
+            "en_reparacion",
+            "espera_de_retiro"
+        ];
+        
+        // Estados donde ya se registró salida (equipo FUERA del sistema)
+        let estados_fuera_sistema = vec![
+            "entregado",
+            "abandonado", 
+            "equipo_no_reparable"
+        ];
+        
         if let Some(estado) = &orden.estado {
-            estados_compatibles.contains(&estado.as_str())
+            if estados_en_sistema.contains(&estado.as_str()) {
+                Ok((true, format!("Puede registrar salida - Orden {} en estado: {}", 
+                                 orden.orden_codigo.as_ref().unwrap_or(&"N/A".to_string()),
+                                 estado)))
+            } else if estados_fuera_sistema.contains(&estado.as_str()) {
+                Ok((false, format!("Ya se registró salida - Orden {} en estado: {}", 
+                                  orden.orden_codigo.as_ref().unwrap_or(&"N/A".to_string()),
+                                  estado)))
+            } else {
+                Ok((false, format!("Estado no válido para salida: {}", estado)))
+            }
         } else {
-            false
+            Ok((true, "Puede registrar salida - estado no definido".to_string()))
         }
+    } else {
+        Ok((true, "Puede registrar salida directa - sin órdenes válidas".to_string()))
+    }
+}
+
+/// Verificar si un equipo está actualmente en el sistema (no ha salido)
+#[tauri::command]
+pub async fn equipo_esta_en_sistema(equipo_id: i32) -> Result<(bool, String), String> {
+    // Verificar que el equipo existe
+    let equipo = get_equipo_by_id(equipo_id).await?;
+    if equipo.is_none() {
+        return Ok((false, "El equipo no existe".to_string()));
+    }
+    
+    // Buscar órdenes de trabajo asociadas
+    let ordenes = crate::commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo(equipo_id).await?;
+    
+    // Si no hay órdenes, el equipo está en el sistema
+    if ordenes.is_empty() {
+        return Ok((true, "Equipo en sistema - sin órdenes de trabajo".to_string()));
+    }
+    
+    // Verificar el estado de la orden más reciente
+    let orden_reciente = ordenes.iter()
+        .max_by_key(|o| &o.created_at);
+    
+    if let Some(orden) = orden_reciente {
+        // Estados que indican equipo EN sistema
+        let estados_en_sistema = vec![
+            "recibido",
+            "cotizacion_enviada", 
+            "aprobacion_pendiente",
+            "en_reparacion",
+            "espera_de_retiro"
+        ];
+        
+        // Estados que indican equipo FUERA del sistema
+        let estados_fuera_sistema = vec![
+            "entregado", 
+            "abandonado", 
+            "equipo_no_reparable"
+        ];
+        
+        if let Some(estado) = &orden.estado {
+            if estados_fuera_sistema.contains(&estado.as_str()) {
+                Ok((false, format!("Equipo FUERA del sistema - Estado: {}", estado)))
+            } else if estados_en_sistema.contains(&estado.as_str()) {
+                Ok((true, format!("Equipo EN sistema - Estado: {}", estado)))
+            } else {
+                // Estado desconocido, asumir en sistema por seguridad
+                Ok((true, format!("Equipo EN sistema - Estado desconocido: {}", estado)))
+            }
+        } else {
+            Ok((true, "Equipo en sistema - estado no definido".to_string()))
+        }
+    } else {
+        Ok((true, "Equipo en sistema - sin órdenes válidas".to_string()))
+    }
+}
+
+/// Obtener equipos que están actualmente en el sistema
+#[tauri::command]
+pub async fn get_equipos_en_sistema() -> Result<Vec<Equipo>, String> {
+    let todos_equipos = get_equipos().await?;
+    let mut equipos_en_sistema = Vec::new();
+    
+    for equipo in todos_equipos {
+        let (esta_en_sistema, _) = equipo_esta_en_sistema(equipo.equipo_id).await?;
+        if esta_en_sistema {
+            equipos_en_sistema.push(equipo);
+        }
+    }
+    
+    Ok(equipos_en_sistema)
+}
+
+/// Obtener equipos que han salido del sistema
+#[tauri::command]
+pub async fn get_equipos_fuera_sistema() -> Result<Vec<Equipo>, String> {
+    let todos_equipos = get_equipos().await?;
+    let mut equipos_fuera_sistema = Vec::new();
+    
+    for equipo in todos_equipos {
+        let (esta_en_sistema, _) = equipo_esta_en_sistema(equipo.equipo_id).await?;
+        if !esta_en_sistema {
+            equipos_fuera_sistema.push(equipo);
+        }
+    }
+    
+    Ok(equipos_fuera_sistema)
+}
+
+/// Obtener estadísticas de equipos en/fuera del sistema
+#[tauri::command]
+pub async fn get_estadisticas_equipos_sistema() -> Result<serde_json::Value, String> {
+    let todos_equipos = get_equipos().await?;
+    let mut en_sistema = 0;
+    let mut fuera_sistema = 0;
+    let mut detalles_fuera = std::collections::HashMap::new();
+    
+    for equipo in todos_equipos {
+        let (esta_en_sistema, mensaje) = equipo_esta_en_sistema(equipo.equipo_id).await?;
+        if esta_en_sistema {
+            en_sistema += 1;
+        } else {
+            fuera_sistema += 1;
+            // Extraer el estado del mensaje para estadísticas
+            if mensaje.contains("entregado") {
+                *detalles_fuera.entry("entregado".to_string()).or_insert(0) += 1;
+            } else if mensaje.contains("abandonado") {
+                *detalles_fuera.entry("abandonado".to_string()).or_insert(0) += 1;
+            } else if mensaje.contains("equipo_no_reparable") {
+                *detalles_fuera.entry("no_reparable".to_string()).or_insert(0) += 1;
+            }
+        }
+    }
+    
+    let estadisticas = serde_json::json!({
+        "total_equipos": en_sistema + fuera_sistema,
+        "en_sistema": en_sistema,
+        "fuera_sistema": fuera_sistema,
+        "porcentaje_en_sistema": if (en_sistema + fuera_sistema) > 0 {
+            (en_sistema as f64 / (en_sistema + fuera_sistema) as f64) * 100.0
+        } else { 0.0 },
+        "detalles_fuera_sistema": detalles_fuera
     });
     
-    if let Some(orden) = orden_compatible {
-        Ok((true, format!("Orden {} en estado compatible: {}", 
-                         orden.orden_codigo.as_ref().unwrap_or(&"N/A".to_string()),
-                         orden.estado.as_ref().unwrap_or(&"N/A".to_string()))))
-    } else {
-        let estados_actuales: Vec<String> = ordenes.iter()
-            .filter_map(|o| o.estado.as_ref().map(|s| s.clone()))
-            .collect();
-        Ok((false, format!("Estados actuales no compatibles: {}", estados_actuales.join(", "))))
-    }
+    Ok(estadisticas)
 }
 
 // Función auxiliar para obtener texto descriptivo del motivo

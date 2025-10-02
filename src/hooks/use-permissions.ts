@@ -198,12 +198,13 @@ export function useOrdenTrabajoPermissions() {
       informe_id?: number;
       estado?: string;
     }) => {
-      // Estados que permiten registro de salida
-      const estadosCompatiblesSalida = [
+      // Estados que permiten registro de salida (equipo AÚN en sistema)
+      const estadosEnSistema = [
+        "recibido",
+        "cotizacion_enviada",
+        "aprobacion_pendiente",
+        "en_reparacion",
         "espera_de_retiro",
-        "entregado",
-        "abandonado",
-        "equipo_no_reparable",
       ];
 
       return {
@@ -219,10 +220,10 @@ export function useOrdenTrabajoPermissions() {
         // Botón de eliminar orden
         showDeleteOrden: isAdmin() || isTecnico(),
 
-        // Botón de registrar salida
+        // Botón de registrar salida - solo visible si equipo está EN sistema
         showRegistrarSalida:
           (isRecepcion() || isTecnico() || isAdmin()) &&
-          estadosCompatiblesSalida.includes(orden.estado || ""),
+          estadosEnSistema.includes(orden.estado || ""),
       };
     },
 
