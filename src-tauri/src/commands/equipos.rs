@@ -57,6 +57,42 @@ pub struct SalidaEquipoResponse {
     pub nuevo_estado: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct EquipoConEstado {
+    pub equipo_id: i32,
+    pub numero_serie: Option<String>,
+    pub equipo_marca: Option<String>,
+    pub equipo_modelo: Option<String>,
+    pub equipo_tipo: Option<String>,
+    pub equipo_precio: Option<i32>,
+    pub equipo_ubicacion: Option<String>,
+    pub cliente_id: Option<i32>,
+    pub created_by: Option<i32>,
+    pub created_at: Option<DateTime<Utc>>,
+    // Información del cliente
+    pub cliente_nombre: Option<String>,
+    // Estado de la última orden de trabajo
+    pub ultimo_estado_orden: Option<String>,
+    pub ultimo_codigo_orden: Option<String>,
+    pub fecha_ultima_orden: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FiltrosEquipos {
+    pub fecha_inicio: Option<String>,
+    pub fecha_fin: Option<String>,
+    pub marcas: Option<Vec<String>>,
+    pub modelos: Option<Vec<String>>,
+    pub tipos: Option<Vec<String>>,
+    pub clientes: Option<Vec<String>>,
+    pub ubicaciones: Option<Vec<String>>,
+    pub estados_orden: Option<Vec<String>>, // Estados de órdenes de trabajo
+    pub search: Option<String>,
+    pub ordenamiento: Option<String>,
+    pub precio_min: Option<i32>,
+    pub precio_max: Option<i32>,
+}
+
 /// Obtener todos los equipos
 #[tauri::command]
 pub async fn get_equipos() -> Result<Vec<Equipo>, String> {
@@ -933,4 +969,268 @@ fn get_motivo_display(motivo: &str) -> &str {
         "baja_definitiva" => "Baja definitiva del inventario",
         _ => "Motivo desconocido"
     }
+}
+
+/// Obtener equipos con estado de última orden de trabajo y filtros avanzados
+#[tauri::command]
+pub async fn get_equipos_filtrados(filtros: FiltrosEquipos) -> Result<Vec<EquipoConEstado>, String> {
+    let pool = get_db_pool_safe()?;
+
+    let mut query = String::from(
+        "SELECT 
+            e.equipo_id,
+            e.numero_serie,
+            e.equipo_marca,
+            e.equipo_modelo,
+            e.equipo_tipo,
+            e.equipo_precio,
+            e.equipo_ubicacion,
+            e.cliente_id,
+            e.created_by,
+            e.created_at,
+            c.cliente_nombre,
+            ot_ultima.estado as ultimo_estado_orden,
+            ot_ultima.orden_codigo as ultimo_codigo_orden,
+            ot_ultima.created_at as fecha_ultima_orden
+        FROM EQUIPO e
+        LEFT JOIN CLIENTE c ON e.cliente_id = c.cliente_id
+        LEFT JOIN (
+            SELECT 
+                ot1.equipo_id,
+                ot1.estado,
+                ot1.orden_codigo,
+                ot1.created_at,
+                ROW_NUMBER() OVER (PARTITION BY ot1.equipo_id ORDER BY ot1.created_at DESC) as rn
+            FROM ORDEN_TRABAJO ot1
+        ) ot_ultima ON e.equipo_id = ot_ultima.equipo_id AND ot_ultima.rn = 1
+        WHERE 1=1"
+    );
+
+    let mut params: Vec<String> = Vec::new();
+
+    // Filtro por rango de fechas de creación del equipo
+    if let Some(fecha_inicio) = filtros.fecha_inicio {
+        if !fecha_inicio.is_empty() {
+            query.push_str(" AND DATE(e.created_at) >= ?");
+            params.push(fecha_inicio);
+        }
+    }
+
+    if let Some(fecha_fin) = filtros.fecha_fin {
+        if !fecha_fin.is_empty() {
+            query.push_str(" AND DATE(e.created_at) <= ?");
+            params.push(fecha_fin);
+        }
+    }
+
+    // Filtro por marcas
+    if let Some(marcas) = filtros.marcas {
+        if !marcas.is_empty() {
+            let placeholders = vec!["?"; marcas.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_marca IN ({})", placeholders));
+            params.extend(marcas);
+        }
+    }
+
+    // Filtro por modelos
+    if let Some(modelos) = filtros.modelos {
+        if !modelos.is_empty() {
+            let placeholders = vec!["?"; modelos.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_modelo IN ({})", placeholders));
+            params.extend(modelos);
+        }
+    }
+
+    // Filtro por tipos
+    if let Some(tipos) = filtros.tipos {
+        if !tipos.is_empty() {
+            let placeholders = vec!["?"; tipos.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_tipo IN ({})", placeholders));
+            params.extend(tipos);
+        }
+    }
+
+    // Filtro por clientes
+    if let Some(clientes) = filtros.clientes {
+        if !clientes.is_empty() {
+            let placeholders = vec!["?"; clientes.len()].join(",");
+            query.push_str(&format!(" AND c.cliente_nombre IN ({})", placeholders));
+            params.extend(clientes);
+        }
+    }
+
+    // Filtro por ubicaciones
+    if let Some(ubicaciones) = filtros.ubicaciones {
+        if !ubicaciones.is_empty() {
+            let placeholders = vec!["?"; ubicaciones.len()].join(",");
+            query.push_str(&format!(" AND e.equipo_ubicacion IN ({})", placeholders));
+            params.extend(ubicaciones);
+        }
+    }
+
+    // Filtro por estados de orden de trabajo
+    if let Some(estados_orden) = filtros.estados_orden {
+        if !estados_orden.is_empty() {
+            let placeholders = vec!["?"; estados_orden.len()].join(",");
+            query.push_str(&format!(" AND ot_ultima.estado IN ({})", placeholders));
+            params.extend(estados_orden);
+        }
+    }
+
+    // Filtro por rango de precios
+    if let Some(precio_min) = filtros.precio_min {
+        query.push_str(" AND e.equipo_precio >= ?");
+        params.push(precio_min.to_string());
+    }
+
+    if let Some(precio_max) = filtros.precio_max {
+        query.push_str(" AND e.equipo_precio <= ?");
+        params.push(precio_max.to_string());
+    }
+
+    // Filtro por búsqueda de texto
+    if let Some(search_term) = filtros.search {
+        if !search_term.trim().is_empty() {
+            let search_pattern = format!("%{}%", search_term.trim());
+            query.push_str(" AND (e.numero_serie LIKE ? OR e.equipo_marca LIKE ? OR e.equipo_modelo LIKE ? OR c.cliente_nombre LIKE ?)");
+            params.push(search_pattern.clone());
+            params.push(search_pattern.clone());
+            params.push(search_pattern.clone());
+            params.push(search_pattern);
+        }
+    }
+
+    // Ordenamiento
+    match filtros.ordenamiento.as_deref() {
+        Some("marca_asc") => query.push_str(" ORDER BY e.equipo_marca ASC"),
+        Some("marca_desc") => query.push_str(" ORDER BY e.equipo_marca DESC"),
+        Some("modelo_asc") => query.push_str(" ORDER BY e.equipo_modelo ASC"),
+        Some("modelo_desc") => query.push_str(" ORDER BY e.equipo_modelo DESC"),
+        Some("fecha_asc") => query.push_str(" ORDER BY e.created_at ASC"),
+        Some("fecha_desc") => query.push_str(" ORDER BY e.created_at DESC"),
+        Some("precio_asc") => query.push_str(" ORDER BY e.equipo_precio ASC"),
+        Some("precio_desc") => query.push_str(" ORDER BY e.equipo_precio DESC"),
+        Some("cliente_asc") => query.push_str(" ORDER BY c.cliente_nombre ASC"),
+        Some("cliente_desc") => query.push_str(" ORDER BY c.cliente_nombre DESC"),
+        Some("estado_asc") => query.push_str(" ORDER BY ot_ultima.estado ASC"),
+        Some("estado_desc") => query.push_str(" ORDER BY ot_ultima.estado DESC"),
+        _ => query.push_str(" ORDER BY e.created_at DESC"), // Por defecto, más recientes primero
+    }
+
+    // Ejecutar la consulta con parámetros dinámicos
+    let mut query_builder = sqlx::query_as::<_, EquipoConEstado>(&query);
+    
+    for param in params {
+        query_builder = query_builder.bind(param);
+    }
+    
+    let equipos = query_builder
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Database error en get_equipos_filtrados: {}", e))?;
+
+    Ok(equipos)
+}
+
+/// Obtener equipos con estado (versión simplificada para compatibilidad)
+#[tauri::command]
+pub async fn get_equipos_con_estado() -> Result<Vec<EquipoConEstado>, String> {
+    let filtros = FiltrosEquipos {
+        fecha_inicio: None,
+        fecha_fin: None,
+        marcas: None,
+        modelos: None,
+        tipos: None,
+        clientes: None,
+        ubicaciones: None,
+        estados_orden: None,
+        search: None,
+        ordenamiento: Some("fecha_desc".to_string()),
+        precio_min: None,
+        precio_max: None,
+    };
+    
+    get_equipos_filtrados(filtros).await
+}
+
+/// Obtener todos los clientes únicos que tienen equipos
+#[tauri::command]
+pub async fn get_clientes_con_equipos() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let clientes = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT c.cliente_nombre 
+         FROM CLIENTE c 
+         INNER JOIN EQUIPO e ON c.cliente_id = e.cliente_id 
+         WHERE c.cliente_nombre IS NOT NULL 
+         ORDER BY c.cliente_nombre"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(clientes)
+}
+
+/// Obtener todos los tipos únicos de equipos
+#[tauri::command]
+pub async fn get_tipos_equipos() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let tipos = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT equipo_tipo 
+         FROM EQUIPO 
+         WHERE equipo_tipo IS NOT NULL 
+         ORDER BY equipo_tipo"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(tipos)
+}
+
+/// Obtener todos los estados únicos de órdenes de trabajo
+#[tauri::command]
+pub async fn get_estados_ordenes_trabajo() -> Result<Vec<String>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let estados = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT estado 
+         FROM ORDEN_TRABAJO 
+         WHERE estado IS NOT NULL 
+         ORDER BY estado"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(estados)
+}
+
+/// Obtener estadísticas de equipos por estado de orden de trabajo
+#[tauri::command]
+pub async fn get_estadisticas_equipos_por_estado() -> Result<Vec<(String, i64)>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let estadisticas = sqlx::query_as::<_, (String, i64)>(
+        "SELECT 
+            COALESCE(ot_ultima.estado, 'Sin orden de trabajo') as estado,
+            COUNT(*) as cantidad
+        FROM EQUIPO e
+        LEFT JOIN (
+            SELECT 
+                ot1.equipo_id,
+                ot1.estado,
+                ROW_NUMBER() OVER (PARTITION BY ot1.equipo_id ORDER BY ot1.created_at DESC) as rn
+            FROM ORDEN_TRABAJO ot1
+        ) ot_ultima ON e.equipo_id = ot_ultima.equipo_id AND ot_ultima.rn = 1
+        GROUP BY ot_ultima.estado
+        ORDER BY cantidad DESC"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(estadisticas)
 }
