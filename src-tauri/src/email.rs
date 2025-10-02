@@ -459,3 +459,44 @@ impl EmailService {
         Ok(())
     }
 }
+
+/// Comando de Tauri para enviar email de orden de trabajo al cliente
+#[tauri::command]
+pub async fn send_orden_trabajo_cliente(orden_id: i32, _sent_by: i32) -> Result<String, String> {
+    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+
+    // Obtener la orden de trabajo
+    let orden = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+
+    // Obtener el equipo
+    let equipo_id = orden.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id.ok_or_else(|| "El equipo no tiene cliente asociado".to_string())?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| "Cliente no encontrado".to_string())?;
+
+    // Verificar que el cliente tenga email
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+
+    // Enviar el email
+    email_service.send_orden_trabajo_cliente(
+        &cliente.cliente_correo.unwrap(),
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
+        &orden,
+        &equipo,
+    ).await?;
+
+    Ok("Email enviado exitosamente".to_string())
+}

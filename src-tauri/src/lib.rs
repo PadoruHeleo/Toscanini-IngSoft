@@ -172,6 +172,7 @@ pub fn run() {
             commands::config::test_database_connection,
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
+            email::send_orden_trabajo_cliente,
             pdf_generator::generate_cotizacion_pdf_command,
             pdf_generator::generate_informe_pdf_command
         ])
