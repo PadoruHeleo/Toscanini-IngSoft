@@ -189,11 +189,23 @@ export function useOrdenTrabajoPermissions() {
     // Aprobar/rechazar cotizaciones: recepción, admin y técnico
     canApproveCotizacion: true, // Todos los roles pueden aprobar/rechazar
 
+    // Registrar salida de equipo: recepcionista, técnico y administrador
+    canRegistrarSalida: isRecepcion() || isTecnico() || isAdmin(),
+
     // Función para determinar qué botones debe ver según el estado de la orden
     getVisibleActions: (orden: {
       cotizacion_id?: number;
       informe_id?: number;
+      estado?: string;
     }) => {
+      // Estados que permiten registro de salida
+      const estadosCompatiblesSalida = [
+        "espera_de_retiro",
+        "entregado",
+        "abandonado",
+        "equipo_no_reparable",
+      ];
+
       return {
         // Botones de cotización
         showCreateCotizacion:
@@ -206,6 +218,11 @@ export function useOrdenTrabajoPermissions() {
 
         // Botón de eliminar orden
         showDeleteOrden: isAdmin() || isTecnico(),
+
+        // Botón de registrar salida
+        showRegistrarSalida:
+          (isRecepcion() || isTecnico() || isAdmin()) &&
+          estadosCompatiblesSalida.includes(orden.estado || ""),
       };
     },
 

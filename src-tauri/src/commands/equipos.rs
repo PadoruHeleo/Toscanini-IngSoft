@@ -41,6 +41,22 @@ pub struct UpdateEquipoRequest {
     pub cliente_id: Option<i32>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegistrarSalidaRequest {
+    pub equipo_id: i32,
+    pub orden_trabajo_id: Option<i32>,
+    pub motivo_salida: String, // 'entregado_cliente', 'retirado_sin_reparacion', 'abandonado', 'baja_definitiva'
+    pub observaciones: Option<String>,
+    pub usuario_id: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SalidaEquipoResponse {
+    pub success: bool,
+    pub message: String,
+    pub nuevo_estado: Option<String>,
+}
+
 /// Obtener todos los equipos
 #[tauri::command]
 pub async fn get_equipos() -> Result<Vec<Equipo>, String> {
@@ -594,4 +610,173 @@ pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(ubicaciones)
+}
+
+/// Registrar salida de equipo del inventario
+#[tauri::command]
+pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<SalidaEquipoResponse, String> {
+    
+    // Validar que el equipo existe
+    let equipo = get_equipo_by_id(request.equipo_id).await?;
+    if equipo.is_none() {
+        return Err("El equipo especificado no existe".to_string());
+    }
+    let equipo = equipo.unwrap();
+    
+    // Validar motivo de salida
+    let motivos_validos = vec![
+        "entregado_cliente",
+        "retirado_sin_reparacion", 
+        "abandonado",
+        "baja_definitiva"
+    ];
+    
+    if !motivos_validos.contains(&request.motivo_salida.as_str()) {
+        return Err("Motivo de salida no válido".to_string());
+    }
+    
+    // Obtener orden de trabajo asociada si existe
+    let orden_trabajo = if let Some(orden_id) = request.orden_trabajo_id {
+        crate::commands::ordenes_trabajo::get_orden_trabajo_by_id(orden_id).await?
+    } else {
+        // Buscar orden de trabajo por equipo_id
+        let ordenes = crate::commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo(request.equipo_id).await?;
+        ordenes.into_iter().find(|o| {
+            matches!(o.estado.as_deref(), Some("espera_de_retiro") | Some("entregado") | Some("abandonado") | Some("equipo_no_reparable"))
+        })
+    };
+    
+    // Validar estado compatible para salida
+    if let Some(ref orden) = orden_trabajo {
+        let estados_compatibles = vec!["espera_de_retiro", "entregado", "abandonado", "equipo_no_reparable"];
+        if let Some(estado_actual) = &orden.estado {
+            if !estados_compatibles.contains(&estado_actual.as_str()) {
+                return Err(format!("El equipo no puede registrar salida en estado '{}'", estado_actual));
+            }
+        }
+    }
+    
+    // Determinar nuevo estado según motivo
+    let nuevo_estado = match request.motivo_salida.as_str() {
+        "entregado_cliente" => "entregado",
+        "retirado_sin_reparacion" | "abandonado" => "abandonado",
+        "baja_definitiva" => "equipo_no_reparable",
+        _ => return Err("Motivo de salida no válido".to_string()),
+    };
+    
+    // Actualizar estado de la orden de trabajo si existe
+    if let Some(orden) = orden_trabajo {
+        let estado_anterior = orden.estado.clone().unwrap_or_default();
+        
+        // Solo actualizar si el estado es diferente
+        if estado_anterior != nuevo_estado {
+            let _ = crate::commands::ordenes_trabajo::cambiar_estado_orden_trabajo(
+                orden.orden_id,
+                nuevo_estado.to_string(),
+                request.usuario_id
+            ).await?;
+        }
+        
+        // Registrar la salida en el log de auditoría
+        let log_message = format!(
+            "Registrada salida de equipo {} - Motivo: {} - Estado: {} -> {}{}",
+            equipo.numero_serie.clone().unwrap_or_else(|| format!("ID:{}", equipo.equipo_id)),
+            request.motivo_salida,
+            estado_anterior,
+            nuevo_estado,
+            request.observaciones.as_ref().map_or(String::new(), |obs| format!(" - Obs: {}", obs))
+        );
+        
+        let _ = log_action(
+            "REGISTRAR_SALIDA_EQUIPO",
+            Some(request.usuario_id),
+            "EQUIPO",
+            Some(request.equipo_id),
+            Some(&estado_anterior),
+            Some(&log_message)
+        ).await;
+        
+        Ok(SalidaEquipoResponse {
+            success: true,
+            message: format!("Salida registrada exitosamente. Equipo {} - {}", 
+                           equipo.numero_serie.clone().unwrap_or_else(|| "Sin serie".to_string()),
+                           get_motivo_display(&request.motivo_salida)),
+            nuevo_estado: Some(nuevo_estado.to_string()),
+        })
+    } else {
+        // Si no hay orden de trabajo, solo registrar en auditoría
+        let log_message = format!(
+            "Registrada salida directa de equipo {} - Motivo: {}{}",
+            equipo.numero_serie.clone().unwrap_or_else(|| format!("ID:{}", equipo.equipo_id)),
+            request.motivo_salida,
+            request.observaciones.as_ref().map_or(String::new(), |obs| format!(" - Obs: {}", obs))
+        );
+        
+        let _ = log_action(
+            "REGISTRAR_SALIDA_EQUIPO_DIRECTO",
+            Some(request.usuario_id),
+            "EQUIPO",
+            Some(request.equipo_id),
+            None,
+            Some(&log_message)
+        ).await;
+        
+        Ok(SalidaEquipoResponse {
+            success: true,
+            message: format!("Salida registrada exitosamente. Equipo {} - {}", 
+                           equipo.numero_serie.clone().unwrap_or_else(|| "Sin serie".to_string()),
+                           get_motivo_display(&request.motivo_salida)),
+            nuevo_estado: Some(nuevo_estado.to_string()),
+        })
+    }
+}
+
+/// Verificar si un equipo puede registrar salida
+#[tauri::command]
+pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, String), String> {
+    // Verificar que el equipo existe
+    let equipo = get_equipo_by_id(equipo_id).await?;
+    if equipo.is_none() {
+        return Ok((false, "El equipo no existe".to_string()));
+    }
+    
+    // Buscar órdenes de trabajo asociadas
+    let ordenes = crate::commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo(equipo_id).await?;
+    
+    // Si no hay órdenes, se puede registrar salida directa
+    if ordenes.is_empty() {
+        return Ok((true, "Puede registrar salida directa".to_string()));
+    }
+    
+    // Verificar si alguna orden está en estado compatible
+    let estados_compatibles = vec!["espera_de_retiro", "entregado", "abandonado", "equipo_no_reparable"];
+    let orden_compatible = ordenes.iter().find(|orden| {
+        if let Some(estado) = &orden.estado {
+            estados_compatibles.contains(&estado.as_str())
+        } else {
+            false
+        }
+    });
+    
+    if let Some(orden) = orden_compatible {
+        Ok((true, format!("Orden {} en estado compatible: {}", 
+                         orden.orden_codigo.as_ref().unwrap_or(&"N/A".to_string()),
+                         orden.estado.as_ref().unwrap_or(&"N/A".to_string()))))
+    } else {
+        let estados_actuales: Vec<String> = ordenes.iter()
+            .filter_map(|o| o.estado.as_ref().map(|s| s.clone()))
+            .collect();
+        Ok((false, format!("Estados actuales no compatibles: {}", estados_actuales.join(", "))))
+    }
+}
+
+// Función auxiliar para obtener texto descriptivo del motivo
+fn get_motivo_display(motivo: &str) -> &str {
+    match motivo {
+        "entregado_cliente" => "Entregado al cliente",
+        "retirado_sin_reparacion" => "Retirado sin reparación",
+        "abandonado" => "Equipo abandonado",
+        "baja_definitiva" => "Baja definitiva del inventario",
+        _ => "Motivo desconocido"
+    }
 }
