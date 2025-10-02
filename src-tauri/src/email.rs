@@ -17,7 +17,7 @@ impl EmailService {
     }
 
     pub async fn send_password_reset_email(&self, to_email: &str, reset_code: &str, user_name: &str) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = "Recuperación de Contraseña - Toscanini";
 
@@ -63,7 +63,7 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         piezas: &[crate::commands::informe::PiezaInforme]
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = format!("Informe Técnico {} - Toscanini", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"));
@@ -215,7 +215,7 @@ impl EmailService {
         equipo: &crate::commands::equipos::Equipo,
         cliente_nombre: &str
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec!["benitez.basti0@gmail.com".to_string()];
         let subject = format!("Nueva Orden de Trabajo {} - Toscanini", 
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"));
@@ -329,7 +329,7 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         equipo: &crate::commands::equipos::Equipo,
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambia por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![cliente_email.to_string()];
         let subject = format!(
             "Orden de Trabajo Creada - Toscanini (Código: {})",
@@ -419,7 +419,7 @@ impl EmailService {
         user_name: &str,
         temp_password: &str,
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambia por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = "Acceso a Toscanini - Credenciales Temporales";
 
@@ -453,10 +453,16 @@ impl EmailService {
         let email = CreateEmailBaseOptions::new(from, to, subject)
             .with_html(&html_content);
 
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
-
-        Ok(())
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("Email enviado exitosamente: {:?}", response);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Error detallado enviando email: {:?}", e);
+                Err(format!("Error sending email: {}", e))
+            }
+        }
     }
 }
 
