@@ -7,11 +7,13 @@ import {
   IconHome,
   IconUsers,
   IconClipboardList,
+  IconFileText,
 } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
+import { useViewPermissions } from "@/hooks/use-permissions";
 import {
   Sidebar,
   SidebarContent,
@@ -22,49 +24,93 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const data = {
-  navMain: [
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const {
+    canViewUsers,
+    canViewTermsConditions,
+    canViewEquipment,
+    canViewClients,
+    canViewOrders,
+    canViewParts,
+  } = useViewPermissions();
+
+  // Configuración base de navegación
+  const baseNavItems = [
     {
       title: "Inicio",
       url: "#",
       icon: IconHome,
+      requiresPermission: false,
     },
     {
       title: "Lista de equipos",
       url: "#",
       icon: IconChartBar,
+      requiresPermission: false,
+      hasPermission: canViewEquipment,
     },
     {
       title: "Clientes",
       url: "#",
       icon: IconUsers,
+      requiresPermission: false,
+      hasPermission: canViewClients,
     },
     {
       title: "Órdenes de Trabajo",
       url: "#",
       icon: IconClipboardList,
+      requiresPermission: false,
+      hasPermission: canViewOrders,
     },
     {
       title: "Piezas",
       url: "#",
-      icon: IconChartBar, // Puedes cambiar el icono si lo deseas
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: IconSettings,
+      icon: IconChartBar,
+      requiresPermission: false,
+      hasPermission: canViewParts,
     },
     {
-      title: "Get Help",
+      title: "Usuarios",
       url: "#",
-      icon: IconHelp,
+      icon: IconUsers,
+      requiresPermission: true,
+      hasPermission: canViewUsers,
     },
-  ],
-};
+    {
+      title: "Términos y Condiciones",
+      url: "#",
+      icon: IconFileText,
+      requiresPermission: true,
+      hasPermission: canViewTermsConditions,
+    },
+  ];
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  // Filtrar elementos según permisos
+  const navMain = baseNavItems.filter((item) => {
+    // Si tiene hasPermission definido, usarlo para determinar visibilidad
+    if (item.hasPermission !== undefined) return item.hasPermission;
+    // Si no tiene hasPermission pero requiere permisos, no mostrar
+    if (item.requiresPermission) return false;
+    // Elementos públicos sin restricciones siempre visibles
+    return true;
+  });
+
+  const data = {
+    navMain,
+    navSecondary: [
+      {
+        title: "Ajustes de Cuenta",
+        url: "#",
+        icon: IconSettings,
+      },
+      {
+        title: "Get Help",
+        url: "#",
+        icon: IconHelp,
+      },
+    ],
+  };
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>

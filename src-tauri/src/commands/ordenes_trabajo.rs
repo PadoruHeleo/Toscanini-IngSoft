@@ -708,7 +708,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
         .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
     
     // Enviar el email
-    email_service.send_orden_trabajo_notification(
+    let log_message = email_service.send_orden_trabajo_notification(
         &orden_trabajo,
         &equipo,
         &cliente_nombre,
@@ -722,9 +722,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
         "ORDEN_TRABAJO",
         Some(orden_id),
         None,
-        Some(&format!("Notificación de orden {} enviada a benitez.basti0@gmail.com", 
-            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")
-        ))
+        Some(&log_message)
     ).await;
     
     Ok(true)
@@ -883,4 +881,75 @@ pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
     .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(clientes)
+}
+
+#[tauri::command]
+pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at
+         FROM ORDEN_TRABAJO
+         WHERE equipo_id IN (SELECT equipo_id FROM EQUIPO WHERE cliente_id = ?)
+         ORDER BY created_at DESC"
+    )
+    .bind(cliente_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    Ok(ordenes)
+}
+
+#[tauri::command]
+pub async fn remove_cotizacion_from_ordenes(cotizacion_id: i32, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
+        .bind(cotizacion_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Registrar la acción en el log de auditoría
+        let _ = log_action(
+            "REMOVE_COTIZACION_FROM_ORDENES",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            None,
+            Some(&format!("Cotización {} removida de órdenes de trabajo", cotizacion_id)),
+            None
+        ).await;
+        
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn remove_informe_from_ordenes(informe_id: i32, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+        .bind(informe_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Registrar la acción en el log de auditoría
+        let _ = log_action(
+            "REMOVE_INFORME_FROM_ORDENES",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            None,
+            Some(&format!("Informe {} removido de órdenes de trabajo", informe_id)),
+            None
+        ).await;
+        
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }

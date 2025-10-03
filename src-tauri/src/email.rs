@@ -1,6 +1,6 @@
 use resend_rs::{Resend, types::CreateEmailBaseOptions};
 use std::env;
-use chrono::{DateTime, Utc};
+use chrono_tz::America::Santiago;
 
 pub struct EmailService {
     resend: Resend,
@@ -8,28 +8,66 @@ pub struct EmailService {
 
 impl EmailService {
     pub fn new() -> Result<Self, String> {
+        println!("🔧 Inicializando EmailService...");
+        
         let api_key = env::var("RESEND_API_KEY")
-            .map_err(|_| "RESEND_API_KEY environment variable not found".to_string())?;
+            .map_err(|_| {
+                eprintln!("❌ Variable de entorno RESEND_API_KEY no encontrada");
+                eprintln!("🔍 Variables de entorno disponibles:");
+                for (key, _) in env::vars() {
+                    if key.contains("RESEND") || key.contains("EMAIL") || key.contains("API") {
+                        eprintln!("   - {}", key);
+                    }
+                }
+                "RESEND_API_KEY environment variable not found".to_string()
+            })?;
+        
+        println!("✅ RESEND_API_KEY cargada correctamente (longitud: {})", api_key.len());
         
         let resend = Resend::new(&api_key);
         
+        println!("✅ EmailService inicializado exitosamente");
         Ok(EmailService { resend })
     }
 
     pub async fn send_password_reset_email(&self, to_email: &str, reset_code: &str, user_name: &str) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
-        let to = vec![to_email.to_string()];
+        use std::env;
+        
+        // Verificar el entorno de ejecución
+        let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        
+        let (from, to) = if app_environment == "development" {
+            // En desarrollo: usar email de desarrollo
+            let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
+            
+            println!("🔧 MODO DESARROLLO: Enviando código de recuperación de contraseña");
+            println!("📧 Enviando a email de desarrollo: {}", dev_email);
+            println!("📧 En producción se enviaría a: {}", to_email);
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![dev_email]
+            )
+        } else {
+            // En producción: usar el email real del usuario
+            println!("📧 MODO PRODUCCIÓN: Enviando código de recuperación a {}", to_email);
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![to_email.to_string()]
+            )
+        };
+        
         let subject = "Recuperación de Contraseña - Toscanini";
 
         let html_content = format!(
             r#"
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #333; text-align: center;">Recuperación de Contraseña</h2>
-                <p>Hola <strong>{}</strong>,</p>
+                <p>Hola <strong>{user_name}</strong>,</p>
                 <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en Toscanini.</p>
                 <div style="background-color: #f5f5f5; padding: 20px; margin: 20px 0; text-align: center; border-radius: 5px;">
                     <p style="margin: 0; font-size: 18px;">Tu código de verificación es:</p>
-                    <h1 style="color: #007bff; font-size: 32px; margin: 10px 0; letter-spacing: 5px;">{}</h1>
+                    <h1 style="color: #007bff; font-size: 32px; margin: 10px 0; letter-spacing: 5px;">{reset_code}</h1>
                 </div>
                 <p><strong>Importante:</strong></p>
                 <ul>
@@ -44,18 +82,29 @@ impl EmailService {
                 </p>
             </div>
             "#,
-            user_name, reset_code
+            user_name = user_name,
+            reset_code = reset_code
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
+        let email = CreateEmailBaseOptions::new(&from, to.clone(), subject)
             .with_html(&html_content);
 
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
-
-        Ok(())
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("✅ Email de recuperación enviado exitosamente: {:?}", response);
+                if app_environment == "development" {
+                    println!("🔑 Código de recuperación generado: {} (solo visible en desarrollo)", reset_code);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("❌ Error detallado enviando email de recuperación: {:?}", e);
+                eprintln!("📧 Destinatario: {:?}", to);
+                eprintln!("🔑 API Key configurada: {}", env::var("RESEND_API_KEY").is_ok());
+                Err(format!("Error sending password reset email: {}", e))
+            }
+        }
     }
-
     pub async fn send_informe_email(
         &self, 
         to_email: &str, 
@@ -64,7 +113,7 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         piezas: &[crate::commands::informe::PiezaInforme]
     ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
+        let from = "noreply@beniteztech.com";
         let to = vec![to_email.to_string()];
         let subject = format!("Informe Técnico {} - Toscanini", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"));
@@ -215,9 +264,46 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         equipo: &crate::commands::equipos::Equipo,
         cliente_nombre: &str
-    ) -> Result<(), String> {
-        let from = "onboarding@resend.dev"; // Cambiar por tu dominio verificado
-        let to = vec!["benitez.basti0@gmail.com".to_string()];
+    ) -> Result<String, String> {
+        use std::env;
+        
+        // Verificar el entorno de ejecución
+        let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        
+        let (from, to, log_message) = if app_environment == "development" {
+            // En desarrollo: usar email de desarrollo o simular envío
+            let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
+            
+            println!("🔧 MODO DESARROLLO: Simulando envío de notificación de orden de trabajo");
+            println!("📧 En producción se enviaría a los administradores y técnicos de la BD");
+            
+            // Obtener emails para logging (sin enviar)
+            let db_emails = crate::commands::users::get_admin_and_tech_emails().await.unwrap_or_default();
+            println!("📋 Emails que recibirían en producción: {:?}", db_emails);
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![dev_email.clone()],
+                format!("Notificación de orden {} enviada a {} (desarrollo)", 
+                    orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), dev_email)
+            )
+        } else {
+            // En producción: obtener emails reales de la base de datos
+            let notification_emails = crate::commands::users::get_admin_and_tech_emails().await?;
+            
+            if notification_emails.is_empty() {
+                return Err("No hay administradores o técnicos con email configurado para enviar notificaciones".to_string());
+            }
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                notification_emails.clone(),
+                format!("Notificación de orden {} enviada a {} administradores y técnicos", 
+                    orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), 
+                    notification_emails.len())
+            )
+        };
+        
         let subject = format!("Nueva Orden de Trabajo {} - Toscanini", 
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"));
 
@@ -314,12 +400,222 @@ impl EmailService {
             orden_trabajo.pre_informe.as_deref().unwrap_or("Sin pre-informe registrado")
         );
 
+        // En desarrollo, detectar emails de prueba y simular envío
+        let is_test_email = |email: &str| -> bool {
+            email.contains("@toscanini.com") || 
+            email.contains("@test.") || 
+            email.contains("@ejemplo.") || 
+            email.contains("@prueba.") ||
+            email.starts_with("admin@") ||
+            email.starts_with("tecnico") ||
+            email.starts_with("recepcion@")
+        };
+        
+        if app_environment == "development" && to.iter().any(|email| is_test_email(email)) {
+            println!("📧 SIMULANDO envío de email a: {:?}", to);
+            println!("📄 Asunto: {}", subject);
+            println!("✅ Email simulado correctamente (no se envió realmente)");
+            return Ok(log_message);
+        }
+        
+        // Enviar email real (en producción o desarrollo con email válido)
+        let email = CreateEmailBaseOptions::new(&from, to.clone(), &subject)
+            .with_html(&html_content);
+
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("📧 Email enviado exitosamente a: {:?}", to);
+                println!("📋 Respuesta: {:?}", response);
+                Ok(log_message)
+            }
+            Err(e) => {
+                eprintln!("❌ Error enviando email: {:?}", e);
+                Err(format!("Error sending email: {}", e))
+            }
+        }
+    }
+
+    pub async fn send_orden_trabajo_cliente(
+        &self,
+        cliente_email: &str,
+        cliente_nombre: &str,
+        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
+        equipo: &crate::commands::equipos::Equipo,
+    ) -> Result<(), String> {
+        let from = "noreply@beniteztech.com";
+        let to = vec![cliente_email.to_string()];
+        let subject = format!(
+            "Orden de Trabajo Creada - Toscanini (Código: {})",
+            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")
+        );
+
+        let html_content = format!(
+            r#"
+            <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #333; margin: 0;">Toscanini</h1>
+                    <p style="color: #666; margin: 5px 0;">Servicio Técnico Especializado</p>
+                </div>
+                <h2 style="color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+                    ¡Hemos recibido tu equipo!
+                </h2>
+                <p>Estimado/a <strong>{}</strong>,</p>
+                <p>Te informamos que hemos recibido tu equipo y se ha generado una orden de trabajo en nuestro sistema.</p>
+                <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+                    <h3 style="margin-top: 0; color: #333;">Detalles de la Orden</h3>
+                    <p><strong>Código de Orden:</strong> {}</p>
+                    <p><strong>Fecha de Ingreso:</strong> {}</p>
+                </div>
+                <div style="background-color: #ffffff; padding: 20px; margin: 20px 0; border: 1px solid #dee2e6; border-radius: 5px;">
+                    <h3 style="margin-top: 0; color: #333;">Información del Equipo</h3>
+                    <p><strong>Marca:</strong> {}</p>
+                    <p><strong>Modelo:</strong> {}</p>
+                    <p><strong>Número de Serie:</strong> {}</p>
+                    <p><strong>Tipo:</strong> {}</p>
+                    {}
+                </div>
+                <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+                    <h3 style="margin-top: 0; color: #333;">Pre-informe</h3>
+                    <p>{}</p>
+                </div>
+                <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0; text-align: center; color: #333;">
+                        <strong>Gracias por confiar en Toscanini.</strong><br>
+                        Te mantendremos informado sobre el avance de tu equipo.<br>
+                        <br>
+                        <strong>Siguientes pasos:</strong><br>
+                        1. Nuestro equipo técnico evaluará el estado de tu equipo.<br>
+                        2. Te contactaremos con el diagnóstico y cotización.<br>
+                        3. Podrás aprobar o rechazar la reparación.<br>
+                        4. Recibirás notificaciones sobre el avance.<br>
+                    </p>
+                </div>
+                <hr style="margin: 30px 0; border: 1px solid #eee;">
+                <p style="color: #666; font-size: 12px; text-align: center;">
+                    Este es un correo automático, por favor no respondas a este mensaje.<br>
+                    Para consultas, contáctanos directamente.
+                </p>
+            </div>
+            "#,
+            cliente_nombre,
+            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"),
+            orden_trabajo.created_at
+                .map(|dt| {
+                    let local_dt = dt.with_timezone(&Santiago);
+                    local_dt.format("%d/%m/%Y %H:%M").to_string()
+                })
+                .unwrap_or_else(|| "N/A".to_string()),
+            equipo.equipo_marca.as_deref().unwrap_or("N/A"),
+            equipo.equipo_modelo.as_deref().unwrap_or("N/A"),
+            equipo.numero_serie.as_deref().unwrap_or("N/A"),
+            equipo.equipo_tipo.as_deref().unwrap_or("N/A"),
+            if let Some(ref ubicacion) = equipo.equipo_ubicacion {
+                format!("<p><strong>Ubicación:</strong> {}</p>", ubicacion)
+            } else {
+                String::new()
+            },
+            orden_trabajo.pre_informe.as_deref().unwrap_or("Sin pre-informe registrado")
+        );
+
         let email = CreateEmailBaseOptions::new(from, to, subject)
             .with_html(&html_content);
 
         self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
+            .map_err(|e| format!("Error enviando email al cliente: {}", e))?;
 
         Ok(())
     }
+
+    pub async fn send_password_email(
+        &self,
+        to_email: &str,
+        user_name: &str,
+        temp_password: &str,
+    ) -> Result<(), String> {
+        let from = "noreply@beniteztech.com";
+        let to = vec![to_email.to_string()];
+        let subject = "Acceso a Toscanini - Credenciales Temporales";
+
+        let html_content = format!(
+            r#"
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #333; text-align: center;">Bienvenido a Toscanini</h2>
+                <p>Hola <strong>{user_name}</strong>,</p>
+                <p>Tu cuenta ha sido creada exitosamente. Aquí tienes tus credenciales temporales para el primer acceso:</p>
+                <ul style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <li><strong>Nombre de usuario:</strong> {to_email}</li>
+                    <li><strong>Contraseña temporal:</strong> <span style="color: #007bff; font-size: 18px;">{temp_password}</span></li>
+                </ul>
+                <h3>Instrucciones para el primer acceso:</h3>
+                <ol>
+                    <li>Ingresa al sistema con tu correo y la contraseña temporal.</li>
+                    <li>Por seguridad, <strong>cambia tu contraseña</strong> inmediatamente después de iniciar sesión.</li>
+                </ol>
+                <p style="color: #d9534f;"><strong>Recomendación:</strong> No compartas tu contraseña y cámbiala tras el primer ingreso.</p>
+                <hr style="margin: 30px 0; border: 1px solid #eee;">
+                <p style="color: #666; font-size: 12px; text-align: center;">
+                    Este es un correo automático, por favor no respondas a este mensaje.
+                </p>
+            </div>
+            "#,
+            user_name = user_name,
+            to_email = to_email,
+            temp_password = temp_password
+        );
+
+        let email = CreateEmailBaseOptions::new(from, to, subject)
+            .with_html(&html_content);
+
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("Email enviado exitosamente: {:?}", response);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Error detallado enviando email: {:?}", e);
+                Err(format!("Error sending email: {}", e))
+            }
+        }
+    }
+}
+
+/// Comando de Tauri para enviar email de orden de trabajo al cliente
+#[tauri::command]
+pub async fn send_orden_trabajo_cliente(orden_id: i32, _sent_by: i32) -> Result<String, String> {
+    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+
+    // Obtener la orden de trabajo
+    let orden = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+
+    // Obtener el equipo
+    let equipo_id = orden.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id.ok_or_else(|| "El equipo no tiene cliente asociado".to_string())?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| "Cliente no encontrado".to_string())?;
+
+    // Verificar que el cliente tenga email
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+
+    // Enviar el email
+    email_service.send_orden_trabajo_cliente(
+        &cliente.cliente_correo.unwrap(),
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
+        &orden,
+        &equipo,
+    ).await?;
+
+    Ok("Email enviado exitosamente".to_string())
 }

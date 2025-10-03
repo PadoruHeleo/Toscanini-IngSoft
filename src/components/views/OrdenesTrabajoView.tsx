@@ -11,13 +11,24 @@ import {
 import { ViewTitle } from "@/components/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Eye, Trash2, Edit } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Eye,
+  Trash2,
+  Edit,
+  FileText,
+  LogOut,
+} from "lucide-react";
 import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
 import CotizacionFormDialog from "./CotizacionFormDialog";
 import InformeFormDialog from "./InformeFormDialog";
+import { PdfViewer } from "@/components/PdfViewer";
 import { UnificarFiltros } from "./UnificarFiltros";
+import { RegistrarSalidaDialog } from "./RegistrarSalidaDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -112,13 +123,13 @@ const getCotizacionButtonInfo = (orden: OrdenTrabajo) => {
   const isSent = orden.estado === "cotizacion_enviada";
   return {
     hasQuote: true,
-    text: isSent ? "Ver Cotización ✓" : "Ver Cotización",
+    text: isSent ? "Ver Cotización" : "Ver Cotización",
     icon: "eye",
     className: isSent
-      ? "text-purple-600 hover:text-purple-700"
+      ? "text-purple-600 hover:text-purple-700 font-medium"
       : "text-blue-600 hover:text-blue-700",
     title: isSent
-      ? "Ver cotización enviada al cliente"
+      ? "Cotización enviada - Pendiente de aprobación/rechazo"
       : "Ver cotización (borrador)",
   };
 };
@@ -141,8 +152,10 @@ const getTiempoEnEstado = (createdAt?: string) => {
 export function OrdenesTrabajoView() {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
+  const { getVisibleActions } = useOrdenTrabajoPermissions();
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshFilters, setRefreshFilters] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenTrabajo | null>(null);
@@ -159,11 +172,25 @@ export function OrdenesTrabajoView() {
   const [editingInforme, setEditingInforme] = useState<any>(null);
   const [now, setNow] = useState(Date.now());
 
+  // Estados para PDF Viewer de Informes y Cotizaciones
+  const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
+  const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
+  const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
+  const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
+
+  // Estados para Registro de Salida
+  const [showRegistrarSalidaDialog, setShowRegistrarSalidaDialog] =
+    useState(false);
+  const [selectedEquipoForSalida, setSelectedEquipoForSalida] =
+    useState<any>(null);
+  const [selectedOrdenForSalida, setSelectedOrdenForSalida] =
+    useState<OrdenTrabajo | null>(null);
+
   // Actualizar el tiempo cada minuto
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-    }, 60 * 1000);  
+    }, 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -211,12 +238,13 @@ export function OrdenesTrabajoView() {
   };
 
   const isTiempoEnEstadoCritico = (orden: OrdenTrabajo) => {
-    if (orden.estado !== "en_reparacion" && orden.estado !== "recibido") return false;
+    if (orden.estado !== "en_reparacion" && orden.estado !== "recibido")
+      return false;
     const base = orden.estado_updated_at || orden.created_at;
     if (!base) return false;
     const baseDate = new Date(base);
     const now = new Date();
-    const diffMs = now.getTime() - baseDate.getTime(); 
+    const diffMs = now.getTime() - baseDate.getTime();
     return diffMs > 60 * 60 * 1000;
   };
 
@@ -237,14 +265,17 @@ export function OrdenesTrabajoView() {
   const handleOrdenAdded = () => {
     loadOrdenes();
     setShowAddForm(false);
+    setRefreshFilters((prev) => prev + 1);
   };
 
   const handleOrdenUpdated = () => {
     loadOrdenes();
     setEditingOrden(null);
+    setRefreshFilters((prev) => prev + 1);
   };
   const handleEditOrden = (orden: OrdenTrabajo) => {
     setEditingOrden(orden);
+    setRefreshFilters((prev) => prev + 1);
   };
   const handleCotizacionAdded = () => {
     // Recargar las órdenes para ver los cambios
@@ -286,6 +317,7 @@ export function OrdenesTrabajoView() {
           `La orden ${orden.orden_codigo} ha sido eliminada exitosamente.`
         );
         loadOrdenes();
+        setRefreshFilters((prev) => prev + 1);
       } else {
         showError("Error", "No se pudo eliminar la orden de trabajo.");
       }
@@ -315,7 +347,10 @@ export function OrdenesTrabajoView() {
       });
 
       // Log para depuración
-      console.log("Abriendo CotizacionFormDialog, ordenTrabajoId:", orden.orden_id);
+      console.log(
+        "Abriendo CotizacionFormDialog, ordenTrabajoId:",
+        orden.orden_id
+      );
 
       // Abrir el formulario de cotización en modo edición
       setSelectedOrdenForCotizacion(orden);
@@ -341,7 +376,10 @@ export function OrdenesTrabajoView() {
     try {
       setLoadingCotizacion(orden.orden_id);
       // Log para depuración
-      console.log("Abriendo CotizacionFormDialog, ordenTrabajoId:", orden.orden_id);
+      console.log(
+        "Abriendo CotizacionFormDialog, ordenTrabajoId:",
+        orden.orden_id
+      );
 
       setSelectedOrdenForCotizacion(orden);
       setEditingCotizacion(null);
@@ -381,6 +419,20 @@ export function OrdenesTrabajoView() {
     }
   };
 
+  const handleVerInformePdf = (orden: OrdenTrabajo) => {
+    if (!orden.informe_id && !orden.cotizacion_id) {
+      showError(
+        "Sin documentos",
+        "Esta orden no tiene informe ni cotización asociados."
+      );
+      return;
+    }
+    setPdfInformeId(orden.informe_id || null);
+    setPdfCotizacionId(orden.cotizacion_id || null);
+    setPdfOrdenCodigo(orden.orden_codigo || "Sin código");
+    setShowInformePdfViewer(true);
+  };
+
   const handleCrearInforme = async (orden: OrdenTrabajo) => {
     if (orden.informe_id) {
       showError(
@@ -404,6 +456,39 @@ export function OrdenesTrabajoView() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleDateString("es-CL");
+  };
+
+  const handleRegistrarSalida = async (orden: OrdenTrabajo) => {
+    if (!orden.equipo_id) {
+      showError("Error", "Esta orden no tiene un equipo asociado.");
+      return;
+    }
+
+    try {
+      // Obtener información del equipo
+      const equipoData = await invoke<any>("get_equipo_by_id", {
+        equipoId: orden.equipo_id,
+      });
+
+      if (equipoData) {
+        setSelectedEquipoForSalida(equipoData);
+        setSelectedOrdenForSalida(orden);
+        setShowRegistrarSalidaDialog(true);
+      } else {
+        showError("Error", "No se pudo cargar la información del equipo.");
+      }
+    } catch (error) {
+      console.error("Error cargando equipo:", error);
+      showError("Error", `No se pudo cargar el equipo: ${error}`);
+    }
+  };
+
+  const handleSalidaRegistrada = () => {
+    // Recargar las órdenes después de registrar la salida
+    loadOrdenes();
+    // Limpiar estados
+    setSelectedEquipoForSalida(null);
+    setSelectedOrdenForSalida(null);
   };
 
   if (loading) {
@@ -442,6 +527,7 @@ export function OrdenesTrabajoView() {
         )}
         {/* boton para los filtos */}
         <UnificarFiltros
+          key={refreshFilters}
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
       </div>
@@ -490,9 +576,17 @@ export function OrdenesTrabajoView() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    {getTiempoEnEstado(orden.estado_updated_at || orden.created_at)}
+                    {getTiempoEnEstado(
+                      orden.estado_updated_at || orden.created_at
+                    )}
                     {isTiempoEnEstadoCritico(orden) && (
-                      <span style={{ color: "#dc2626", fontWeight: "bold", marginLeft: 8 }}>
+                      <span
+                        style={{
+                          color: "#dc2626",
+                          fontWeight: "bold",
+                          marginLeft: 8,
+                        }}
+                      >
                         Atrasado
                       </span>
                     )}
@@ -520,78 +614,142 @@ export function OrdenesTrabajoView() {
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end flex-wrap">
-                      {" "}
-                      {/* Botones de cotización */}
                       {(() => {
-                        const buttonInfo = getCotizacionButtonInfo(orden);
+                        const actions = getVisibleActions(orden);
+
                         return (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              buttonInfo.hasQuote
-                                ? handleVerCotizacion(orden)
-                                : handleCrearCotizacion(orden)
-                            }
-                            disabled={loadingCotizacion === orden.orden_id}
-                            className={`${buttonInfo.className} disabled:opacity-50`}
-                            title={buttonInfo.title}
-                          >
-                            {loadingCotizacion === orden.orden_id ? (
-                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                            ) : buttonInfo.icon === "eye" ? (
-                              <Eye className="h-3 w-3" />
-                            ) : (
-                              <Plus className="h-3 w-3" />
+                          <>
+                            {/* Botones de cotización */}
+                            {actions.showCreateCotizacion &&
+                              (() => {
+                                const buttonInfo =
+                                  getCotizacionButtonInfo(orden);
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleCrearCotizacion(orden)}
+                                    disabled={
+                                      loadingCotizacion === orden.orden_id
+                                    }
+                                    className={`${buttonInfo.className} disabled:opacity-50`}
+                                    title={buttonInfo.title}
+                                  >
+                                    {loadingCotizacion === orden.orden_id ? (
+                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                      <Plus className="h-3 w-3" />
+                                    )}
+                                    {buttonInfo.text}
+                                  </Button>
+                                );
+                              })()}
+
+                            {actions.showViewCotizacion &&
+                              (() => {
+                                const buttonInfo =
+                                  getCotizacionButtonInfo(orden);
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVerCotizacion(orden)}
+                                    disabled={
+                                      loadingCotizacion === orden.orden_id
+                                    }
+                                    className={`${buttonInfo.className} disabled:opacity-50`}
+                                    title={buttonInfo.title}
+                                  >
+                                    {loadingCotizacion === orden.orden_id ? (
+                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                      <Eye className="h-3 w-3" />
+                                    )}
+                                    {buttonInfo.text}
+                                  </Button>
+                                );
+                              })()}
+
+                            {/* Botones de informe */}
+                            {actions.showCreateInforme && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCrearInforme(orden)}
+                                className="text-green-600 hover:text-green-700"
+                                title="Crear nuevo informe"
+                              >
+                                <Plus className="h-3 w-3" />
+                                Crear Informe
+                              </Button>
                             )}
-                            {buttonInfo.text}
-                          </Button>
+
+                            {actions.showViewInforme && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleVerInforme(orden)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Ver informe existente"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Ver Informe
+                              </Button>
+                            )}
+
+                            {/* Botón PDF - visible si hay cotización O informe */}
+                            {(orden.cotizacion_id || orden.informe_id) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleVerInformePdf(orden)}
+                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                title="Ver PDF (Cotización e Informe)"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </Button>
+                            )}
+
+                            {/* Botón editar - siempre visible */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditOrden(orden)}
+                              className="text-gray-600 hover:text-gray-700"
+                              title="Editar orden"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+
+                            {/* Botón registrar salida - visible en estados compatibles */}
+                            {actions.showRegistrarSalida && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRegistrarSalida(orden)}
+                                className="text-orange-600 hover:text-orange-700"
+                                title="Registrar salida del equipo"
+                              >
+                                <LogOut className="h-3 w-3" />
+                                Registrar Salida
+                              </Button>
+                            )}
+
+                            {/* Botón eliminar - solo para admin y técnico */}
+                            {actions.showDeleteOrden && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteOrden(orden)}
+                                className="text-red-600 hover:text-red-700"
+                                title="Eliminar orden"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </>
                         );
                       })()}
-                      {/* Botones de informe */}
-                      {orden.informe_id ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleVerInforme(orden)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Ver informe"
-                        >
-                          <Eye className="h-3 w-3" />
-                          Informe
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCrearInforme(orden)}
-                          className="text-green-600 hover:text-green-700"
-                          title="Crear informe"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Informe
-                        </Button>
-                      )}
-                      {/* Botón editar */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditOrden(orden)}
-                        className="text-gray-600 hover:text-gray-700"
-                        title="Editar orden"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      {/* Botón eliminar */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteOrden(orden)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Eliminar orden"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -683,6 +841,24 @@ export function OrdenesTrabajoView() {
         informe={editingInforme}
         isEditing={!!editingInforme}
         ordenTrabajoId={selectedOrdenForInforme?.orden_id}
+      />
+      {/* PDF Viewer para Informes */}
+      {(pdfInformeId || pdfCotizacionId) && (
+        <PdfViewer
+          open={showInformePdfViewer}
+          onOpenChange={setShowInformePdfViewer}
+          title={`Documentos - Orden ${pdfOrdenCodigo}`}
+          informeId={pdfInformeId || undefined}
+          cotizacionId={pdfCotizacionId || undefined}
+        />
+      )}
+      {/* Diálogo para Registrar Salida de Equipo */}
+      <RegistrarSalidaDialog
+        open={showRegistrarSalidaDialog}
+        onOpenChange={setShowRegistrarSalidaDialog}
+        equipo={selectedEquipoForSalida}
+        ordenTrabajo={selectedOrdenForSalida}
+        onSalidaRegistrada={handleSalidaRegistrada}
       />
     </div>
   );

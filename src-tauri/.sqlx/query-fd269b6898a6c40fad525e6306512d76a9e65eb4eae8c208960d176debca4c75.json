@@ -1,0 +1,54 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT p.pieza_nombre, p.pieza_marca, p.pieza_precio, pi.cantidad\n         FROM PIEZAS_INFORME pi\n         INNER JOIN PIEZA p ON pi.pieza_id = p.pieza_id\n         WHERE pi.informe_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pieza_nombre",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 120
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pieza_marca",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 120
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "pieza_precio",
+        "type_info": {
+          "type": "Long",
+          "flags": "",
+          "max_size": 11
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "cantidad",
+        "type_info": {
+          "type": "Long",
+          "flags": "",
+          "max_size": 11
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "fd269b6898a6c40fad525e6306512d76a9e65eb4eae8c208960d176debca4c75"
+}

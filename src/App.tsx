@@ -4,10 +4,14 @@ import {
   EquiposView,
   ClientesView,
   OrdenesTrabajoView,
-  SettingsView,
+  AjustesDeCuentaView,
   HelpView,
   PiezasView,
+  UsuarioView,
+  TerminosCondicionesView,
 } from "@/components/views";
+import { AccessDenied } from "@/components/AccessDenied";
+import { useViewPermissions } from "@/hooks/use-permissions";
 import { usePeriodicNotification } from "@/hooks/use-periodic-notification";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
@@ -28,6 +32,8 @@ function PeriodicNotifications() {
 // Componente para renderizar la vista activa
 function ViewRenderer() {
   const { currentView } = useView();
+  const { canViewUsers, canViewTermsConditions } = useViewPermissions();
+
   switch (currentView) {
     case "dashboard":
     case "inicio":
@@ -41,9 +47,19 @@ function ViewRenderer() {
       return <OrdenesTrabajoView />;
     case "piezas":
       return <PiezasView />;
+    case "usuarios":
+      if (!canViewUsers) {
+        return <AccessDenied />;
+      }
+      return <UsuarioView />;
+    case "términos y condiciones":
+      if (!canViewTermsConditions) {
+        return <AccessDenied />;
+      }
+      return <TerminosCondicionesView />;
     case "projects":
-    case "settings":
-      return <SettingsView />;
+    case "Ajustes de Cuenta":
+      return <AjustesDeCuentaView />;
     case "gethelp":
       return <HelpView />;
     default:
@@ -58,7 +74,8 @@ export default function App() {
         <ViewProvider>
           <ProtectedRoute>
             <SidebarProvider>
-              <PeriodicNotifications /> {/* Componente de notificaciones periodicas, insertado aqui, evaluar cambiar su posicion */}
+              <PeriodicNotifications />{" "}
+              {/* Componente de notificaciones periodicas, insertado aqui, evaluar cambiar su posicion */}
               <AppSidebar variant="inset" />{" "}
               <SidebarInset>
                 <div className="flex flex-1 flex-col">

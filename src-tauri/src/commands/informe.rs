@@ -250,6 +250,38 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
         .ok_or_else(|| "Failed to retrieve created informe".to_string())
 }
 
+/// Eliminar un informe en estado de borrador
+#[tauri::command]
+pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: String, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+
+    // Cambia el estado del informe a "rechazado" y guarda el motivo
+    
+
+
+    // Desvincula el informe de la orden de trabajo
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+        .bind(informe_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Database error al desvincular informe: {}", e))?;
+
+    // Registrar AuditLog
+    let was_updated = result.rows_affected() > 0;
+    if was_updated {
+        let _ = log_action(
+            "RECHAZAR_INFORME_BORRADOR",
+            Some(updated_by),
+            "INFORME",
+            Some(informe_id),
+            Some("Informe en borrador eliminado"),
+            Some(&motivo_eliminacion)
+        ).await;
+    }
+
+    Ok(was_updated)
+}
+
 /// Actualizar un informe existente
 #[tauri::command]
 pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, updated_by: i32) -> Result<Option<Informe>, String> {
@@ -529,4 +561,24 @@ pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<boo
     ).await;
     
     Ok(true)
+}
+
+#[tauri::command]
+pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, String> {
+    let pool = get_db_pool_safe()?;
+    let informes = sqlx::query_as::<_, Informe>(
+        "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
+                i.is_borrador, i.created_by, i.created_at,
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
+         FROM INFORME i
+         INNER JOIN ORDEN_TRABAJO ot ON i.informe_id = ot.informe_id
+         INNER JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
+         WHERE e.cliente_id = ?
+         ORDER BY i.created_at DESC"
+    )
+    .bind(cliente_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error al obtener informes del cliente: {}", e))?;
+    Ok(informes)
 }

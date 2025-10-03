@@ -1,0 +1,184 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT i.informe_codigo, i.diagnostico, i.recomendaciones, i.solucion_aplicada, \n                i.tecnico_responsable, i.created_at,\n                ot.orden_codigo, ot.has_garantia,\n                cl.cliente_nombre, cl.cliente_correo, cl.cliente_telefono, cl.cliente_direccion,\n                e.equipo_marca, e.equipo_modelo, e.equipo_tipo, e.numero_serie, e.equipo_ubicacion\n         FROM INFORME i\n         LEFT JOIN ORDEN_TRABAJO ot ON i.informe_id = ot.informe_id\n         LEFT JOIN EQUIPO e ON ot.equipo_id = e.equipo_id\n         LEFT JOIN CLIENTE cl ON e.cliente_id = cl.cliente_id\n         WHERE i.informe_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "informe_codigo",
+        "type_info": {
+          "type": "VarString",
+          "flags": "UNIQUE_KEY",
+          "max_size": 48
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "diagnostico",
+        "type_info": {
+          "type": "Blob",
+          "flags": "BLOB",
+          "max_size": 262140
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "recomendaciones",
+        "type_info": {
+          "type": "Blob",
+          "flags": "BLOB",
+          "max_size": 262140
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "solucion_aplicada",
+        "type_info": {
+          "type": "Blob",
+          "flags": "BLOB",
+          "max_size": 262140
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "tecnico_responsable",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": {
+          "type": "Timestamp",
+          "flags": "NOT_NULL | UNSIGNED | BINARY | TIMESTAMP",
+          "max_size": 19
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "orden_codigo",
+        "type_info": {
+          "type": "VarString",
+          "flags": "UNIQUE_KEY",
+          "max_size": 200
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "has_garantia",
+        "type_info": {
+          "type": "Tiny",
+          "flags": "",
+          "max_size": 1
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "cliente_nombre",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 256
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "cliente_correo",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 1024
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "cliente_telefono",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 64
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "cliente_direccion",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 2048
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "equipo_marca",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 128
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "equipo_modelo",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 256
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "equipo_tipo",
+        "type_info": {
+          "type": "String",
+          "flags": "SET",
+          "max_size": 108
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "numero_serie",
+        "type_info": {
+          "type": "VarString",
+          "flags": "UNIQUE_KEY",
+          "max_size": 128
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "equipo_ubicacion",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "max_size": 1024
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "04a8b7213d73857eac64ff6e0545fdc946669745789cdad21575a27e145a6686"
+}
