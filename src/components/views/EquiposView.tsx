@@ -16,6 +16,7 @@ import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
 import { EquipoHistorialDialog } from "@/components/views/EquipoHistorialDialog";
 import { UnificarFiltrosEquipos } from "@/components/views/UnificarFiltrosEquipos";
 import { Badge } from "@/components/ui/badge";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface EquipoConEstado {
   equipo_id: number;
@@ -62,6 +63,9 @@ export function EquiposView() {
   const [historialEquipo, setHistorialEquipo] =
     useState<EquipoConEstado | null>(null);
   const [refreshFilters, setRefreshFilters] = useState(0);
+
+  // Hook para verificar permisos de administrador
+  const { isAdmin } = usePermissions();
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -219,7 +223,7 @@ export function EquiposView() {
               <TableHead>Tipo</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Ubicación</TableHead>
-              <TableHead className="w-[160px]">Estado</TableHead>
+              {isAdmin() && <TableHead className="w-[160px]">Estado</TableHead>}
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -227,7 +231,7 @@ export function EquiposView() {
             {equipos.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={isAdmin() ? 8 : 7}
                   className="text-center py-8 text-gray-500"
                 >
                   {searchTerm
@@ -248,16 +252,18 @@ export function EquiposView() {
                     {equipo.cliente_nombre || "Sin cliente"}
                   </TableCell>
                   <TableCell>{equipo.equipo_ubicacion || "N/A"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {getEstadoBadge(equipo.ultimo_estado_orden)}
-                      {equipo.ultimo_codigo_orden && (
-                        <div className="text-xs text-gray-500">
-                          {equipo.ultimo_codigo_orden}
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
+                  {isAdmin() && (
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {getEstadoBadge(equipo.ultimo_estado_orden)}
+                        {equipo.ultimo_codigo_orden && (
+                          <div className="text-xs text-gray-500">
+                            {equipo.ultimo_codigo_orden}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       <Button
@@ -269,15 +275,17 @@ export function EquiposView() {
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setHistorialEquipo(equipo)}
-                        className="text-blue-600 hover:text-blue-700"
-                        title="Ver historial del equipo"
-                      >
-                        <History className="h-3 w-3" />
-                      </Button>
+                      {isAdmin() && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setHistorialEquipo(equipo)}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Ver historial del equipo"
+                        >
+                          <History className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -303,11 +311,13 @@ export function EquiposView() {
         equipo={editingEquipo || undefined}
         isEditing={editingEquipo !== null}
       />
-      <EquipoHistorialDialog
-        open={historialEquipo !== null}
-        onOpenChange={(open) => !open && setHistorialEquipo(null)}
-        equipo={historialEquipo}
-      />
+      {isAdmin() && (
+        <EquipoHistorialDialog
+          open={historialEquipo !== null}
+          onOpenChange={(open) => !open && setHistorialEquipo(null)}
+          equipo={historialEquipo}
+        />
+      )}
     </div>
   );
 }
