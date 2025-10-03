@@ -8,28 +8,66 @@ pub struct EmailService {
 
 impl EmailService {
     pub fn new() -> Result<Self, String> {
+        println!("🔧 Inicializando EmailService...");
+        
         let api_key = env::var("RESEND_API_KEY")
-            .map_err(|_| "RESEND_API_KEY environment variable not found".to_string())?;
+            .map_err(|_| {
+                eprintln!("❌ Variable de entorno RESEND_API_KEY no encontrada");
+                eprintln!("🔍 Variables de entorno disponibles:");
+                for (key, _) in env::vars() {
+                    if key.contains("RESEND") || key.contains("EMAIL") || key.contains("API") {
+                        eprintln!("   - {}", key);
+                    }
+                }
+                "RESEND_API_KEY environment variable not found".to_string()
+            })?;
+        
+        println!("✅ RESEND_API_KEY cargada correctamente (longitud: {})", api_key.len());
         
         let resend = Resend::new(&api_key);
         
+        println!("✅ EmailService inicializado exitosamente");
         Ok(EmailService { resend })
     }
 
     pub async fn send_password_reset_email(&self, to_email: &str, reset_code: &str, user_name: &str) -> Result<(), String> {
-        let from = "noreply@beniteztech.com";
-        let to = vec![to_email.to_string()];
+        use std::env;
+        
+        // Verificar el entorno de ejecución
+        let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        
+        let (from, to) = if app_environment == "development" {
+            // En desarrollo: usar email de desarrollo
+            let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
+            
+            println!("🔧 MODO DESARROLLO: Enviando código de recuperación de contraseña");
+            println!("📧 Enviando a email de desarrollo: {}", dev_email);
+            println!("📧 En producción se enviaría a: {}", to_email);
+            
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![dev_email]
+            )
+        } else {
+            // En producción: usar el email real del usuario
+            println!("📧 MODO PRODUCCIÓN: Enviando código de recuperación a {}", to_email);
+            (
+                "noreply@beniteztech.com".to_string(),
+                vec![to_email.to_string()]
+            )
+        };
+        
         let subject = "Recuperación de Contraseña - Toscanini";
 
         let html_content = format!(
             r#"
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #333; text-align: center;">Recuperación de Contraseña</h2>
-                <p>Hola <strong>{}</strong>,</p>
+                <p>Hola <strong>{user_name}</strong>,</p>
                 <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en Toscanini.</p>
                 <div style="background-color: #f5f5f5; padding: 20px; margin: 20px 0; text-align: center; border-radius: 5px;">
                     <p style="margin: 0; font-size: 18px;">Tu código de verificación es:</p>
-                    <h1 style="color: #007bff; font-size: 32px; margin: 10px 0; letter-spacing: 5px;">{}</h1>
+                    <h1 style="color: #007bff; font-size: 32px; margin: 10px 0; letter-spacing: 5px;">{reset_code}</h1>
                 </div>
                 <p><strong>Importante:</strong></p>
                 <ul>
@@ -44,16 +82,28 @@ impl EmailService {
                 </p>
             </div>
             "#,
-            user_name, reset_code
+            user_name = user_name,
+            reset_code = reset_code
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
+        let email = CreateEmailBaseOptions::new(&from, to.clone(), subject)
             .with_html(&html_content);
 
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;
-
-        Ok(())
+        match self.resend.emails.send(email).await {
+            Ok(response) => {
+                println!("✅ Email de recuperación enviado exitosamente: {:?}", response);
+                if app_environment == "development" {
+                    println!("🔑 Código de recuperación generado: {} (solo visible en desarrollo)", reset_code);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("❌ Error detallado enviando email de recuperación: {:?}", e);
+                eprintln!("📧 Destinatario: {:?}", to);
+                eprintln!("🔑 API Key configurada: {}", env::var("RESEND_API_KEY").is_ok());
+                Err(format!("Error sending password reset email: {}", e))
+            }
+        }
     }
     pub async fn send_informe_email(
         &self, 

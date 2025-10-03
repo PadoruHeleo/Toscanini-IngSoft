@@ -447,19 +447,40 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
 
 #[tauri::command]
 pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Result<String, String> {
-    let pool = get_db_pool_safe()?;
-      // Buscar el usuario por email
+    println!("🔄 Iniciando proceso de recuperación de contraseña para: {}", request.usuario_correo);
+    
+    println!("🔗 Obteniendo pool de conexión a la base de datos...");
+    let pool = match get_db_pool_safe() {
+        Ok(p) => {
+            println!("✅ Pool de conexión obtenido exitosamente");
+            p
+        },
+        Err(e) => {
+            eprintln!("❌ Error de conexión a la base de datos en request_password_reset: {}", e);
+            return Err(format!("No se pudo conectar con la base de datos: {}", e));
+        }
+    };
+    
+    println!("🔍 Buscando usuario por email en la base de datos...");
+    // Buscar el usuario por email
     let usuario = sqlx::query_as::<_, Usuario>(
-        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, last_login_at, session_expires_at, session_token 
+        "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, NULL as is_active, last_login_at, session_expires_at, session_token 
          FROM USUARIO 
          WHERE usuario_correo = ?"
     )
     .bind(&request.usuario_correo)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Database error: {}", e))?;    let user = match usuario {
+    .map_err(|e| {
+        eprintln!("❌ Error ejecutando consulta SQL para buscar usuario: {}", e);
+        format!("Database error: {}", e)
+    })?;
+    
+    println!("✅ Consulta de usuario completada");
+    let user = match usuario {
         Some(u) => u,
         None => {
+            println!("❌ Usuario no encontrado para el email: {}", request.usuario_correo);
             // Registrar intento de recuperación con correo inexistente
             let _ = log_action(
                 "PASSWORD_RESET_FAILED",
@@ -474,17 +495,23 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
             return Err("EMAIL_NOT_REGISTERED".to_string());
         }
     };
-      // Generar código de 6 dígitos
+    
+    println!("✅ Usuario encontrado: {}", user.usuario_nombre.as_deref().unwrap_or("Sin nombre"));
+    
+    // Generar código de 6 dígitos
+    println!("🔑 Generando código de recuperación...");
     let reset_code: String = {
         use rand::Rng;
         let mut rng = rand::thread_rng();
         (0..6).map(|_| rng.gen_range(0..10).to_string()).collect()
     };
+    println!("🔑 Código generado: {}", reset_code);
     
     // Calcular tiempo de expiración (15 minutos desde ahora)
     let expires_at = Utc::now() + Duration::minutes(15);
     
     // Limpiar códigos anteriores no usados de este usuario
+    println!("🧹 Limpiando códigos anteriores...");
     let _ = sqlx::query(
         "UPDATE PASSWORD_RESET SET used = TRUE WHERE usuario_id = ? AND used = FALSE"
     )
@@ -493,6 +520,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     .await;
     
     // Insertar nuevo código de recuperación
+    println!("💾 Insertando nuevo código en la base de datos...");
     sqlx::query(
         "INSERT INTO PASSWORD_RESET (usuario_id, reset_code, expires_at) VALUES (?, ?, ?)"
     )
@@ -501,16 +529,33 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     .bind(expires_at)
     .execute(pool)
     .await
-    .map_err(|e| format!("Database error: {}", e))?;
+    .map_err(|e| {
+        eprintln!("❌ Error insertando código en la base de datos: {}", e);
+        format!("Database error: {}", e)
+    })?;
+    
+    println!("✅ Código insertado en la base de datos exitosamente");
     
     // Enviar correo electrónico
+    println!("📧 Intentando inicializar servicio de email...");
     let email_service = EmailService::new()
-        .map_err(|e| format!("Email service error: {}", e))?;
+        .map_err(|e| {
+            eprintln!("❌ Error inicializando servicio de email: {}", e);
+            format!("Error del servicio de email: {}", e)
+        })?;
+    
+    println!("📧 Servicio de email inicializado correctamente");
+    println!("📧 Enviando código {} al usuario {}", reset_code, user.usuario_nombre.as_deref().unwrap_or("Usuario"));
     
     let user_name = user.usuario_nombre.as_deref().unwrap_or("Usuario");
     email_service.send_password_reset_email(&request.usuario_correo, &reset_code, user_name)
         .await
-        .map_err(|e| format!("Error sending email: {}", e))?;    // Registrar solicitud exitosa
+        .map_err(|e| {
+            eprintln!("❌ Error enviando email de recuperación: {}", e);
+            format!("Error enviando correo: {}", e)
+        })?;
+    
+    println!("✅ Email de recuperación enviado exitosamente");    // Registrar solicitud exitosa
     let _ = log_action(
         "PASSWORD_RESET_REQUESTED",
         Some(user.usuario_id),
