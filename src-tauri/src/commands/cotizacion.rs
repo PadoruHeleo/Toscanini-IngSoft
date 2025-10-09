@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
+use crate::commands::terminos_condiciones::apply_default_terminos_to_cotizacion;
 use chrono::{DateTime, Utc};
 use chrono::Datelike;
 
@@ -232,6 +233,10 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     }
     // Confirmar transacción
     tx.commit().await.map_err(|e| format!("Database error: {}", e))?;
+    
+    // Aplicar términos y condiciones por defecto automáticamente
+    let _ = apply_default_terminos_to_cotizacion(cotizacion_id, request.created_by).await;
+    
     // Registrar la acción en el log de auditoría
     let _ = log_action(
         "CREATE_COTIZACION",
