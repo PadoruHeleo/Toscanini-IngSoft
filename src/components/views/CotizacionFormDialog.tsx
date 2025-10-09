@@ -125,7 +125,6 @@ export default function CotizacionFormDialog({
     useState(false);
   const [abandonoComentario, setAbandonoComentario] = useState("");
   const [motivoRechazo, setMotivoRechazo] = useState("");
-  const [ordenCreatedAt, setOrdenCreatedAt] = useState<string | null>(null);
   const [puedeAbandonar, setPuedeAbandonar] = useState(false);
   const [activeTab, setActiveTab] = useState("informacion");
   const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
@@ -180,7 +179,6 @@ export default function CotizacionFormDialog({
         )
           .then((orden) => {
             setEstadoOrden(orden.estado);
-            setOrdenCreatedAt(orden.created_at);
             // Calcular si han pasado más de 168 horas
             if (orden.created_at) {
               const createdDate = new Date(orden.created_at);

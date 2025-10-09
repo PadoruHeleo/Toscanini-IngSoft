@@ -37,21 +37,6 @@ interface EquipoConEstado {
   fecha_ultima_orden?: string;
 }
 
-interface FiltrosEquipos {
-  fecha_inicio?: string;
-  fecha_fin?: string;
-  marcas?: string[];
-  modelos?: string[];
-  tipos?: string[];
-  clientes?: string[];
-  ubicaciones?: string[];
-  estados_orden?: string[];
-  search?: string;
-  ordenamiento?: string;
-  precio_min?: number;
-  precio_max?: number;
-}
-
 export function EquiposView() {
   const [equipos, setEquipos] = useState<EquipoConEstado[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,18 +102,8 @@ export function EquiposView() {
     setRefreshFilters((prev) => prev + 1);
   };
 
-  const handleEquipoUpdated = () => {
-    setEditingEquipo(null);
-    setRefreshFilters((prev) => prev + 1);
-  };
-
   const handleEditEquipo = (equipo: EquipoConEstado) =>
     setEditingEquipo(equipo);
-  const handleVerHistorial = (equipo: EquipoConEstado) =>
-    setHistorialEquipo(equipo);
-
-  const formatDate = (dateString?: string) =>
-    dateString ? new Date(dateString).toLocaleDateString("es-CL") : "N/A";
 
   const handleEquiposFiltrados = (equiposFiltrados: EquipoConEstado[]) => {
     setEquipos(equiposFiltrados);

@@ -42,7 +42,3 @@ printpdf = "0.7"
 [[bin]]
 name = "tauri-app"
 path = "src/main.rs"
-
-[[bin]]
-name = "migrate"
-path = "src/bin/migrate.rs"
