@@ -8,6 +8,7 @@ import {
   IconUsers,
   IconClipboardList,
   IconFileText,
+  IconHistory,
 } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -74,6 +75,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       title: "Usuarios",
       url: "#",
       icon: IconUsers,
+      requiresPermission: true,
+      hasPermission: canViewUsers,
+    },
+    {
+      title: "Logs de Auditoría",
+      url: "#",
+      icon: IconHistory,
       requiresPermission: true,
       hasPermission: canViewUsers,
     },

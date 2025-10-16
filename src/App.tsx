@@ -9,6 +9,7 @@ import {
   PiezasView,
   UsuarioView,
   TerminosCondicionesView,
+  LogsAuditoriaView,
 } from "@/components/views";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useViewPermissions } from "@/hooks/use-permissions";
@@ -52,6 +53,11 @@ function ViewRenderer() {
         return <AccessDenied />;
       }
       return <UsuarioView />;
+    case "logs de auditoría":
+      if (!canViewUsers) {
+        return <AccessDenied />;
+      }
+      return <LogsAuditoriaView />;
     case "términos y condiciones":
       if (!canViewTermsConditions) {
         return <AccessDenied />;
