@@ -25,3 +25,6 @@ export * from "./UnificarFiltrosClientes.tsx";
 export * from "./FiltrarClientesPorCorreo.tsx";
 export * from "./FiltrarClientesPorRuts.tsx";
 export * from "./FiltrarClientesActivoseInactivos.tsx";
+export * from "./FiltrarLogsPorAccion.tsx";
+export * from "./FiltrarLogsPorEntidad.tsx";
+export * from "./UnificarFiltrosLogs.tsx";

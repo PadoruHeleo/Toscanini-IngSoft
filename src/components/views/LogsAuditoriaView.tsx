@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Table,
@@ -19,13 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { UnificarFiltrosLogs } from "./UnificarFiltrosLogs";
 
 interface AuditLogWithUser {
   log_id: number;
@@ -40,16 +34,6 @@ interface AuditLogWithUser {
   usuario_correo: string | null;
 }
 
-interface LogFilters {
-  usuario_id?: number;
-  entidad_tabla?: string;
-  accion?: string;
-  fecha_desde?: string;
-  fecha_hasta?: string;
-  limit?: number;
-  offset?: number;
-}
-
 export function LogsAuditoriaView() {
   const { error: showError } = useToastContext();
   const [logs, setLogs] = useState<AuditLogWithUser[]>([]);
@@ -57,46 +41,37 @@ export function LogsAuditoriaView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLog, setSelectedLog] = useState<AuditLogWithUser | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
-  
-  // Filtros
-  const [filterTabla, setFilterTabla] = useState<string>("");
-  const [filterAccion, setFilterAccion] = useState<string>("");
 
-  const loadLogs = async () => {
-    try {
-      setLoading(true);
-      
-      const filters: LogFilters = {
-        limit: 100,
-      };
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-      if (filterTabla) {
-        filters.entidad_tabla = filterTabla;
-      }
-
-      if (filterAccion || searchTerm.trim()) {
-        filters.accion = searchTerm.trim() || filterAccion;
-      }
-
-      const logsData = await invoke<AuditLogWithUser[]>("get_audit_logs", {
-        filters: Object.keys(filters).length > 1 ? filters : null,
-      });
-
-      setLogs(logsData);
-    } catch (error) {
-      console.error("Error cargando logs:", error);
-      showError(
-        "Error al cargar logs",
-        "No se pudieron cargar los registros de auditoría."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Cargar logs inicial
   useEffect(() => {
-    loadLogs();
-  }, [searchTerm, filterTabla, filterAccion]);
+    const loadInitialLogs = async () => {
+      try {
+        setLoading(true);
+        const logsData = await invoke<AuditLogWithUser[]>("get_audit_logs", {
+          filters: null,
+        });
+        setLogs(logsData);
+      } catch (error) {
+        console.error("Error cargando logs:", error);
+        showError(
+          "Error al cargar logs",
+          "No se pudieron cargar los registros de auditoría."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadInitialLogs();
+  }, []);
+
+  const handleClearSearch = () => setSearchTerm("");
+
+  const handleLogsFiltrados = (logsFiltrados: AuditLogWithUser[]) => {
+    setLogs(logsFiltrados);
+    setLoading(false);
+  };
 
   const handleViewDetails = (log: AuditLogWithUser) => {
     setSelectedLog(log);
@@ -107,13 +82,13 @@ export function LogsAuditoriaView() {
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
-      return date.toLocaleString('es-CL', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
+      return date.toLocaleString("es-CL", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       });
     } catch {
       return dateString;
@@ -122,45 +97,35 @@ export function LogsAuditoriaView() {
 
   const getAccionLabel = (accion: string | null) => {
     if (!accion) return "N/A";
-    
     const accionMap: { [key: string]: string } = {
-      "CREATE": "Crear",
-      "UPDATE": "Actualizar",
-      "DELETE": "Eliminar",
-      "LOGIN": "Inicio de sesión",
-      "LOGOUT": "Cierre de sesión",
-      "LOGIN_FAILED": "Inicio de sesión fallido",
+      CREATE: "Crear",
+      UPDATE: "Actualizar",
+      DELETE: "Eliminar",
+      LOGIN: "Inicio de sesión",
+      LOGOUT: "Cierre de sesión",
+      LOGIN_FAILED: "Inicio de sesión fallido",
     };
-
     return accionMap[accion.toUpperCase()] || accion;
   };
 
   const getTablaLabel = (tabla: string | null) => {
     if (!tabla) return "N/A";
-    
     const tablaMap: { [key: string]: string } = {
-      "USUARIO": "Usuario",
-      "CLIENTE": "Cliente",
-      "EQUIPO": "Equipo",
-      "COTIZACION": "Cotización",
-      "INFORME": "Informe",
-      "ORDEN_TRABAJO": "Orden de Trabajo",
-      "PIEZA": "Pieza",
+      USUARIO: "Usuario",
+      CLIENTE: "Cliente",
+      EQUIPO: "Equipo",
+      COTIZACION: "Cotización",
+      INFORME: "Informe",
+      ORDEN_TRABAJO: "Orden de Trabajo",
+      PIEZA: "Pieza",
     };
-
     return tablaMap[tabla.toUpperCase()] || tabla;
-  };
-
-  const clearFilters = () => {
-    setSearchTerm("");
-    setFilterTabla("");
-    setFilterAccion("");
   };
 
   if (loading) {
     return (
       <div className="p-4">
-        <ViewTitle onRefresh={loadLogs} />
+        <ViewTitle />
         <div className="text-center py-8">Cargando logs de auditoría...</div>
       </div>
     );
@@ -169,60 +134,28 @@ export function LogsAuditoriaView() {
   return (
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
-        <ViewTitle onRefresh={loadLogs} />
+        <ViewTitle />
       </div>
 
-      {/* Filtros */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        {/* Búsqueda por acción */}
-        <div className="relative">
+      {/* Barra de búsqueda y filtros unificados */}
+      <div className="flex items-center space-x-2 mb-4">
+        <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             placeholder="Buscar por acción..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8"
+            title="Buscar por acción"
           />
         </div>
-
-        {/* Filtro por tabla */}
-        <Select value={filterTabla || undefined} onValueChange={(value) => setFilterTabla(value === "ALL" ? "" : value)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Filtrar por entidad..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todas las entidades</SelectItem>
-            <SelectItem value="USUARIO">Usuario</SelectItem>
-            <SelectItem value="CLIENTE">Cliente</SelectItem>
-            <SelectItem value="EQUIPO">Equipo</SelectItem>
-            <SelectItem value="COTIZACION">Cotización</SelectItem>
-            <SelectItem value="INFORME">Informe</SelectItem>
-            <SelectItem value="ORDEN_TRABAJO">Orden de Trabajo</SelectItem>
-            <SelectItem value="PIEZA">Pieza</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Filtro por tipo de acción */}
-        <div className="flex gap-2">
-          <Select value={filterAccion || undefined} onValueChange={(value) => setFilterAccion(value === "ALL" ? "" : value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filtrar por acción..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas las acciones</SelectItem>
-              <SelectItem value="CREATE">Crear</SelectItem>
-              <SelectItem value="UPDATE">Actualizar</SelectItem>
-              <SelectItem value="DELETE">Eliminar</SelectItem>
-              <SelectItem value="LOGIN">Inicio de sesión</SelectItem>
-              <SelectItem value="LOGOUT">Cierre de sesión</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          {(searchTerm || filterTabla || filterAccion) && (
-            <Button variant="outline" onClick={clearFilters}>
-              Limpiar
-            </Button>
-          )}
+        <div className="flex-grow min-w-0">
+          <UnificarFiltrosLogs
+            searchTerm={searchTerm}
+            onFiltrar={handleLogsFiltrados}
+            onClearSearch={handleClearSearch}
+          />
         </div>
       </div>
 
@@ -246,7 +179,7 @@ export function LogsAuditoriaView() {
                   colSpan={6}
                   className="text-center py-8 text-gray-500"
                 >
-                  {searchTerm || filterTabla || filterAccion
+                  {searchTerm
                     ? "No se encontraron registros"
                     : "No hay registros de auditoría"}
                 </TableCell>
@@ -254,13 +187,9 @@ export function LogsAuditoriaView() {
             ) : (
               logs.map((log) => (
                 <TableRow key={log.log_id}>
-                  <TableCell className="font-medium">
-                    {log.log_id}
-                  </TableCell>
+                  <TableCell className="font-medium">{log.log_id}</TableCell>
                   <TableCell>{formatDate(log.created_at)}</TableCell>
-                  <TableCell>
-                    {log.usuario_nombre || "Sistema"}
-                  </TableCell>
+                  <TableCell>{log.usuario_nombre || "Sistema"}</TableCell>
                   <TableCell>{getAccionLabel(log.log_accion)}</TableCell>
                   <TableCell>{getTablaLabel(log.log_entidad_tabla)}</TableCell>
                   <TableCell className="text-right">
@@ -284,6 +213,11 @@ export function LogsAuditoriaView() {
       {/* Total de logs */}
       <div className="mt-4 text-sm text-gray-600">
         Total: {logs.length} registro{logs.length !== 1 ? "s" : ""}
+        {searchTerm && (
+          <span className="ml-2 text-blue-600">
+            (filtrado por: "{searchTerm}")
+          </span>
+        )}
       </div>
 
       {/* Dialog para ver detalles del log */}
@@ -296,30 +230,50 @@ export function LogsAuditoriaView() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="font-semibold text-sm text-gray-600">Fecha y Hora</h3>
-                  <p className="text-sm">{formatDate(selectedLog.created_at)}</p>
+                  <h3 className="font-semibold text-sm text-gray-600">
+                    Fecha y Hora
+                  </h3>
+                  <p className="text-sm">
+                    {formatDate(selectedLog.created_at)}
+                  </p>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm text-gray-600">Acción</h3>
-                  <p className="text-sm">{getAccionLabel(selectedLog.log_accion)}</p>
+                  <h3 className="font-semibold text-sm text-gray-600">
+                    Acción
+                  </h3>
+                  <p className="text-sm">
+                    {getAccionLabel(selectedLog.log_accion)}
+                  </p>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm text-gray-600">Usuario</h3>
-                  <p className="text-sm">{selectedLog.usuario_nombre || "Sistema"}</p>
+                  <h3 className="font-semibold text-sm text-gray-600">
+                    Usuario
+                  </h3>
+                  <p className="text-sm">
+                    {selectedLog.usuario_nombre || "Sistema"}
+                  </p>
                   {selectedLog.usuario_correo && (
-                    <p className="text-xs text-gray-500">{selectedLog.usuario_correo}</p>
+                    <p className="text-xs text-gray-500">
+                      {selectedLog.usuario_correo}
+                    </p>
                   )}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm text-gray-600">Entidad</h3>
-                  <p className="text-sm">{getTablaLabel(selectedLog.log_entidad_tabla)}</p>
+                  <h3 className="font-semibold text-sm text-gray-600">
+                    Entidad
+                  </h3>
+                  <p className="text-sm">
+                    {getTablaLabel(selectedLog.log_entidad_tabla)}
+                  </p>
                 </div>
               </div>
 
               {/* Valores anteriores y nuevos */}
               <div className="space-y-2">
                 <div>
-                  <h3 className="font-semibold text-sm text-gray-600 mb-1">Resultado</h3>
+                  <h3 className="font-semibold text-sm text-gray-600 mb-1">
+                    Resultado
+                  </h3>
                   <div className="bg-gray-50 p-3 rounded-md max-h-48 overflow-auto">
                     <pre className="text-xs whitespace-pre-wrap">
                       {selectedLog.log_new_v || "N/A"}
