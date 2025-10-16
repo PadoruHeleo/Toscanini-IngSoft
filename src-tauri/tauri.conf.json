@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Toscanini",
+  "productName": "Tauri App",
   "version": "0.1.0",
   "identifier": "com.toscanini.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Toscanini",
+        "title": "Tauri App",
         "width": 800,
         "height": 600
       }
