@@ -19,6 +19,7 @@ export * from "./FiltrarOrdenesPorCliente";
 export * from "./UnificarFiltros";
 export * from "./UsuarioView";
 export * from "./UsuarioFormDialog";
+export * from "./LogsAuditoriaView";
 export * from "./FiltrarOrdenesPorFechaClientes.tsx";
 export * from "./UnificarFiltrosClientes.tsx";
 export * from "./FiltrarClientesPorCorreo.tsx";

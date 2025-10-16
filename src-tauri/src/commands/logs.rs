@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use chrono::{DateTime, Utc};
 use crate::database::get_db_pool_safe;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -11,7 +12,7 @@ pub struct AuditLog {
     pub log_entidad_id: Option<i32>,
     pub log_prev_v: Option<String>,
     pub log_new_v: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -23,7 +24,7 @@ pub struct AuditLogWithUser {
     pub log_entidad_id: Option<i32>,
     pub log_prev_v: Option<String>,
     pub log_new_v: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
     pub usuario_nombre: Option<String>,
     pub usuario_correo: Option<String>,
 }
