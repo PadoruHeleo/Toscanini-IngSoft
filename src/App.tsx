@@ -12,6 +12,7 @@ import {
   LogsAuditoriaView,
   InventarioEquiposView,
   InventarioPiezasView,
+  SalidasEquipoView,
 } from "@/components/views";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useViewPermissions } from "@/hooks/use-permissions";
@@ -67,6 +68,11 @@ function ViewRenderer() {
         return <AccessDenied />;
       }
       return <LogsAuditoriaView />;
+    case "salidas de equipos":
+      if (!canViewUsers) {
+        return <AccessDenied />;
+      }
+      return <SalidasEquipoView />;
     case "términos y condiciones":
       if (!canViewTermsConditions) {
         return <AccessDenied />;

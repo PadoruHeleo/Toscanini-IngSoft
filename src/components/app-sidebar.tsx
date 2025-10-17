@@ -124,6 +124,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           url: "#",
           icon: IconHistory,
         });
+        adminSubItems.push({
+          title: "Salidas de Equipos",
+          url: "#",
+          icon: IconPackage,
+        });
       }
 
       if (canViewTermsConditions) {

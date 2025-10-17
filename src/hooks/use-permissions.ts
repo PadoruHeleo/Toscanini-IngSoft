@@ -207,7 +207,7 @@ export function useOrdenTrabajoPermissions() {
       // - cotizacion_rechazada: cliente rechazó cotización, equipo aún en empresa
       const estadosEnSistema = [
         "recibido",
-        "cotizacion_enviada", 
+        "cotizacion_enviada",
         "aprobacion_pendiente", // Este es "espera de cliente"
         "en_reparacion",
         "espera_de_retiro",
