@@ -740,3 +740,232 @@ pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> R
         Ok(false)
     }
 }
+
+// Estructuras para inventario de equipos
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct InventarioEquipo {
+    pub inventario_equipo_id: i32,
+    pub equipo_codigo: Option<String>,
+    pub equipo_nombre: Option<String>,
+    pub equipo_marca: Option<String>,
+    pub equipo_modelo: Option<String>,
+    pub equipo_tipo: Option<String>,
+    pub equipo_descripcion: Option<String>,
+    pub equipo_precio: Option<i32>,
+    pub equipo_stock: Option<i32>,
+    pub equipo_estado: Option<String>,
+    pub equipo_ubicacion: Option<String>,
+    pub fecha_adquisicion: Option<String>,
+    pub proveedor: Option<String>,
+    pub numero_serie: Option<String>,
+    pub garantia_vencimiento: Option<String>,
+    pub observaciones: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InventarioEquipoRequest {
+    pub equipo_codigo: String,
+    pub equipo_nombre: String,
+    pub equipo_marca: Option<String>,
+    pub equipo_modelo: Option<String>,
+    pub equipo_tipo: String,
+    pub equipo_descripcion: Option<String>,
+    pub equipo_precio: Option<i32>,
+    pub equipo_stock: Option<i32>,
+    pub equipo_ubicacion: Option<String>,
+    pub proveedor: Option<String>,
+    pub numero_serie: Option<String>,
+    pub observaciones: Option<String>,
+}
+
+// Funciones para inventario de equipos
+#[tauri::command]
+pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    println!("Ejecutando query para obtener inventario de equipos...");
+    
+    let equipos = sqlx::query_as::<_, InventarioEquipo>(
+        "SELECT * FROM INVENTARIO_EQUIPO ORDER BY equipo_nombre"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        println!("Error en query INVENTARIO_EQUIPO: {}", e);
+        format!("Database error: {}", e)
+    })?;
+    
+    println!("Equipos encontrados: {}", equipos.len());
+    Ok(equipos)
+}
+
+#[tauri::command]
+pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query(
+        "INSERT INTO INVENTARIO_EQUIPO (
+            equipo_codigo, equipo_nombre, equipo_marca, equipo_modelo, 
+            equipo_tipo, equipo_descripcion, equipo_precio, equipo_stock,
+            equipo_estado, equipo_ubicacion, proveedor, numero_serie, observaciones
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?)"
+    )
+    .bind(&request.equipo_codigo)
+    .bind(&request.equipo_nombre)
+    .bind(&request.equipo_marca)
+    .bind(&request.equipo_modelo)
+    .bind(&request.equipo_tipo)
+    .bind(&request.equipo_descripcion)
+    .bind(&request.equipo_precio)
+    .bind(&request.equipo_stock.unwrap_or(0))
+    .bind(&request.equipo_ubicacion)
+    .bind(&request.proveedor)
+    .bind(&request.numero_serie)
+    .bind(&request.observaciones)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        let _ = log_action(
+            "CREATE",
+            None,
+            "INVENTARIO_EQUIPO",
+            None,
+            None,
+            Some(&format!("Creado equipo: {} - {}", request.equipo_codigo, request.equipo_nombre))
+        ).await;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoRequest) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    let result = sqlx::query(
+        "UPDATE INVENTARIO_EQUIPO SET 
+            equipo_codigo = ?, equipo_nombre = ?, equipo_marca = ?, equipo_modelo = ?,
+            equipo_tipo = ?, equipo_descripcion = ?, equipo_precio = ?, equipo_stock = ?,
+            equipo_ubicacion = ?, proveedor = ?, numero_serie = ?, observaciones = ?
+        WHERE inventario_equipo_id = ?"
+    )
+    .bind(&request.equipo_codigo)
+    .bind(&request.equipo_nombre)
+    .bind(&request.equipo_marca)
+    .bind(&request.equipo_modelo)
+    .bind(&request.equipo_tipo)
+    .bind(&request.equipo_descripcion)
+    .bind(&request.equipo_precio)
+    .bind(&request.equipo_stock.unwrap_or(0))
+    .bind(&request.equipo_ubicacion)
+    .bind(&request.proveedor)
+    .bind(&request.numero_serie)
+    .bind(&request.observaciones)
+    .bind(equipo_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        let _ = log_action(
+            "UPDATE",
+            None,
+            "INVENTARIO_EQUIPO",
+            Some(equipo_id),
+            None,
+            Some(&format!("Actualizado equipo: {} - {}", request.equipo_codigo, request.equipo_nombre))
+        ).await;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Primero obtenemos la información del equipo para el log
+    let equipo_info = sqlx::query_as::<_, InventarioEquipo>(
+        "SELECT * FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?"
+    )
+    .bind(equipo_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    let result = sqlx::query(
+        "DELETE FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?"
+    )
+    .bind(equipo_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        if let Some(equipo) = equipo_info {
+            let _ = log_action(
+                "DELETE",
+                None,
+                "INVENTARIO_EQUIPO",
+                Some(equipo_id),
+                None,
+                Some(&format!("Eliminado equipo: {} - {}", 
+                    equipo.equipo_codigo.unwrap_or_default(), 
+                    equipo.equipo_nombre.unwrap_or_default()))
+            ).await;
+        }
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Primero obtenemos el stock actual
+    let current_stock: i32 = sqlx::query_scalar(
+        "SELECT equipo_stock FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?"
+    )
+    .bind(equipo_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .unwrap_or(0);
+    
+    let new_stock = match tipo.as_str() {
+        "entrada" => current_stock + cantidad,
+        "salida" => std::cmp::max(0, current_stock - cantidad),
+        _ => return Err("Tipo de operación no válido. Use 'entrada' o 'salida'".to_string()),
+    };
+    
+    let result = sqlx::query(
+        "UPDATE INVENTARIO_EQUIPO SET equipo_stock = ? WHERE inventario_equipo_id = ?"
+    )
+    .bind(new_stock)
+    .bind(equipo_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error updating stock: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Log de la operación
+        let _ = log_action(
+            "UPDATE_STOCK",
+            None,
+            "INVENTARIO_EQUIPO",
+            Some(equipo_id),
+            Some(&format!("Stock anterior: {}", current_stock)),
+            Some(&format!("Stock nuevo: {} ({})", new_stock, if tipo == "entrada" { format!("+{}", cantidad) } else { format!("-{}", cantidad) }))
+        ).await;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}

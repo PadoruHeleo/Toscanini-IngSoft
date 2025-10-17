@@ -29,6 +29,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ViewTitle } from "@/components/ViewTitle";
 import { usePiezasPermissions } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/AccessDenied";
+import { useToastContext } from "@/contexts/ToastContext";
 
 interface PiezaInventario {
   pieza_id: number;
@@ -55,6 +56,7 @@ interface PiezaFormData {
 
 export function InventarioPiezasView() {
   const { canViewPiezas } = usePiezasPermissions();
+  const { success, error } = useToastContext();
   const [piezas, setPiezas] = useState<PiezaInventario[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStockDialog, setShowStockDialog] = useState(false);
@@ -176,24 +178,59 @@ export function InventarioPiezasView() {
             : null,
         },
       });
+
+      // Toast de éxito
+      success(
+        "Pieza actualizada exitosamente",
+        `Se actualizó la pieza "${formData.pieza_nombre}"`
+      );
+
       loadPiezas();
       handleCloseEditDialog();
     } catch (e) {
       console.error("Error updating pieza:", e);
+
+      // Toast de error
+      error(
+        "Error al actualizar pieza",
+        "No se pudo actualizar la información de la pieza"
+      );
     }
   };
 
   const handleStockUpdate = async () => {
+    if (!selectedPieza) return;
+
     try {
       await invoke("update_pieza_stock", {
         piezaId: stockUpdate.pieza_id,
         cantidad: stockUpdate.cantidad,
         tipo: stockUpdate.tipo,
       });
+
+      // Toast de éxito
+      const accion = stockUpdate.tipo === "entrada" ? "agregado" : "reducido";
+      const cantidad = stockUpdate.cantidad;
+      const nombre = selectedPieza.pieza_nombre || "Pieza";
+
+      success(
+        `Stock ${accion} exitosamente`,
+        `Se ${
+          stockUpdate.tipo === "entrada" ? "agregaron" : "redujeron"
+        } ${cantidad} unidad${cantidad > 1 ? "es" : ""} de ${nombre}`
+      );
+
       loadPiezas();
       handleCloseStockDialog();
     } catch (e) {
       console.error("Error updating stock:", e);
+
+      // Toast de error
+      error(
+        "Error al actualizar stock",
+        "No se pudo actualizar el stock de la pieza"
+      );
+
       // Si no existe el comando, simular actualización local
       setPiezas((prevPiezas) =>
         prevPiezas.map((pieza) => {
@@ -216,7 +253,8 @@ export function InventarioPiezasView() {
     if (stock === 0) {
       return {
         label: "Sin Stock",
-        className: "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200",
+        className:
+          "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200",
         icon: AlertTriangle,
         textColor: "text-red-600",
       };
@@ -224,7 +262,8 @@ export function InventarioPiezasView() {
     if (stock <= 5) {
       return {
         label: "Stock Bajo",
-        className: "bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200",
+        className:
+          "bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200",
         icon: AlertTriangle,
         textColor: "text-amber-600",
       };
@@ -232,14 +271,16 @@ export function InventarioPiezasView() {
     if (stock <= 20) {
       return {
         label: "Stock Medio",
-        className: "bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200",
+        className:
+          "bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200",
         icon: Package,
         textColor: "text-blue-600",
       };
     }
     return {
       label: "Stock Alto",
-      className: "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200",
+      className:
+        "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200",
       icon: Package,
       textColor: "text-emerald-600",
     };
@@ -278,40 +319,56 @@ export function InventarioPiezasView() {
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4 text-emerald-600" />
-              <span className="text-sm font-medium text-emerald-800">Stock Alto</span>
+              <span className="text-sm font-medium text-emerald-800">
+                Stock Alto
+              </span>
             </div>
             <div className="text-2xl font-bold text-emerald-600">
-              {filteredPiezas.filter(p => (p.pieza_stock || 0) > 20).length}
+              {filteredPiezas.filter((p) => (p.pieza_stock || 0) > 20).length}
             </div>
           </div>
-          
+
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-800">Stock Medio</span>
+              <span className="text-sm font-medium text-blue-800">
+                Stock Medio
+              </span>
             </div>
             <div className="text-2xl font-bold text-blue-600">
-              {filteredPiezas.filter(p => (p.pieza_stock || 0) > 5 && (p.pieza_stock || 0) <= 20).length}
+              {
+                filteredPiezas.filter(
+                  (p) => (p.pieza_stock || 0) > 5 && (p.pieza_stock || 0) <= 20
+                ).length
+              }
             </div>
           </div>
-          
+
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-medium text-amber-800">Stock Bajo</span>
+              <span className="text-sm font-medium text-amber-800">
+                Stock Bajo
+              </span>
             </div>
             <div className="text-2xl font-bold text-amber-600">
-              {filteredPiezas.filter(p => (p.pieza_stock || 0) > 0 && (p.pieza_stock || 0) <= 5).length}
+              {
+                filteredPiezas.filter(
+                  (p) => (p.pieza_stock || 0) > 0 && (p.pieza_stock || 0) <= 5
+                ).length
+              }
             </div>
           </div>
-          
+
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-red-600" />
-              <span className="text-sm font-medium text-red-800">Sin Stock</span>
+              <span className="text-sm font-medium text-red-800">
+                Sin Stock
+              </span>
             </div>
             <div className="text-2xl font-bold text-red-600">
-              {filteredPiezas.filter(p => (p.pieza_stock || 0) === 0).length}
+              {filteredPiezas.filter((p) => (p.pieza_stock || 0) === 0).length}
             </div>
           </div>
         </div>
@@ -380,7 +437,9 @@ export function InventarioPiezasView() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex flex-col items-center gap-1">
-                        <span className={`font-mono text-lg font-semibold ${stockStatus.textColor}`}>
+                        <span
+                          className={`font-mono text-lg font-semibold ${stockStatus.textColor}`}
+                        >
                           {pieza.pieza_stock || 0}
                         </span>
                         <span className="text-xs text-gray-500">unidades</span>

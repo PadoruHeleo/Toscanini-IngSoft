@@ -259,3 +259,39 @@ export function useOrdenTrabajoPermissions() {
     isRecepcion: isRecepcion(),
   };
 }
+
+/**
+ * Hook especializado para permisos específicos de gestión de equipos de inventario
+ */
+export function useInventarioEquipoPermissions() {
+  const { userRole, isAdmin, isTecnico } = usePermissions();
+
+  return {
+    // Ver inventario de equipos: admin y técnico
+    canViewEquipment: isAdmin() || isTecnico(),
+
+    // Crear equipo en inventario: solo admin y técnico
+    canCreateEquipment: isAdmin() || isTecnico(),
+
+    // Editar equipos: admin y técnico
+    canEditEquipment: isAdmin() || isTecnico(),
+
+    // Eliminar equipos: solo admin
+    canDeleteEquipment: isAdmin(),
+
+    // Gestionar stock: admin y técnico
+    canManageStock: isAdmin() || isTecnico(),
+
+    // Cambiar estado de equipos: admin y técnico
+    canChangeStatus: isAdmin() || isTecnico(),
+
+    // Ver información completa: admin y técnico
+    canViewFullDetails: isAdmin() || isTecnico(),
+
+    // Solo lectura para otros roles
+    isReadOnly: !isAdmin() && !isTecnico(),
+
+    // Información del rol actual
+    userRole,
+  };
+}
