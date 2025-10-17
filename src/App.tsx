@@ -10,6 +10,8 @@ import {
   UsuarioView,
   TerminosCondicionesView,
   LogsAuditoriaView,
+  InventarioEquiposView,
+  InventarioPiezasView,
 } from "@/components/views";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useViewPermissions } from "@/hooks/use-permissions";
@@ -40,20 +42,27 @@ function ViewRenderer() {
     case "inicio":
     case "home":
       return <HomeView />;
-    case "lista de equipos":
+    case "equipos en reparación":
+    case "lista de equipos": // Mantener compatibilidad hacia atrás
       return <EquiposView />;
     case "clientes":
       return <ClientesView />;
     case "órdenes de trabajo":
       return <OrdenesTrabajoView />;
-    case "piezas":
+    case "inventario de equipos":
+      return <InventarioEquiposView />;
+    case "inventario de piezas":
+      return <InventarioPiezasView />;
+    case "piezas": // Mantener por compatibilidad
       return <PiezasView />;
-    case "usuarios":
+    case "usuario":
+    case "usuarios": // Mantener compatibilidad hacia atrás
       if (!canViewUsers) {
         return <AccessDenied />;
       }
       return <UsuarioView />;
-    case "logs de auditoría":
+    case "registros de auditoría":
+    case "logs de auditoría": // Mantener compatibilidad hacia atrás
       if (!canViewUsers) {
         return <AccessDenied />;
       }
@@ -64,8 +73,9 @@ function ViewRenderer() {
       }
       return <TerminosCondicionesView />;
     case "projects":
-    case "Ajustes de Cuenta":
+    case "ajustes de cuenta":
       return <AjustesDeCuentaView />;
+    case "get help":
     case "gethelp":
       return <HelpView />;
     default:
