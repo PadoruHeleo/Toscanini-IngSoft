@@ -28,3 +28,6 @@ export * from "./FiltrarClientesActivoseInactivos.tsx";
 export * from "./FiltrarLogsPorAccion.tsx";
 export * from "./FiltrarLogsPorEntidad.tsx";
 export * from "./UnificarFiltrosLogs.tsx";
+export * from "./InventarioEquiposView";
+export * from "./InventarioPiezasView";
+export * from "./SalidasEquipoView";

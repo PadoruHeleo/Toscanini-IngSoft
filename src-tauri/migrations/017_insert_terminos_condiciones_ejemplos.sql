@@ -1,5 +1,5 @@
 -- Insertar términos y condiciones de ejemplo
-INSERT INTO TERMINOS_CONDICIONES (termino_nombre, termino_descripcion, tipo_referencia, is_default) VALUES
+INSERT IGNORE INTO TERMINOS_CONDICIONES (termino_nombre, termino_descripcion, tipo_referencia, is_default) VALUES
 ('Garantía Estándar', 'Los trabajos de reparación tienen una garantía de 90 días a partir de la fecha de entrega del equipo.', 'ambos', TRUE),
 ('Responsabilidad por Pérdida', 'El cliente es responsable de cualquier pérdida o daño del equipo mientras esté en nuestras instalaciones.', 'ambos', TRUE),
 ('Condiciones de Pago', 'El pago debe realizarse antes de la entrega del equipo reparado. Se acepta efectivo, tarjeta o transferencia bancaria.', 'cotizacion', TRUE),

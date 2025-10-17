@@ -198,13 +198,30 @@ export function useOrdenTrabajoPermissions() {
       informe_id?: number;
       estado?: string;
     }) => {
-      // Estados que permiten registro de salida (equipo AÚN en sistema)
+      // Estados que permiten registro de salida (equipo AÚN físicamente en la empresa)
+      // - recibido: equipo recién ingresado
+      // - cotizacion_enviada: cotización enviada, equipo en espera
+      // - aprobacion_pendiente: esperando aprobación del cliente (espera de cliente)
+      // - en_reparacion: equipo siendo reparado
+      // - espera_de_retiro: equipo reparado, esperando retiro
+      // - cotizacion_rechazada: cliente rechazó cotización, equipo aún en empresa
       const estadosEnSistema = [
         "recibido",
         "cotizacion_enviada",
-        "aprobacion_pendiente",
+        "aprobacion_pendiente", // Este es "espera de cliente"
         "en_reparacion",
         "espera_de_retiro",
+        "cotizacion_rechazada", // BUG FIX: Equipo sigue en sistema
+      ];
+
+      // Estados donde el equipo ya NO está en la empresa O ya es un estado de salida
+      // - entregado: equipo ya entregado al cliente
+      // - abandonado: equipo abandonado por el cliente
+      // - equipo_no_reparable: estado terminal, diagnóstico completo, listo para retiro
+      const estadosFueraSistema = [
+        "entregado",
+        "abandonado",
+        "equipo_no_reparable", // Estado terminal, no necesita "registrar salida"
       ];
 
       return {
@@ -221,9 +238,11 @@ export function useOrdenTrabajoPermissions() {
         showDeleteOrden: isAdmin() || isTecnico(),
 
         // Botón de registrar salida - solo visible si equipo está EN sistema
+        // NO mostrar si equipo ya fue entregado o abandonado
         showRegistrarSalida:
           (isRecepcion() || isTecnico() || isAdmin()) &&
-          estadosEnSistema.includes(orden.estado || ""),
+          estadosEnSistema.includes(orden.estado || "") &&
+          !estadosFueraSistema.includes(orden.estado || ""),
       };
     },
 
@@ -257,5 +276,41 @@ export function useOrdenTrabajoPermissions() {
     // Información del rol actual
     userRole,
     isRecepcion: isRecepcion(),
+  };
+}
+
+/**
+ * Hook especializado para permisos específicos de gestión de equipos de inventario
+ */
+export function useInventarioEquipoPermissions() {
+  const { userRole, isAdmin, isTecnico } = usePermissions();
+
+  return {
+    // Ver inventario de equipos: admin y técnico
+    canViewEquipment: isAdmin() || isTecnico(),
+
+    // Crear equipo en inventario: solo admin y técnico
+    canCreateEquipment: isAdmin() || isTecnico(),
+
+    // Editar equipos: admin y técnico
+    canEditEquipment: isAdmin() || isTecnico(),
+
+    // Eliminar equipos: solo admin
+    canDeleteEquipment: isAdmin(),
+
+    // Gestionar stock: admin y técnico
+    canManageStock: isAdmin() || isTecnico(),
+
+    // Cambiar estado de equipos: admin y técnico
+    canChangeStatus: isAdmin() || isTecnico(),
+
+    // Ver información completa: admin y técnico
+    canViewFullDetails: isAdmin() || isTecnico(),
+
+    // Solo lectura para otros roles
+    isReadOnly: !isAdmin() && !isTecnico(),
+
+    // Información del rol actual
+    userRole,
   };
 }

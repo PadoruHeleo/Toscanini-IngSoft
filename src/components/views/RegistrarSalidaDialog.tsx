@@ -243,13 +243,13 @@ export function RegistrarSalidaDialog({
                   <p className="text-xs text-muted-foreground">
                     Estados válidos para registro de salida: Recibido,
                     Cotización enviada, Aprobación pendiente, En reparación,
-                    Espera de retiro
+                    Espera de retiro, Cotización rechazada
                   </p>
                 )}
                 {!canRegister && statusMessage.includes("Ya se registró") && (
                   <p className="text-xs text-muted-foreground">
                     El equipo ya ha salido del sistema. Estados finales:
-                    Entregado, Abandonado, No reparable
+                    Entregado, Abandonado
                   </p>
                 )}
               </div>
