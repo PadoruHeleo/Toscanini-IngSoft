@@ -27,6 +27,7 @@ pub struct Pieza {
     pub pieza_marca: Option<String>,
     pub pieza_desc: Option<String>,
     pub pieza_precio: Option<i32>,
+    pub pieza_stock: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -430,7 +431,7 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
 pub async fn get_piezas() -> Result<Vec<Pieza>, String> {
     let pool = get_db_pool_safe()?;
     let piezas = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA ORDER BY pieza_nombre ASC"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA ORDER BY pieza_nombre ASC"
     )
     .fetch_all(pool)
     .await
@@ -443,7 +444,7 @@ pub async fn get_piezas() -> Result<Vec<Pieza>, String> {
 pub async fn get_pieza_by_id(pieza_id: i32) -> Result<Option<Pieza>, String> {
     let pool = get_db_pool_safe()?;
     let pieza = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
     .fetch_optional(pool)
@@ -468,7 +469,7 @@ pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> 
     .map_err(|e| format!("Database error: {}", e))?;
     let pieza_id = result.last_insert_id() as i32;
     let pieza = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
     .fetch_one(pool)
@@ -500,7 +501,7 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
     let pool = get_db_pool_safe()?;
     // Obtener datos previos para el log
     let prev_pieza = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
     .fetch_optional(pool)
@@ -526,7 +527,7 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
         return Ok(None);
     }
     let pieza = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
     .fetch_one(pool)
@@ -552,7 +553,7 @@ pub async fn delete_pieza(pieza_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     // Obtener datos previos para el log
     let prev_pieza = sqlx::query_as::<_, Pieza>(
-        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, created_at FROM PIEZA WHERE pieza_id = ?"
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
     .fetch_optional(pool)
@@ -675,4 +676,67 @@ pub async fn get_cotizaciones_by_cliente(cliente_id: i32) -> Result<Vec<Cotizaci
     .await
     .map_err(|e| format!("Database error al obtener cotizaciones del cliente: {}", e))?;
     Ok(cotizaciones)
+}
+
+/// Obtener todas las piezas con información de inventario
+#[tauri::command]
+pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
+    let pool = get_db_pool_safe()?;
+    let piezas = sqlx::query_as::<_, Pieza>(
+        "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at 
+         FROM PIEZA 
+         ORDER BY pieza_nombre ASC"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    Ok(piezas)
+}
+
+/// Actualizar el stock de una pieza
+#[tauri::command]
+pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el stock actual
+    let current_stock = sqlx::query_scalar::<_, Option<i32>>(
+        "SELECT pieza_stock FROM PIEZA WHERE pieza_id = ?"
+    )
+    .bind(pieza_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Database error getting current stock: {}", e))?
+    .unwrap_or(0);
+    
+    // Calcular el nuevo stock
+    let new_stock = match tipo.as_str() {
+        "entrada" => current_stock + cantidad,
+        "salida" => std::cmp::max(0, current_stock - cantidad),
+        _ => return Err("Tipo de operación inválido. Use 'entrada' o 'salida'".to_string()),
+    };
+    
+    // Actualizar el stock
+    let result = sqlx::query(
+        "UPDATE PIEZA SET pieza_stock = ? WHERE pieza_id = ?"
+    )
+    .bind(new_stock)
+    .bind(pieza_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Database error updating stock: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Log de la operación
+        let _ = log_action(
+            "UPDATE_STOCK",
+            None,
+            "PIEZA",
+            Some(pieza_id),
+            Some(&format!("Stock anterior: {}", current_stock)),
+            Some(&format!("Stock nuevo: {} ({})", new_stock, if tipo == "entrada" { format!("+{}", cantidad) } else { format!("-{}", cantidad) }))
+        ).await;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
