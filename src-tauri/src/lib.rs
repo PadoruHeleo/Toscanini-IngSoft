@@ -34,6 +34,7 @@ pub fn run() {
             commands::users::logout_user,
             commands::users::cleanup_expired_sessions,
             commands::users::create_admin_user,
+            commands::users::verify_phone,
             commands::users::request_password_reset,            
             commands::users::verify_reset_code,
             commands::users::reset_password_with_code,
