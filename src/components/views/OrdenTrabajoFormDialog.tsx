@@ -164,9 +164,7 @@ export default function OrdenTrabajoFormDialog({
   });
 
   // Estados para manejo de equipos nuevos
-  const [tipoEquipo, setTipoEquipo] = useState<"existente" | "nuevo">(
-    "existente"
-  );
+  const [tipoEquipo, setTipoEquipo] = useState<"existente" | "nuevo">("nuevo");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [marcas, setMarcas] = useState<string[]>([]);
   const [modelos, setModelos] = useState<string[]>([]);
@@ -324,7 +322,7 @@ export default function OrdenTrabajoFormDialog({
         equipo_ubicacion: "",
         cliente_id: undefined,
       });
-      setTipoEquipo("existente");
+      setTipoEquipo("nuevo");
     }
     setErrors({});
     setGeneratedDescription("");
@@ -884,51 +882,11 @@ export default function OrdenTrabajoFormDialog({
                   className="w-full"
                 >
                   <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="nuevo">Equipo Nuevo</TabsTrigger>
                     <TabsTrigger value="existente">
                       Equipo Existente
                     </TabsTrigger>
-                    <TabsTrigger value="nuevo">Equipo Nuevo</TabsTrigger>
                   </TabsList>
-
-                  <TabsContent value="existente" className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="equipo_id">Seleccionar Equipo *</Label>
-                      <Select
-                        value={formData.equipo_id}
-                        onValueChange={(value) =>
-                          handleInputChange("equipo_id", value)
-                        }
-                        disabled={isOrderLocked}
-                      >
-                        <SelectTrigger
-                          className={errors.equipo_id ? "border-red-500" : ""}
-                        >
-                          <SelectValue
-                            placeholder={
-                              loadingEquipos
-                                ? "Cargando equipos..."
-                                : "Seleccionar equipo"
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {equipos.map((equipo) => (
-                            <SelectItem
-                              key={equipo.equipo_id}
-                              value={equipo.equipo_id.toString()}
-                            >
-                              {getEquipoDisplayName(equipo)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {errors.equipo_id && (
-                        <p className="text-sm text-red-600">
-                          {errors.equipo_id}
-                        </p>
-                      )}
-                    </div>
-                  </TabsContent>
 
                   <TabsContent value="nuevo" className="space-y-4">
                     {/* Campos del equipo nuevo - Layout simplificado */}
@@ -1243,6 +1201,46 @@ export default function OrdenTrabajoFormDialog({
                           )}
                         </div>
                       </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="existente" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="equipo_id">Seleccionar Equipo *</Label>
+                      <Select
+                        value={formData.equipo_id}
+                        onValueChange={(value) =>
+                          handleInputChange("equipo_id", value)
+                        }
+                        disabled={isOrderLocked}
+                      >
+                        <SelectTrigger
+                          className={errors.equipo_id ? "border-red-500" : ""}
+                        >
+                          <SelectValue
+                            placeholder={
+                              loadingEquipos
+                                ? "Cargando equipos..."
+                                : "Seleccionar equipo"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {equipos.map((equipo) => (
+                            <SelectItem
+                              key={equipo.equipo_id}
+                              value={equipo.equipo_id.toString()}
+                            >
+                              {getEquipoDisplayName(equipo)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.equipo_id && (
+                        <p className="text-sm text-red-600">
+                          {errors.equipo_id}
+                        </p>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>
