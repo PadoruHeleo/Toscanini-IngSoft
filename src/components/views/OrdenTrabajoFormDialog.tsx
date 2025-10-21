@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
@@ -1398,18 +1397,6 @@ export default function OrdenTrabajoFormDialog({
               )}
             </div>
           </div>
-          {/* Garantía */}{" "}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="has_garantia"
-              checked={formData.has_garantia}
-              onCheckedChange={(checked) =>
-                handleInputChange("has_garantia", !!checked)
-              }
-              disabled={isOrderLocked}
-            />
-            <Label htmlFor="has_garantia">Equipo tiene garantía</Label>
-          </div>
           {/* Pre-informe */}
           <div className="space-y-2">
             <Label htmlFor="pre_informe">Pre-informe *</Label>{" "}
@@ -1432,7 +1419,119 @@ export default function OrdenTrabajoFormDialog({
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}{" "}
+          )}
+          {/* Estado de Garantía */}
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">
+              Estado de Garantía *
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                className={`relative rounded-lg border-2 p-4 cursor-pointer transition-all duration-200 ${
+                  formData.has_garantia
+                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                } ${isOrderLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                onClick={() =>
+                  !isOrderLocked && handleInputChange("has_garantia", true)
+                }
+              >
+                <div className="flex items-center space-x-3">
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      formData.has_garantia
+                        ? "border-green-500 bg-green-500"
+                        : "border-gray-300 bg-white"
+                    }`}
+                  >
+                    {formData.has_garantia && (
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      ✅ Con Garantía
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      El equipo tiene garantía vigente
+                    </div>
+                  </div>
+                </div>
+                {formData.has_garantia && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className={`relative rounded-lg border-2 p-4 cursor-pointer transition-all duration-200 ${
+                  !formData.has_garantia
+                    ? "border-orange-500 bg-orange-50 ring-2 ring-orange-200"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                } ${isOrderLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                onClick={() =>
+                  !isOrderLocked && handleInputChange("has_garantia", false)
+                }
+              >
+                <div className="flex items-center space-x-3">
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      !formData.has_garantia
+                        ? "border-orange-500 bg-orange-500"
+                        : "border-gray-300 bg-white"
+                    }`}
+                  >
+                    {!formData.has_garantia && (
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      ⚠️ Sin Garantía
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      El equipo no tiene garantía o expiró
+                    </div>
+                  </div>
+                </div>
+                {!formData.has_garantia && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Información adicional sobre la garantía */}
+            <div
+              className={`text-sm p-3 rounded-md border-l-4 ${
+                formData.has_garantia
+                  ? "bg-green-50 border-green-400 text-green-800"
+                  : "bg-orange-50 border-orange-400 text-orange-800"
+              }`}
+            >
+              {formData.has_garantia ? (
+                <div className="flex items-start space-x-2">
+                  <div className="text-green-600 mt-0.5">ℹ️</div>
+                  <div>
+                    <strong>Equipo con garantía:</strong> Los trabajos de
+                    reparación pueden estar cubiertos. Verificar términos y
+                    condiciones antes de proceder.
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start space-x-2">
+                  <div className="text-orange-600 mt-0.5">⚠️</div>
+                  <div>
+                    <strong>Equipo sin garantía:</strong> Todos los costos de
+                    reparación serán por cuenta del cliente. Se requerirá
+                    cotización previa.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           <DialogFooter className="gap-2">
             <Button
               type="button"
