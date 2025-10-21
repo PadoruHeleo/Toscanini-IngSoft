@@ -44,26 +44,37 @@ export function LogsAuditoriaView() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Función para cargar logs
+  const loadLogs = async () => {
+    try {
+      setLoading(true);
+      const logsData = await invoke<AuditLogWithUser[]>("get_audit_logs", {
+        filters: null,
+      });
+      setLogs(logsData);
+    } catch (error) {
+      console.error("Error cargando logs:", error);
+      showError(
+        "Error al cargar logs",
+        "No se pudieron cargar los registros de auditoría."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Cargar logs inicial
   useEffect(() => {
-    const loadInitialLogs = async () => {
-      try {
-        setLoading(true);
-        const logsData = await invoke<AuditLogWithUser[]>("get_audit_logs", {
-          filters: null,
-        });
-        setLogs(logsData);
-      } catch (error) {
-        console.error("Error cargando logs:", error);
-        showError(
-          "Error al cargar logs",
-          "No se pudieron cargar los registros de auditoría."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadInitialLogs();
+    loadLogs();
+  }, []);
+
+  // Actualización automática cada minuto
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadLogs();
+    }, 60000); // 60 segundos
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleClearSearch = () => setSearchTerm("");
@@ -125,7 +136,7 @@ export function LogsAuditoriaView() {
   if (loading) {
     return (
       <div className="p-4">
-        <ViewTitle />
+        <ViewTitle onRefresh={loadLogs} />
         <div className="text-center py-8">Cargando logs de auditoría...</div>
       </div>
     );
@@ -134,7 +145,7 @@ export function LogsAuditoriaView() {
   return (
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
-        <ViewTitle />
+        <ViewTitle onRefresh={loadLogs} />
       </div>
 
       {/* Barra de búsqueda y filtros unificados */}
