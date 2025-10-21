@@ -571,11 +571,6 @@ export default function OrdenTrabajoFormDialog({
       if (!formData.equipo_id) {
         newErrors.equipo_id = "Debe seleccionar un equipo";
       }
-      // La descripción se genera automáticamente, pero verificamos que exista
-      if (!generatedDescription.trim()) {
-        newErrors.equipo_id =
-          "Seleccione un equipo y complete el pre-informe para generar la descripción";
-      }
     } else {
       // Validar datos del equipo nuevo
       if (!equipoFormData.numero_serie?.trim()) {
@@ -1351,23 +1346,7 @@ export default function OrdenTrabajoFormDialog({
               })()}
             </div>
           )}
-          {/* Descripción */}
-          <div className="space-y-2">
-            <Label htmlFor="orden_desc">
-              Descripción *
-              <span className="text-sm text-gray-500 font-normal ml-1">
-                (Se genera automáticamente)
-              </span>
-            </Label>
-            <Textarea
-              id="orden_desc"
-              value={generatedDescription}
-              readOnly
-              placeholder="La descripción se generará automáticamente al seleccionar un equipo y escribir el pre-informe"
-              className="bg-gray-50"
-              rows={3}
-            />
-          </div>
+          {/* La descripción se genera automáticamente internamente y no se muestra al usuario */}
           <div className="grid grid-cols-2 gap-4">
             {/* Prioridad */}
             <div className="space-y-2">
