@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
+import AccesoriosForm from "@/components/forms/AccesoriosForm";
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -257,6 +258,27 @@ export default function OrdenTrabajoFormDialog({
   const [accesoriosSelected, setAccesoriosSelected] = useState<
     OrdenAccesorioLocal[]
   >([]);
+
+  // Cargar accesorios asociados cuando se edita una orden
+  useEffect(() => {
+    const loadAccesorios = async () => {
+      try {
+        if (isEditing && orden && orden.orden_id) {
+          const accs = await invoke<OrdenAccesorioLocal[]>(
+            "get_accesorios_orden",
+            { orden_id: orden.orden_id }
+          );
+          setAccesoriosSelected(accs || []);
+        } else {
+          setAccesoriosSelected([]);
+        }
+      } catch (e) {
+        console.error("Error cargando accesorios de la orden:", e);
+      }
+    };
+
+    if (open) loadAccesorios();
+  }, [open, isEditing, orden]);
 
   // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
   useEffect(() => {
@@ -708,6 +730,20 @@ export default function OrdenTrabajoFormDialog({
             `La orden ha sido actualizada exitosamente.`
           );
           onOrdenAdded();
+          // Guardar accesorios asociados a la orden si hay alguno seleccionado
+          if (accesoriosSelected && accesoriosSelected.length > 0 && orden) {
+            try {
+              await invoke("update_accesorios_orden", {
+                orden_id: orden.orden_id,
+                accesorios: accesoriosSelected,
+              });
+            } catch (e) {
+              console.error(
+                "Error guardando accesorios al actualizar orden:",
+                e
+              );
+            }
+          }
         } else {
           showError("Error", "No se pudo actualizar la orden de trabajo.");
         }
@@ -1438,6 +1474,15 @@ export default function OrdenTrabajoFormDialog({
             {errors.pre_informe && (
               <p className="text-sm text-red-500">{errors.pre_informe}</p>
             )}
+          </div>
+          {/* Accesorios relacionados al pre-informe */}
+          <div className="space-y-2">
+            <Label>Accesorios</Label>
+            <AccesoriosForm
+              ordenId={isEditing && orden ? orden.orden_id : undefined}
+              value={accesoriosSelected}
+              onChange={(v: OrdenAccesorioLocal[]) => setAccesoriosSelected(v)}
+            />
           </div>
           {Object.keys(errors).length > 0 && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
