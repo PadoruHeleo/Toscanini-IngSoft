@@ -1481,31 +1481,35 @@ export default function OrdenTrabajoFormDialog({
             </div>
           </div>
           {/* Pre-informe */}
-          <div className="space-y-2">
-            <Label htmlFor="pre_informe">Pre-informe *</Label>{" "}
-            <Textarea
-              id="pre_informe"
-              value={formData.pre_informe}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                handleInputChange("pre_informe", e.target.value)
-              }
-              placeholder="Diagnóstico inicial del equipo"
-              className={errors.pre_informe ? "border-red-500" : ""}
-              rows={4}
-              disabled={isOrderLocked}
-            />
-            {errors.pre_informe && (
-              <p className="text-sm text-red-500">{errors.pre_informe}</p>
-            )}
-          </div>
-          {/* Accesorios relacionados al pre-informe */}
-          <div className="space-y-2">
-            <Label>Accesorios</Label>
-            <AccesoriosForm
-              ordenId={isEditing && orden ? orden.orden_id : undefined}
-              value={accesoriosSelected}
-              onChange={(v: OrdenAccesorioLocal[]) => setAccesoriosSelected(v)}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="pre_informe">Pre-informe *</Label>{" "}
+              <Textarea
+                id="pre_informe"
+                value={formData.pre_informe}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  handleInputChange("pre_informe", e.target.value)
+                }
+                placeholder="Diagnóstico inicial del equipo"
+                className={errors.pre_informe ? "border-red-500" : ""}
+                rows={6}
+                disabled={isOrderLocked}
+              />
+              {errors.pre_informe && (
+                <p className="text-sm text-red-500">{errors.pre_informe}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Accesorios</Label>
+              <AccesoriosForm
+                ordenId={isEditing && orden ? orden.orden_id : undefined}
+                value={accesoriosSelected}
+                onChange={(v: OrdenAccesorioLocal[]) =>
+                  setAccesoriosSelected(v)
+                }
+              />
+            </div>
           </div>
           {Object.keys(errors).length > 0 && (
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">

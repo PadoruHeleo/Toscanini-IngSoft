@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useToastContext } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { invoke } from "@tauri-apps/api/core";
 
 type TipoAccesorio = {
@@ -30,6 +37,7 @@ export default function AccesoriosForm({
   const [tipos, setTipos] = useState<TipoAccesorio[]>([]);
   const [selected, setSelected] = useState<OrdenAccesorio[]>(value || []);
   const [newTipoName, setNewTipoName] = useState("");
+  const [showNewTipoInline, setShowNewTipoInline] = useState(false);
   const [creating, setCreating] = useState(false);
   const { success, error: showError } = useToastContext();
 
@@ -128,46 +136,65 @@ export default function AccesoriosForm({
       <div className="mb-2">
         <div className="text-sm font-medium mb-1">Seleccionar accesorios</div>
         <div>
-          <select
+          <Select
             value={""}
-            onChange={(e) => {
-              const val = parseInt(e.target.value);
-              if (!isNaN(val)) addTipoToSelected(val);
+            onValueChange={(value) => {
+              if (value === "nuevo_tipo") setShowNewTipoInline(true);
+              else {
+                const id = parseInt(value);
+                if (!isNaN(id)) addTipoToSelected(id);
+              }
             }}
-            className="border rounded px-2 py-1 w-full"
           >
-            <option value="">-- Seleccionar accesorio --</option>
-            {tipos
-              .filter(
-                (t) => !selected.find((s) => s.tipo_accesorio_id === t.tipo_id)
-              )
-              .map((t) => (
-                <option key={t.tipo_id} value={t.tipo_id}>
-                  {t.nombre || `Tipo ${t.tipo_id}`}
-                </option>
-              ))}
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="-- Seleccionar accesorio --" />
+            </SelectTrigger>
+            <SelectContent>
+              {tipos
+                .filter(
+                  (t) =>
+                    !selected.find((s) => s.tipo_accesorio_id === t.tipo_id)
+                )
+                .map((t) => (
+                  <SelectItem key={t.tipo_id} value={t.tipo_id.toString()}>
+                    {t.nombre || `Tipo ${t.tipo_id}`}
+                  </SelectItem>
+                ))}
+              <SelectItem value="nuevo_tipo">+ Agregar nuevo tipo</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      <div className="mb-2">
-        <label className="text-sm">Agregar nuevo tipo</label>
-        <div className="flex gap-2 mt-1">
-          <input
-            value={newTipoName}
-            onChange={(e) => setNewTipoName(e.target.value)}
-            className="border px-2 py-1 rounded"
-          />
-          <Button
-            type="button"
-            onClick={handleCreateTipo}
-            disabled={creating}
-            className="cursor-pointer"
-          >
-            {creating ? "Creando..." : "Crear"}
-          </Button>
+      {showNewTipoInline && (
+        <div className="mb-2">
+          <div className="text-sm">Nuevo tipo</div>
+          <div className="flex gap-2 mt-1">
+            <input
+              value={newTipoName}
+              onChange={(e) => setNewTipoName(e.target.value)}
+              className="border px-2 py-1 rounded flex-1"
+              placeholder="Nombre del nuevo tipo"
+            />
+            <Button
+              type="button"
+              onClick={handleCreateTipo}
+              disabled={creating}
+              size="sm"
+            >
+              {creating ? "Creando..." : "Crear"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowNewTipoInline(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <div className="text-sm font-medium mb-1">Accesorios seleccionados</div>
