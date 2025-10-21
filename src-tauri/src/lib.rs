@@ -119,6 +119,12 @@ pub fn run() {
             commands::ordenes_trabajo::delete_orden_trabajo,
             commands::ordenes_trabajo::get_ordenes_trabajo_stats,
             commands::ordenes_trabajo::search_ordenes_trabajo,
+            // Accesorios
+            commands::accesorios::get_tipos_accesorios,
+            commands::accesorios::create_tipo_accesorio,
+            commands::accesorios::get_accesorios_orden,
+            commands::accesorios::create_accesorio_orden,
+            commands::accesorios::update_accesorios_orden,
             commands::ordenes_trabajo::send_orden_trabajo_notification,
             commands::cotizacion::get_cotizaciones,
             commands::cotizacion::get_cotizacion_by_id,

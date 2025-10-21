@@ -106,6 +106,15 @@ interface EquipoFormData {
   cliente_id: number | undefined;
 }
 
+interface OrdenAccesorioLocal {
+  id?: number;
+  orden_id?: number;
+  tipo_accesorio_id: number;
+  estado?: string;
+  observaciones?: string | null;
+  created_at?: string;
+}
+
 interface FormErrors {
   prioridad?: string;
   estado?: string;
@@ -245,6 +254,9 @@ export default function OrdenTrabajoFormDialog({
 
   const [generatedDescription, setGeneratedDescription] = useState<string>("");
   const [errors, setErrors] = useState<FormErrors>({});
+  const [accesoriosSelected, setAccesoriosSelected] = useState<
+    OrdenAccesorioLocal[]
+  >([]);
 
   // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
   useEffect(() => {
@@ -744,6 +756,18 @@ export default function OrdenTrabajoFormDialog({
         if (result) {
           success("Orden creada", `La orden ha sido creada exitosamente.`);
           onOrdenAdded();
+
+          // Guardar accesorios asociados a la orden si hay alguno seleccionado
+          if (accesoriosSelected && accesoriosSelected.length > 0) {
+            try {
+              await invoke("update_accesorios_orden", {
+                orden_id: result.orden_id,
+                accesorios: accesoriosSelected,
+              });
+            } catch (e) {
+              console.error("Error guardando accesorios para la orden:", e);
+            }
+          }
 
           // Enviar comando al cliente después de crear la orden
           await invoke("send_orden_trabajo_cliente", {
