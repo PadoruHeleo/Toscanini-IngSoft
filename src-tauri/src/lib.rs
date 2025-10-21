@@ -41,6 +41,7 @@ pub fn run() {
             commands::users::change_user_password,
             commands::users::change_user_email,
             commands::users::send_password_email,
+            commands::users::verify_phone,
             commands::logs::create_audit_log,
             commands::logs::get_audit_log_by_id,
             commands::logs::get_audit_logs,
