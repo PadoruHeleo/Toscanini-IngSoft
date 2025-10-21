@@ -258,6 +258,9 @@ export default function OrdenTrabajoFormDialog({
   const [accesoriosSelected, setAccesoriosSelected] = useState<
     OrdenAccesorioLocal[]
   >([]);
+  const [tiposAccesorios, setTiposAccesorios] = useState<
+    { tipo_id: number; nombre?: string }[]
+  >([]);
 
   // Cargar accesorios asociados cuando se edita una orden
   useEffect(() => {
@@ -279,6 +282,26 @@ export default function OrdenTrabajoFormDialog({
 
     if (open) loadAccesorios();
   }, [open, isEditing, orden]);
+
+  // Cuando se abre el modal de confirmación, cargar nombres de tipos para mostrar en el resumen
+  useEffect(() => {
+    const loadTipos = async () => {
+      if (!showConfirmationDialog) return;
+      try {
+        const tipos = await invoke<{ tipo_id: number; nombre?: string }[]>(
+          "get_tipos_accesorios"
+        );
+        setTiposAccesorios(tipos || []);
+      } catch (e) {
+        console.error(
+          "Error cargando tipos de accesorios para confirmación:",
+          e
+        );
+      }
+    };
+
+    loadTipos();
+  }, [showConfirmationDialog]);
 
   // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
   useEffect(() => {
@@ -1669,6 +1692,24 @@ export default function OrdenTrabajoFormDialog({
                 {formData.pre_informe.length > 50
                   ? formData.pre_informe.substring(0, 50) + "..."
                   : formData.pre_informe}
+              </div>
+            )}
+            {/* Mostrar accesorios seleccionados en la confirmación */}
+            {accesoriosSelected && accesoriosSelected.length > 0 && (
+              <div>
+                <strong>Accesorios:</strong>
+                <ul className="list-disc pl-5">
+                  {accesoriosSelected.map((a) => {
+                    const tipo = tiposAccesorios.find(
+                      (t) => t.tipo_id === a.tipo_accesorio_id
+                    );
+                    return (
+                      <li key={a.tipo_accesorio_id}>
+                        {tipo?.nombre || "Tipo " + a.tipo_accesorio_id}
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
           </div>
