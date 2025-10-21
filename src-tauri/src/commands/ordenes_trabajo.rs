@@ -428,7 +428,32 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
         .execute(pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
+
+    // Crear mensaje descriptivo de los cambios realizados
+    let mut cambios = Vec::new();
     
+    if let Some(prioridad) = &request.prioridad {
+        cambios.push(format!("prioridad: {}", prioridad));
+    }
+    if let Some(estado) = &request.estado {
+        cambios.push(format!("estado: {}", estado));
+    }
+    if let Some(orden_desc) = &request.orden_desc {
+        cambios.push(format!("descripción: {}", orden_desc));
+    }
+    if let Some(has_garantia) = request.has_garantia {
+        cambios.push(format!("garantía: {}", if has_garantia { "sí" } else { "no" }));
+    }
+    if let Some(pre_informe) = &request.pre_informe {
+        cambios.push(format!("pre-informe: {}", pre_informe));
+    }
+    
+    let mensaje_cambios = if cambios.is_empty() {
+        "Sin cambios específicos".to_string()
+    } else {
+        cambios.join(", ")
+    };
+
     // Registrar la acción en el log de auditoría
     let _ = log_action(
         "UPDATE_ORDEN_TRABAJO",
@@ -436,9 +461,9 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
         "ORDEN_TRABAJO",
         Some(orden_id),
         current_orden.as_ref().and_then(|o| o.orden_codigo.as_deref()),
-        request.orden_codigo.as_deref()
+        Some(&mensaje_cambios)
     ).await;
-    
+
     // Obtener la orden actualizada
     get_orden_trabajo_by_id(orden_id).await
 }
