@@ -26,7 +26,6 @@ interface Usuario {
   created_by?: number;
   created_at?: string;
   is_active?: boolean;
-  
 }
 
 export function UsuarioView() {
@@ -112,11 +111,6 @@ export function UsuarioView() {
         typeof error === "string" ? error : "Ha ocurrido un error inesperado."
       );
     }
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-CL");
   };
 
   function getRolLabel(rol?: string) {

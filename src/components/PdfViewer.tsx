@@ -26,7 +26,6 @@ export function PdfViewer({
   title,
   cotizacionId,
   informeId,
-  filename = "documento.pdf",
 }: PdfViewerProps) {
   const [cotizacionPdfData, setCotizacionPdfData] = useState<Uint8Array | null>(
     null

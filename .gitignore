@@ -23,3 +23,22 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Rust/Tauri
+**/target/
+/src-tauri/target/
+target/
+Cargo.lock
+*.pdb
+*.exe
+*.dll
+*.lib
+*.exp
+*.rlib
+*.rmeta
+*.rcgu.o
+*.d
+
+# Tauri generated files
+/src-tauri/gen/
+/src-tauri/WixTools/

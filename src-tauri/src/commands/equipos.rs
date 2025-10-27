@@ -690,7 +690,8 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
             "cotizacion_enviada", 
             "aprobacion_pendiente",
             "en_reparacion",
-            "espera_de_retiro"
+            "espera_de_retiro",
+            "cotizacion_rechazada" // Cliente rechazó cotización, equipo aún en empresa
         ];
         
         // Estados donde ya se registró salida (equipo FUERA del sistema)
@@ -805,7 +806,8 @@ pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, Stri
             "cotizacion_enviada", 
             "aprobacion_pendiente",
             "en_reparacion",
-            "espera_de_retiro"
+            "espera_de_retiro",
+            "cotizacion_rechazada" // Cliente rechazó cotización, equipo aún en empresa
         ];
         
         // Estados donde ya se registró salida (equipo FUERA del sistema)

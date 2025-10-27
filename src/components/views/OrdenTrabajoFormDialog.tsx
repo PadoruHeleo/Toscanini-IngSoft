@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
@@ -40,13 +40,44 @@ interface OrdenTrabajo {
   finished_at?: string;
 }
 
+interface Cliente {
+  cliente_id: number;
+  cliente_nombre: string;
+  cliente_correo?: string;
+}
+
 interface Equipo {
   equipo_id: number;
   numero_serie?: string;
   equipo_marca?: string;
   equipo_modelo?: string;
   equipo_tipo?: string;
+  equipo_precio?: number;
+  equipo_ubicacion?: string;
+  cliente_id?: number;
   cliente_nombre?: string;
+  created_by?: number;
+  created_at?: string;
+}
+
+interface CreateEquipoRequest {
+  numero_serie: string;
+  equipo_marca: string;
+  equipo_modelo: string;
+  equipo_tipo: string;
+  equipo_precio?: number;
+  equipo_ubicacion?: string;
+  cliente_id: number;
+  created_by: number;
+}
+
+interface CreateClienteRequest {
+  cliente_rut: string;
+  cliente_nombre: string;
+  cliente_correo: string;
+  cliente_telefono?: string;
+  cliente_direccion?: string;
+  created_by: number;
 }
 
 interface OrdenTrabajoFormDialogProps {
@@ -65,11 +96,26 @@ interface FormData {
   pre_informe: string;
 }
 
+interface EquipoFormData {
+  numero_serie: string;
+  equipo_marca: string;
+  equipo_modelo: string;
+  equipo_tipo: string;
+  equipo_precio: number;
+  equipo_ubicacion: string;
+  cliente_id: number | undefined;
+}
+
 interface FormErrors {
   prioridad?: string;
   estado?: string;
   equipo_id?: string;
   pre_informe?: string;
+  numero_serie?: string;
+  equipo_marca?: string;
+  equipo_modelo?: string;
+  equipo_tipo?: string;
+  cliente_id?: string;
 }
 
 const prioridadOptions = [
@@ -114,7 +160,62 @@ export default function OrdenTrabajoFormDialog({
     has_garantia: false,
     equipo_id: "",
     pre_informe: "",
-  }); // Función para generar la descripción automáticamente
+  });
+
+  // Estados para manejo de equipos nuevos
+  const [tipoEquipo, setTipoEquipo] = useState<"existente" | "nuevo">("nuevo");
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [marcas, setMarcas] = useState<string[]>([]);
+  const [modelos, setModelos] = useState<string[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<string[]>([]);
+
+  // Estados para crear nuevos valores
+  const [showNewMarcaInput, setShowNewMarcaInput] = useState(false);
+  const [showNewModeloInput, setShowNewModeloInput] = useState(false);
+  const [showNewUbicacionInput, setShowNewUbicacionInput] = useState(false);
+  const [newMarcaValue, setNewMarcaValue] = useState("");
+  const [newModeloValue, setNewModeloValue] = useState("");
+  const [newUbicacionValue, setNewUbicacionValue] = useState("");
+
+  // Estados para crear nuevo cliente
+  const [showNewClienteDialog, setShowNewClienteDialog] = useState(false);
+  const [newClienteData, setNewClienteData] = useState<{
+    cliente_rut: string;
+    cliente_nombre: string;
+    cliente_correo: string;
+    cliente_telefono: string;
+    cliente_direccion: string;
+  }>({
+    cliente_rut: "",
+    cliente_nombre: "",
+    cliente_correo: "",
+    cliente_telefono: "",
+    cliente_direccion: "",
+  });
+  const [newClienteErrors, setNewClienteErrors] = useState<
+    Record<string, string>
+  >({});
+
+  // Estados para confirmaciones
+  const [showConfirmMarcaDialog, setShowConfirmMarcaDialog] = useState(false);
+  const [showConfirmModeloDialog, setShowConfirmModeloDialog] = useState(false);
+  const [showConfirmUbicacionDialog, setShowConfirmUbicacionDialog] =
+    useState(false);
+  const [showConfirmClienteDialog, setShowConfirmClienteDialog] =
+    useState(false);
+
+  // Datos del equipo nuevo
+  const [equipoFormData, setEquipoFormData] = useState<EquipoFormData>({
+    numero_serie: "",
+    equipo_marca: "",
+    equipo_modelo: "",
+    equipo_tipo: "",
+    equipo_precio: 0,
+    equipo_ubicacion: "",
+    cliente_id: undefined,
+  });
+
+  // Función para generar la descripción automáticamente
   const generateDescription = (equipoId: string, preInforme: string) => {
     if (!equipoId || !preInforme.trim() || equipos.length === 0) return "";
 
@@ -127,27 +228,69 @@ export default function OrdenTrabajoFormDialog({
     return `El equipo ${marca} ${modelo} presenta ${preInforme.trim()}`;
   };
 
-  const [generatedDescription, setGeneratedDescription] = useState<string>("");
-  const [errors, setErrors] = useState<FormErrors>({}); // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
-  useEffect(() => {
+  // Función para generar descripción con equipo nuevo
+  const generateDescriptionForNewEquipo = (preInforme: string) => {
     if (
-      formData.equipo_id &&
-      formData.pre_informe.trim() &&
-      equipos.length > 0
-    ) {
-      const newDescription = generateDescription(
-        formData.equipo_id,
-        formData.pre_informe
-      );
-      if (newDescription) {
-        setGeneratedDescription(newDescription);
+      !preInforme.trim() ||
+      !equipoFormData.equipo_marca ||
+      !equipoFormData.equipo_modelo
+    )
+      return "";
+
+    const marca = equipoFormData.equipo_marca || "Marca desconocida";
+    const modelo = equipoFormData.equipo_modelo || "Modelo desconocido";
+
+    return `El equipo ${marca} ${modelo} presenta ${preInforme.trim()}`;
+  };
+
+  const [generatedDescription, setGeneratedDescription] = useState<string>("");
+  const [errors, setErrors] = useState<FormErrors>({});
+
+  // Actualizar descripción automáticamente cuando cambie el equipo o pre-informe
+  useEffect(() => {
+    if (tipoEquipo === "existente") {
+      if (
+        formData.equipo_id &&
+        formData.pre_informe.trim() &&
+        equipos.length > 0
+      ) {
+        const newDescription = generateDescription(
+          formData.equipo_id,
+          formData.pre_informe
+        );
+        if (newDescription) {
+          setGeneratedDescription(newDescription);
+        }
+      }
+    } else {
+      if (
+        formData.pre_informe.trim() &&
+        equipoFormData.equipo_marca &&
+        equipoFormData.equipo_modelo
+      ) {
+        const newDescription = generateDescriptionForNewEquipo(
+          formData.pre_informe
+        );
+        if (newDescription) {
+          setGeneratedDescription(newDescription);
+        }
       }
     }
-  }, [formData.equipo_id, formData.pre_informe, equipos]);
+  }, [
+    formData.equipo_id,
+    formData.pre_informe,
+    equipos,
+    tipoEquipo,
+    equipoFormData.equipo_marca,
+    equipoFormData.equipo_modelo,
+  ]);
   // Cargar equipos al abrir el diálogo
   useEffect(() => {
     if (open) {
       loadEquipos();
+      loadClientes();
+      loadMarcas();
+      loadUbicaciones();
     }
   }, [open]); // Inicializar formulario cuando se pasa una orden para editar
   useEffect(() => {
@@ -168,8 +311,20 @@ export default function OrdenTrabajoFormDialog({
         equipo_id: "",
         pre_informe: "",
       });
+      // Resetear datos del equipo nuevo
+      setEquipoFormData({
+        numero_serie: "",
+        equipo_marca: "",
+        equipo_modelo: "",
+        equipo_tipo: "",
+        equipo_precio: 0,
+        equipo_ubicacion: "",
+        cliente_id: undefined,
+      });
+      setTipoEquipo("nuevo");
     }
     setErrors({});
+    setGeneratedDescription("");
   }, [isEditing, orden, open]); // Regenerar descripción para órdenes existentes una vez que se cargan los equipos
   useEffect(() => {
     if (
@@ -222,14 +377,179 @@ export default function OrdenTrabajoFormDialog({
       setLoadingEquipos(false);
     }
   };
+
+  // Funciones para cargar datos de equipos nuevos
+  const loadClientes = async () => {
+    try {
+      const clientesData = await invoke<Cliente[]>("get_clientes");
+      setClientes(clientesData);
+    } catch (error) {
+      console.error("Error cargando clientes:", error);
+    }
+  };
+
+  const loadMarcas = async () => {
+    try {
+      const marcasData = await invoke<string[]>("get_equipos_marcas");
+      setMarcas(marcasData);
+    } catch (error) {
+      console.error("Error cargando marcas:", error);
+    }
+  };
+
+  const loadUbicaciones = async () => {
+    try {
+      const ubicacionesData = await invoke<string[]>("get_equipos_ubicaciones");
+      setUbicaciones(ubicacionesData);
+    } catch (error) {
+      console.error("Error cargando ubicaciones:", error);
+    }
+  };
+
+  const loadModelosByMarca = async (marca: string) => {
+    try {
+      const modelosData = await invoke<string[]>(
+        "get_equipos_modelos_by_marca",
+        { marca }
+      );
+      setModelos(modelosData);
+    } catch (error) {
+      console.error("Error cargando modelos:", error);
+      setModelos([]);
+    }
+  };
+
+  // Funciones para manejo de equipos nuevos
+  const validateClienteForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!newClienteData.cliente_rut.trim()) {
+      errors.cliente_rut = "El RUT es obligatorio";
+    }
+    if (!newClienteData.cliente_nombre.trim()) {
+      errors.cliente_nombre = "El nombre es obligatorio";
+    }
+    if (!newClienteData.cliente_correo.trim()) {
+      errors.cliente_correo = "El correo es obligatorio";
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClienteData.cliente_correo)
+    ) {
+      errors.cliente_correo = "El formato del correo no es válido";
+    }
+
+    setNewClienteErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateCliente = async () => {
+    if (!validateClienteForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const clienteRequest: CreateClienteRequest = {
+        ...newClienteData,
+        created_by: user?.usuario_id || 0,
+      };
+      const nuevoCliente = await invoke<Cliente>("create_cliente", {
+        request: clienteRequest,
+      });
+
+      setClientes((prev) => [...prev, nuevoCliente]);
+      setEquipoFormData((prev) => ({
+        ...prev,
+        cliente_id: nuevoCliente.cliente_id,
+      }));
+
+      setShowNewClienteDialog(false);
+      setNewClienteData({
+        cliente_rut: "",
+        cliente_nombre: "",
+        cliente_correo: "",
+        cliente_telefono: "",
+        cliente_direccion: "",
+      });
+      setNewClienteErrors({});
+
+      success(
+        "¡Cliente creado exitosamente!",
+        `${nuevoCliente.cliente_nombre} ha sido registrado.`
+      );
+    } catch (error) {
+      console.error("Error creando cliente:", error);
+      showError(
+        "Error al crear cliente",
+        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funciones de confirmación para valores nuevos
+  const handleConfirmMarca = () => {
+    if (newMarcaValue.trim()) {
+      const nuevaMarca = newMarcaValue.trim();
+      if (!marcas.includes(nuevaMarca)) {
+        setMarcas((prev) => [...prev, nuevaMarca]);
+      }
+      handleEquipoInputChange("equipo_marca", nuevaMarca);
+      setShowNewMarcaInput(false);
+      setNewMarcaValue("");
+      setShowConfirmMarcaDialog(false);
+    }
+  };
+
+  const handleConfirmModelo = () => {
+    if (newModeloValue.trim()) {
+      const nuevoModelo = newModeloValue.trim();
+      if (!modelos.includes(nuevoModelo)) {
+        setModelos((prev) => [...prev, nuevoModelo]);
+      }
+      handleEquipoInputChange("equipo_modelo", nuevoModelo);
+      setShowNewModeloInput(false);
+      setNewModeloValue("");
+      setShowConfirmModeloDialog(false);
+    }
+  };
+
+  const handleConfirmUbicacion = () => {
+    if (newUbicacionValue.trim()) {
+      const nuevaUbicacion = newUbicacionValue.trim();
+      if (!ubicaciones.includes(nuevaUbicacion)) {
+        setUbicaciones((prev) => [...prev, nuevaUbicacion]);
+      }
+      handleEquipoInputChange("equipo_ubicacion", nuevaUbicacion);
+      setShowNewUbicacionInput(false);
+      setNewUbicacionValue("");
+      setShowConfirmUbicacionDialog(false);
+    }
+  };
+
+  const handleConfirmCreateCliente = () => {
+    setShowConfirmClienteDialog(false);
+    setShowNewClienteDialog(true);
+  };
+
+  const handleEquipoInputChange = (field: keyof EquipoFormData, value: any) => {
+    setEquipoFormData((prev) => ({ ...prev, [field]: value }));
+
+    // Si cambia la marca, cargar modelos y limpiar el modelo actual
+    if (field === "equipo_marca" && value) {
+      loadModelosByMarca(value);
+      setEquipoFormData((prev) => ({ ...prev, equipo_modelo: "" }));
+      setShowNewModeloInput(false);
+      setNewModeloValue("");
+    }
+
+    // Limpiar error del campo cuando el usuario empiece a escribir
+    if (errors[field as keyof FormErrors]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
-
-    // La descripción se genera automáticamente, pero verificamos que exista
-    if (!generatedDescription.trim()) {
-      newErrors.prioridad =
-        "Seleccione un equipo y complete el pre-informe para generar la descripción";
-    }
 
     if (!formData.prioridad) {
       newErrors.prioridad = "La prioridad es requerida";
@@ -239,12 +559,32 @@ export default function OrdenTrabajoFormDialog({
       newErrors.estado = "El estado es requerido";
     }
 
-    if (!formData.equipo_id) {
-      newErrors.equipo_id = "Debe seleccionar un equipo";
-    }
-
     if (!formData.pre_informe.trim()) {
       newErrors.pre_informe = "El pre-informe es requerido";
+    }
+
+    // Validar según el tipo de equipo
+    if (tipoEquipo === "existente") {
+      if (!formData.equipo_id) {
+        newErrors.equipo_id = "Debe seleccionar un equipo";
+      }
+    } else {
+      // Validar datos del equipo nuevo
+      if (!equipoFormData.numero_serie?.trim()) {
+        newErrors.numero_serie = "El número de serie es obligatorio";
+      }
+      if (!equipoFormData.equipo_marca?.trim()) {
+        newErrors.equipo_marca = "La marca es obligatoria";
+      }
+      if (!equipoFormData.equipo_modelo?.trim()) {
+        newErrors.equipo_modelo = "El modelo es obligatorio";
+      }
+      if (!equipoFormData.equipo_tipo) {
+        newErrors.equipo_tipo = "El tipo es obligatorio";
+      }
+      if (!equipoFormData.cliente_id) {
+        newErrors.cliente_id = "Debe seleccionar un cliente";
+      }
     }
 
     setErrors(newErrors);
@@ -361,12 +701,37 @@ export default function OrdenTrabajoFormDialog({
         }
       } else {
         // Crear nueva orden
+        let equipoId: number;
+
+        if (tipoEquipo === "nuevo") {
+          // Primero crear el equipo nuevo
+          const equipoData: CreateEquipoRequest = {
+            numero_serie: equipoFormData.numero_serie!,
+            equipo_marca: equipoFormData.equipo_marca!,
+            equipo_modelo: equipoFormData.equipo_modelo!,
+            equipo_tipo: equipoFormData.equipo_tipo!,
+            equipo_precio: equipoFormData.equipo_precio || 0,
+            equipo_ubicacion: equipoFormData.equipo_ubicacion || undefined,
+            cliente_id: equipoFormData.cliente_id!,
+            created_by: user.usuario_id,
+          };
+
+          const nuevoEquipo = await invoke<Equipo>("create_equipo", {
+            request: equipoData,
+          });
+
+          equipoId = nuevoEquipo.equipo_id;
+        } else {
+          // Usar equipo existente
+          equipoId = parseInt(formData.equipo_id);
+        }
+
         const createData = {
           orden_desc: generatedDescription,
           prioridad: formData.prioridad,
           estado: formData.estado,
           has_garantia: formData.has_garantia,
-          equipo_id: parseInt(formData.equipo_id),
+          equipo_id: equipoId,
           created_by: user.usuario_id,
           pre_informe: formData.pre_informe,
           cotizacion_id: null,
@@ -504,40 +869,421 @@ export default function OrdenTrabajoFormDialog({
               />
             </div>
 
-            {/* Equipo */}
-            <div className="space-y-2">
-              <Label htmlFor="equipo_id">Equipo *</Label>{" "}
-              <Select
-                value={formData.equipo_id}
-                onValueChange={(value) => handleInputChange("equipo_id", value)}
-                disabled={isOrderLocked}
-              >
-                <SelectTrigger
-                  className={errors.equipo_id ? "border-red-500" : ""}
+            {/* Tipo de Equipo - Solo en modo creación */}
+            {!isEditing && (
+              <div className="col-span-2 space-y-2">
+                <Label>Tipo de Equipo *</Label>
+                <Tabs
+                  value={tipoEquipo}
+                  onValueChange={(value) =>
+                    setTipoEquipo(value as "existente" | "nuevo")
+                  }
+                  className="w-full"
                 >
-                  <SelectValue
-                    placeholder={
-                      loadingEquipos
-                        ? "Cargando equipos..."
-                        : "Seleccionar equipo"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {equipos.map((equipo) => (
-                    <SelectItem
-                      key={equipo.equipo_id}
-                      value={equipo.equipo_id.toString()}
-                    >
-                      {getEquipoDisplayName(equipo)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.equipo_id && (
-                <p className="text-sm text-red-500">{errors.equipo_id}</p>
-              )}{" "}
-            </div>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="nuevo">Equipo Nuevo</TabsTrigger>
+                    <TabsTrigger value="existente">
+                      Equipo Existente
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="nuevo" className="space-y-4">
+                    {/* Campos del equipo nuevo - Layout simplificado */}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="numero_serie">
+                            Número de Serie *
+                          </Label>
+                          <Input
+                            id="numero_serie"
+                            value={equipoFormData.numero_serie}
+                            onChange={(e) =>
+                              handleEquipoInputChange(
+                                "numero_serie",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Ingrese el número de serie"
+                            className={
+                              errors.numero_serie ? "border-red-500" : ""
+                            }
+                          />
+                          {errors.numero_serie && (
+                            <p className="text-sm text-red-600">
+                              {errors.numero_serie}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="equipo_tipo">Tipo *</Label>
+                          <Select
+                            value={equipoFormData.equipo_tipo}
+                            onValueChange={(value) =>
+                              handleEquipoInputChange("equipo_tipo", value)
+                            }
+                          >
+                            <SelectTrigger
+                              className={
+                                errors.equipo_tipo ? "border-red-500" : ""
+                              }
+                            >
+                              <SelectValue placeholder="Seleccionar tipo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="telefono">Teléfono</SelectItem>
+                              <SelectItem value="tablet">Tablet</SelectItem>
+                              <SelectItem value="laptop">Laptop</SelectItem>
+                              <SelectItem value="computador">
+                                Computador
+                              </SelectItem>
+                              <SelectItem value="impresora">
+                                Impresora
+                              </SelectItem>
+                              <SelectItem value="monitor">Monitor</SelectItem>
+                              <SelectItem value="otro">Otro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {errors.equipo_tipo && (
+                            <p className="text-sm text-red-600">
+                              {errors.equipo_tipo}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="equipo_marca">Marca *</Label>
+                          <Select
+                            value={equipoFormData.equipo_marca}
+                            onValueChange={(value) => {
+                              if (value === "nueva_marca") {
+                                setShowNewMarcaInput(true);
+                              } else {
+                                handleEquipoInputChange("equipo_marca", value);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              className={
+                                errors.equipo_marca ? "border-red-500" : ""
+                              }
+                            >
+                              <SelectValue placeholder="Seleccionar marca" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {marcas.map((marca) => (
+                                <SelectItem key={marca} value={marca}>
+                                  {marca}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="nueva_marca">
+                                + Agregar nueva marca
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {showNewMarcaInput && (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Nueva marca"
+                                value={newMarcaValue}
+                                onChange={(e) =>
+                                  setNewMarcaValue(e.target.value)
+                                }
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => setShowConfirmMarcaDialog(true)}
+                                size="sm"
+                              >
+                                ✓
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setShowNewMarcaInput(false);
+                                  setNewMarcaValue("");
+                                }}
+                                size="sm"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          )}
+                          {errors.equipo_marca && (
+                            <p className="text-sm text-red-600">
+                              {errors.equipo_marca}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="equipo_modelo">Modelo *</Label>
+                          <Select
+                            value={equipoFormData.equipo_modelo}
+                            onValueChange={(value) => {
+                              if (value === "nuevo_modelo") {
+                                setShowNewModeloInput(true);
+                              } else {
+                                handleEquipoInputChange("equipo_modelo", value);
+                              }
+                            }}
+                            disabled={!equipoFormData.equipo_marca}
+                          >
+                            <SelectTrigger
+                              className={
+                                errors.equipo_modelo ? "border-red-500" : ""
+                              }
+                            >
+                              <SelectValue
+                                placeholder={
+                                  !equipoFormData.equipo_marca
+                                    ? "Primero seleccione una marca"
+                                    : "Seleccionar modelo"
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {modelos.map((modelo) => (
+                                <SelectItem key={modelo} value={modelo}>
+                                  {modelo}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="nuevo_modelo">
+                                + Agregar nuevo modelo
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {showNewModeloInput && (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Nuevo modelo"
+                                value={newModeloValue}
+                                onChange={(e) =>
+                                  setNewModeloValue(e.target.value)
+                                }
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => setShowConfirmModeloDialog(true)}
+                                size="sm"
+                              >
+                                ✓
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setShowNewModeloInput(false);
+                                  setNewModeloValue("");
+                                }}
+                                size="sm"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          )}
+                          {errors.equipo_modelo && (
+                            <p className="text-sm text-red-600">
+                              {errors.equipo_modelo}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="cliente_id">Cliente *</Label>
+                          <Select
+                            value={equipoFormData.cliente_id?.toString() || ""}
+                            onValueChange={(value) => {
+                              if (value === "nuevo_cliente") {
+                                setShowConfirmClienteDialog(true);
+                              } else {
+                                handleEquipoInputChange(
+                                  "cliente_id",
+                                  parseInt(value)
+                                );
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              className={
+                                errors.cliente_id ? "border-red-500" : ""
+                              }
+                            >
+                              <SelectValue placeholder="Seleccionar cliente" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientes.map((cliente) => (
+                                <SelectItem
+                                  key={cliente.cliente_id}
+                                  value={cliente.cliente_id.toString()}
+                                >
+                                  {cliente.cliente_nombre}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="nuevo_cliente">
+                                + Crear nuevo cliente
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {errors.cliente_id && (
+                            <p className="text-sm text-red-600">
+                              {errors.cliente_id}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="equipo_ubicacion">Ubicación</Label>
+                          <Select
+                            value={equipoFormData.equipo_ubicacion || ""}
+                            onValueChange={(value) => {
+                              if (value === "nueva_ubicacion") {
+                                setShowNewUbicacionInput(true);
+                              } else {
+                                handleEquipoInputChange(
+                                  "equipo_ubicacion",
+                                  value
+                                );
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar ubicación" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ubicaciones.map((ubicacion) => (
+                                <SelectItem key={ubicacion} value={ubicacion}>
+                                  {ubicacion}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="nueva_ubicacion">
+                                + Agregar nueva ubicación
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {showNewUbicacionInput && (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Nueva ubicación"
+                                value={newUbicacionValue}
+                                onChange={(e) =>
+                                  setNewUbicacionValue(e.target.value)
+                                }
+                              />
+                              <Button
+                                type="button"
+                                onClick={() =>
+                                  setShowConfirmUbicacionDialog(true)
+                                }
+                                size="sm"
+                              >
+                                ✓
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setShowNewUbicacionInput(false);
+                                  setNewUbicacionValue("");
+                                }}
+                                size="sm"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="existente" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="equipo_id">Seleccionar Equipo *</Label>
+                      <Select
+                        value={formData.equipo_id}
+                        onValueChange={(value) =>
+                          handleInputChange("equipo_id", value)
+                        }
+                        disabled={isOrderLocked}
+                      >
+                        <SelectTrigger
+                          className={errors.equipo_id ? "border-red-500" : ""}
+                        >
+                          <SelectValue
+                            placeholder={
+                              loadingEquipos
+                                ? "Cargando equipos..."
+                                : "Seleccionar equipo"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {equipos.map((equipo) => (
+                            <SelectItem
+                              key={equipo.equipo_id}
+                              value={equipo.equipo_id.toString()}
+                            >
+                              {getEquipoDisplayName(equipo)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.equipo_id && (
+                        <p className="text-sm text-red-600">
+                          {errors.equipo_id}
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )}
+
+            {/* En modo edición, mostrar campo de equipo normal */}
+            {isEditing && (
+              <div className="space-y-2">
+                <Label htmlFor="equipo_id">Equipo *</Label>
+                <Select
+                  value={formData.equipo_id}
+                  onValueChange={(value) =>
+                    handleInputChange("equipo_id", value)
+                  }
+                  disabled={isOrderLocked}
+                >
+                  <SelectTrigger
+                    className={errors.equipo_id ? "border-red-500" : ""}
+                  >
+                    <SelectValue
+                      placeholder={
+                        loadingEquipos
+                          ? "Cargando equipos..."
+                          : "Seleccionar equipo"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {equipos.map((equipo) => (
+                      <SelectItem
+                        key={equipo.equipo_id}
+                        value={equipo.equipo_id.toString()}
+                      >
+                        {getEquipoDisplayName(equipo)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.equipo_id && (
+                  <p className="text-sm text-red-600">{errors.equipo_id}</p>
+                )}
+              </div>
+            )}
           </div>
           {/* Detalles del Equipo Seleccionado */}
           {formData.equipo_id && (
@@ -597,23 +1343,7 @@ export default function OrdenTrabajoFormDialog({
               })()}
             </div>
           )}
-          {/* Descripción */}
-          <div className="space-y-2">
-            <Label htmlFor="orden_desc">
-              Descripción *
-              <span className="text-sm text-gray-500 font-normal ml-1">
-                (Se genera automáticamente)
-              </span>
-            </Label>
-            <Textarea
-              id="orden_desc"
-              value={generatedDescription}
-              readOnly
-              placeholder="La descripción se generará automáticamente al seleccionar un equipo y escribir el pre-informe"
-              className="bg-gray-50"
-              rows={3}
-            />
-          </div>
+          {/* La descripción se genera automáticamente internamente y no se muestra al usuario */}
           <div className="grid grid-cols-2 gap-4">
             {/* Prioridad */}
             <div className="space-y-2">
@@ -667,18 +1397,6 @@ export default function OrdenTrabajoFormDialog({
               )}
             </div>
           </div>
-          {/* Garantía */}{" "}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="has_garantia"
-              checked={formData.has_garantia}
-              onCheckedChange={(checked) =>
-                handleInputChange("has_garantia", !!checked)
-              }
-              disabled={isOrderLocked}
-            />
-            <Label htmlFor="has_garantia">Equipo tiene garantía</Label>
-          </div>
           {/* Pre-informe */}
           <div className="space-y-2">
             <Label htmlFor="pre_informe">Pre-informe *</Label>{" "}
@@ -701,7 +1419,119 @@ export default function OrdenTrabajoFormDialog({
             <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">
               Por favor, corrija los errores antes de continuar.
             </div>
-          )}{" "}
+          )}
+          {/* Estado de Garantía */}
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">
+              Estado de Garantía *
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                className={`relative rounded-lg border-2 p-4 cursor-pointer transition-all duration-200 ${
+                  formData.has_garantia
+                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                } ${isOrderLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                onClick={() =>
+                  !isOrderLocked && handleInputChange("has_garantia", true)
+                }
+              >
+                <div className="flex items-center space-x-3">
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      formData.has_garantia
+                        ? "border-green-500 bg-green-500"
+                        : "border-gray-300 bg-white"
+                    }`}
+                  >
+                    {formData.has_garantia && (
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      ✅ Con Garantía
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      El equipo tiene garantía vigente
+                    </div>
+                  </div>
+                </div>
+                {formData.has_garantia && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className={`relative rounded-lg border-2 p-4 cursor-pointer transition-all duration-200 ${
+                  !formData.has_garantia
+                    ? "border-orange-500 bg-orange-50 ring-2 ring-orange-200"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                } ${isOrderLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                onClick={() =>
+                  !isOrderLocked && handleInputChange("has_garantia", false)
+                }
+              >
+                <div className="flex items-center space-x-3">
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      !formData.has_garantia
+                        ? "border-orange-500 bg-orange-500"
+                        : "border-gray-300 bg-white"
+                    }`}
+                  >
+                    {!formData.has_garantia && (
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      ⚠️ Sin Garantía
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      El equipo no tiene garantía o expiró
+                    </div>
+                  </div>
+                </div>
+                {!formData.has_garantia && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Información adicional sobre la garantía */}
+            <div
+              className={`text-sm p-3 rounded-md border-l-4 ${
+                formData.has_garantia
+                  ? "bg-green-50 border-green-400 text-green-800"
+                  : "bg-orange-50 border-orange-400 text-orange-800"
+              }`}
+            >
+              {formData.has_garantia ? (
+                <div className="flex items-start space-x-2">
+                  <div className="text-green-600 mt-0.5">ℹ️</div>
+                  <div>
+                    <strong>Equipo con garantía:</strong> Los trabajos de
+                    reparación pueden estar cubiertos. Verificar términos y
+                    condiciones antes de proceder.
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start space-x-2">
+                  <div className="text-orange-600 mt-0.5">⚠️</div>
+                  <div>
+                    <strong>Equipo sin garantía:</strong> Todos los costos de
+                    reparación serán por cuenta del cliente. Se requerirá
+                    cotización previa.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -789,6 +1619,223 @@ export default function OrdenTrabajoFormDialog({
                 ? "Confirmar Actualización"
                 : "Confirmar Creación"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para agregar nuevo cliente */}
+      <Dialog
+        open={showNewClienteDialog}
+        onOpenChange={setShowNewClienteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+            <DialogDescription>
+              Complete la información del nuevo cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="cliente_rut">RUT *</Label>
+              <Input
+                id="cliente_rut"
+                value={newClienteData.cliente_rut}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_rut: e.target.value,
+                  }))
+                }
+                placeholder="12.345.678-9"
+                className={newClienteErrors.cliente_rut ? "border-red-500" : ""}
+              />
+              {newClienteErrors.cliente_rut && (
+                <p className="text-sm text-red-600">
+                  {newClienteErrors.cliente_rut}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cliente_nombre">Nombre *</Label>
+              <Input
+                id="cliente_nombre"
+                value={newClienteData.cliente_nombre}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_nombre: e.target.value,
+                  }))
+                }
+                placeholder="Nombre completo"
+                className={
+                  newClienteErrors.cliente_nombre ? "border-red-500" : ""
+                }
+              />
+              {newClienteErrors.cliente_nombre && (
+                <p className="text-sm text-red-600">
+                  {newClienteErrors.cliente_nombre}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cliente_correo">Correo Electrónico *</Label>
+              <Input
+                id="cliente_correo"
+                type="email"
+                value={newClienteData.cliente_correo}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_correo: e.target.value,
+                  }))
+                }
+                placeholder="correo@ejemplo.com"
+                className={
+                  newClienteErrors.cliente_correo ? "border-red-500" : ""
+                }
+              />
+              {newClienteErrors.cliente_correo && (
+                <p className="text-sm text-red-600">
+                  {newClienteErrors.cliente_correo}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cliente_telefono">Teléfono</Label>
+              <Input
+                id="cliente_telefono"
+                value={newClienteData.cliente_telefono}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_telefono: e.target.value,
+                  }))
+                }
+                placeholder="+56 9 1234 5678"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cliente_direccion">Dirección</Label>
+              <Input
+                id="cliente_direccion"
+                value={newClienteData.cliente_direccion}
+                onChange={(e) =>
+                  setNewClienteData((prev) => ({
+                    ...prev,
+                    cliente_direccion: e.target.value,
+                  }))
+                }
+                placeholder="Dirección completa"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowNewClienteDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateCliente} disabled={loading}>
+              {loading ? "Creando..." : "Crear Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear marca */}
+      <Dialog
+        open={showConfirmMarcaDialog}
+        onOpenChange={setShowConfirmMarcaDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nueva Marca</DialogTitle>
+          </DialogHeader>
+          <p>¿Desea agregar la marca "{newMarcaValue}" a la lista?</p>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmMarcaDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmMarca}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear modelo */}
+      <Dialog
+        open={showConfirmModeloDialog}
+        onOpenChange={setShowConfirmModeloDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nuevo Modelo</DialogTitle>
+          </DialogHeader>
+          <p>¿Desea agregar el modelo "{newModeloValue}" a la lista?</p>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmModeloDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmModelo}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear ubicación */}
+      <Dialog
+        open={showConfirmUbicacionDialog}
+        onOpenChange={setShowConfirmUbicacionDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Nueva Ubicación</DialogTitle>
+          </DialogHeader>
+          <p>¿Desea agregar la ubicación "{newUbicacionValue}" a la lista?</p>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmUbicacionDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmUbicacion}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para crear cliente */}
+      <Dialog
+        open={showConfirmClienteDialog}
+        onOpenChange={setShowConfirmClienteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+          </DialogHeader>
+          <p>
+            ¿Desea crear un nuevo cliente? Se abrirá un formulario para
+            completar los datos.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmClienteDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmCreateCliente}>Continuar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

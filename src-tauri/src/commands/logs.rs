@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use chrono::{DateTime, Utc};
 use crate::database::get_db_pool_safe;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -11,7 +12,7 @@ pub struct AuditLog {
     pub log_entidad_id: Option<i32>,
     pub log_prev_v: Option<String>,
     pub log_new_v: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -23,7 +24,7 @@ pub struct AuditLogWithUser {
     pub log_entidad_id: Option<i32>,
     pub log_prev_v: Option<String>,
     pub log_new_v: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
     pub usuario_nombre: Option<String>,
     pub usuario_correo: Option<String>,
 }
@@ -41,8 +42,9 @@ pub struct CreateAuditLogRequest {
 #[derive(Debug, Deserialize)]
 pub struct LogFilters {
     pub usuario_id: Option<i32>,
-    pub entidad_tabla: Option<String>,
-    pub accion: Option<String>,
+    pub entidad_tabla: Option<Vec<String>>,  
+    pub accion: Option<Vec<String>>,          
+    pub search: Option<String>,               
     pub fecha_desde: Option<String>,
     pub fecha_hasta: Option<String>,
     pub limit: Option<i32>,
@@ -106,32 +108,54 @@ pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogW
          LEFT JOIN USUARIO u ON a.log_usuario_id = u.usuario_id"
     );
     
-    let mut conditions = Vec::new();
+    let mut conditions: Vec<String> = Vec::new();  // ← CAMBIO: Vec<String> en lugar de Vec<&str>
     let mut params: Vec<String> = Vec::new();
     
     if let Some(filters) = filters {
         if let Some(usuario_id) = filters.usuario_id {
-            conditions.push("a.log_usuario_id = ?");
+            conditions.push("a.log_usuario_id = ?".to_string());  // ← CAMBIO: .to_string()
             params.push(usuario_id.to_string());
         }
         
-        if let Some(entidad_tabla) = filters.entidad_tabla {
-            conditions.push("a.log_entidad_tabla = ?");
-            params.push(entidad_tabla);
+        // Filtro por múltiples entidades (IN)
+        if let Some(entidades) = filters.entidad_tabla {
+            if !entidades.is_empty() {
+                let placeholders = entidades.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+                conditions.push(format!("a.log_entidad_tabla IN ({})", placeholders));  // ← Ya no necesita &
+                for entidad in entidades {
+                    params.push(entidad);
+                }
+            }
         }
         
-        if let Some(accion) = filters.accion {
-            conditions.push("a.log_accion LIKE ?");
-            params.push(format!("%{}%", accion));
+        // Filtro por múltiples acciones (IN)
+        if let Some(acciones) = filters.accion {
+            if !acciones.is_empty() {
+                let placeholders = acciones.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+                conditions.push(format!("a.log_accion IN ({})", placeholders));  // ← Ya no necesita &
+                for accion in acciones {
+                    params.push(accion);
+                }
+            }
+        }
+        
+        // Búsqueda general (opcional)
+        if let Some(search) = filters.search {
+            if !search.is_empty() {
+                conditions.push("(a.log_accion LIKE ? OR a.log_entidad_tabla LIKE ?)".to_string());  // ← CAMBIO: .to_string()
+                let search_pattern = format!("%{}%", search);
+                params.push(search_pattern.clone());
+                params.push(search_pattern);
+            }
         }
         
         if let Some(fecha_desde) = filters.fecha_desde {
-            conditions.push("a.created_at >= ?");
+            conditions.push("a.created_at >= ?".to_string());  // ← CAMBIO: .to_string()
             params.push(fecha_desde);
         }
         
         if let Some(fecha_hasta) = filters.fecha_hasta {
-            conditions.push("a.created_at <= ?");
+            conditions.push("a.created_at <= ?".to_string());  // ← CAMBIO: .to_string()
             params.push(fecha_hasta);
         }
         

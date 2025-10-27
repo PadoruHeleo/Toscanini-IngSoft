@@ -28,8 +28,8 @@ export function NavSecondary({
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {
-            // Convertir el título a camelCase para el ID de la vista
-            const viewId = item.title;
+            // Convertir el título a minúsculas para coincidir con los cases en App.tsx
+            const viewId = item.title.toLowerCase();
             const isActive = currentView === viewId;
 
             return (

@@ -170,7 +170,6 @@ export function OrdenesTrabajoView() {
   const [selectedOrdenForInforme, setSelectedOrdenForInforme] =
     useState<OrdenTrabajo | null>(null);
   const [editingInforme, setEditingInforme] = useState<any>(null);
-  const [now, setNow] = useState(Date.now());
 
   // Estados para PDF Viewer de Informes y Cotizaciones
   const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
@@ -185,14 +184,6 @@ export function OrdenesTrabajoView() {
     useState<any>(null);
   const [selectedOrdenForSalida, setSelectedOrdenForSalida] =
     useState<OrdenTrabajo | null>(null);
-
-  // Actualizar el tiempo cada minuto
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const loadOrdenes = async () => {
     try {
@@ -796,7 +787,7 @@ export function OrdenesTrabajoView() {
         cotizacion={editingCotizacion}
         isEditing={!!editingCotizacion}
         ordenTrabajoId={selectedOrdenForCotizacion?.orden_id}
-        onSendToClient={async (cotizacionId) => {
+        onSendToClient={async () => {
           try {
             if (!user || !selectedOrdenForCotizacion) return;
 
@@ -812,7 +803,6 @@ export function OrdenesTrabajoView() {
             );
 
             loadOrdenes();
-            setNow(Date.now()); // actualizar el tiempo
           } catch (error) {
             console.error("Error actualizando estado de orden:", error);
             showError(
@@ -820,7 +810,6 @@ export function OrdenesTrabajoView() {
               "La cotización se envió pero no se pudo actualizar el estado de la orden."
             );
             loadOrdenes();
-            setNow(Date.now());
           }
         }}
       />

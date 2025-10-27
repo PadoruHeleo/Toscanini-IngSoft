@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,6 @@ interface EstadoSistema {
 export function EquipoEstadoSistema({
   equipoId,
   showRefresh = false,
-  size = "sm",
 }: EquipoEstadoSistemaProps) {
   const [estado, setEstado] = useState<EstadoSistema | null>(null);
   const [loading, setLoading] = useState(false);
