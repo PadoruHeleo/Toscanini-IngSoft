@@ -128,13 +128,17 @@ pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogW
             }
         }
         
-        // Filtro por múltiples acciones (IN)
+        // Filtro por múltiples acciones
         if let Some(acciones) = filters.accion {
             if !acciones.is_empty() {
-                let placeholders = acciones.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-                conditions.push(format!("a.log_accion IN ({})", placeholders));  // ← Ya no necesita &
+                let mut accion_conditions = Vec::new();
                 for accion in acciones {
-                    params.push(accion);
+                    accion_conditions.push("a.log_accion LIKE ?".to_string());
+                    params.push(format!("{}%", accion));
+                }
+                // Unir condiciones con OR y agruparlas
+                if !accion_conditions.is_empty() {
+                    conditions.push(format!("({})", accion_conditions.join(" OR ")));
                 }
             }
         }
