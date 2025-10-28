@@ -250,7 +250,6 @@ export function EquiposView() {
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
-                      {isAdmin() && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -260,7 +259,6 @@ export function EquiposView() {
                         >
                           <History className="h-3 w-3" />
                         </Button>
-                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -286,13 +284,11 @@ export function EquiposView() {
         equipo={editingEquipo || undefined}
         isEditing={editingEquipo !== null}
       />
-      {isAdmin() && (
         <EquipoHistorialDialog
           open={historialEquipo !== null}
           onOpenChange={(open) => !open && setHistorialEquipo(null)}
           equipo={historialEquipo}
         />
-      )}
     </div>
   );
 }
