@@ -29,6 +29,7 @@ import { RegistrarSalidaDialog } from "./RegistrarSalidaDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
+import CambiarEstadoDialog from "./CambiarEstadoDialog"; // <-- agregado
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -152,7 +153,7 @@ const getTiempoEnEstado = (createdAt?: string) => {
 export function OrdenesTrabajoView() {
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
-  const { getVisibleActions } = useOrdenTrabajoPermissions();
+  const { getVisibleActions, userRole } = useOrdenTrabajoPermissions(); // <-- extrae userRole
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshFilters, setRefreshFilters] = useState(0);
@@ -180,6 +181,10 @@ export function OrdenesTrabajoView() {
   // Estados para Registro de Salida
   const [showRegistrarSalidaDialog, setShowRegistrarSalidaDialog] =
     useState(false);
+  // nuevos estados para cambiar estado
+  const [showCambiarEstadoDialog, setShowCambiarEstadoDialog] = useState(false);
+  const [selectedOrdenForCambio, setSelectedOrdenForCambio] =
+    useState<OrdenTrabajo | null>(null);
   const [selectedEquipoForSalida, setSelectedEquipoForSalida] =
     useState<any>(null);
   const [selectedOrdenForSalida, setSelectedOrdenForSalida] =
@@ -558,13 +563,31 @@ export function OrdenesTrabajoView() {
                     {orden.orden_desc || "N/A"}
                   </TableCell>{" "}
                   <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${getEstadoStyles(
-                        orden.estado
-                      )}`}
-                    >
-                      {formatEstadoText(orden.estado)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${getEstadoStyles(
+                          orden.estado
+                        )}`}
+                      >
+                        {formatEstadoText(orden.estado)}
+                      </span>
+
+                      {/* Mostrar botón "Editar" solo si el usuario es admin */}
+                      {userRole === "admin" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedOrdenForCambio(orden);
+                            setShowCambiarEstadoDialog(true);
+                          }}
+                          className="text-gray-600 hover:text-gray-700"
+                          title="Cambiar estado"
+                        >
+                          Editar
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {getTiempoEnEstado(
@@ -848,6 +871,17 @@ export function OrdenesTrabajoView() {
         equipo={selectedEquipoForSalida}
         ordenTrabajo={selectedOrdenForSalida}
         onSalidaRegistrada={handleSalidaRegistrada}
+      />
+      <CambiarEstadoDialog
+        open={showCambiarEstadoDialog}
+        onOpenChange={(open) => {
+          setShowCambiarEstadoDialog(open);
+          if (!open) setSelectedOrdenForCambio(null);
+        }}
+        orden={selectedOrdenForCambio}
+        onCambioCompletado={() => {
+          loadOrdenes();
+        }}
       />
     </div>
   );

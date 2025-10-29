@@ -141,49 +141,6 @@ export default function InformeFormDialog({
 
   const [errors, setErrors] = useState<FormErrors>({});
   // Estado para el diálogo de confirmación de eliminación
-  // Función para manejar la eliminación del informe
-  const handleEliminarInforme = async () => {
-    if (!informe?.informe_id || !user) {
-      showError("Error", "No se puede eliminar el informe.");
-      return;
-    }
-    try {
-      setLoading(true);
-      // Actualizar la orden de trabajo para quitar la referencia al informe
-      const ordenResult = await invoke<boolean>("remove_informe_from_ordenes", {
-        informeId: informe.informe_id,
-        updatedBy: user.usuario_id,
-      });
-
-      if (!ordenResult) {
-        // <-- Cambia aquí la condición
-        showError(
-          "Error",
-          "No se pudo desvincular el informe de la orden de trabajo."
-        );
-        setLoading(false);
-        return;
-      }
-      // Eliminar el informe
-      const result = await invoke<boolean>("delete_informe", {
-        informeId: informe.informe_id,
-        deletedBy: user.usuario_id,
-      });
-
-      if (result) {
-        success("Informe eliminado", "El informe fue eliminado exitosamente.");
-        onInformeAdded();
-        onOpenChange(false);
-      } else {
-        showError("Error", "No se pudo eliminar el informe.");
-      }
-    } catch (error) {
-      showError("Error", "Ocurrió un error al eliminar el informe.");
-      console.log(error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadTerminosCondiciones = async () => {
     try {
@@ -1667,17 +1624,6 @@ export default function InformeFormDialog({
                     : "Enviar Informe a Cliente"}
                 </Button>
               )}
-              {isEditing && informe?.is_borrador && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setShowEliminarInformeDialog(true)}
-                  disabled={loading}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  {loading ? "Eliminando..." : "Eliminar Informe"}
-                </Button>
-              )}
               {!isEditing && (
                 <Button
                   type="button"
@@ -1700,19 +1646,33 @@ export default function InformeFormDialog({
         </Tabs>
       </DialogContent>
 
-      {/* Diálogo de confirmación para eliminar informe */}
+      {/* Modal de eliminar informe (CON MOTIVO) */}
       <Dialog
         open={showEliminarInformeDialog}
         onOpenChange={setShowEliminarInformeDialog}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
             <DialogDescription>
-              ¿Está seguro que desea eliminar este informe? Esta acción no se
-              puede deshacer.
+              ¿Está seguro que desea <b>eliminar</b> este informe en borrador?
+              <br />
+              Podrá crear un nuevo informe para esta orden.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-3">
+            <Label htmlFor="motivo_eliminacion">
+              Motivo de la eliminación *
+            </Label>
+            <Textarea
+              id="motivo_eliminacion"
+              value={motivoEliminacion}
+              onChange={(e) => setMotivoEliminacion(e.target.value)}
+              placeholder="Ingrese el motivo de la eliminación..."
+              rows={3}
+              required
+            />
+          </div>
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -1724,15 +1684,14 @@ export default function InformeFormDialog({
             </Button>
             <Button
               type="button"
-              variant="destructive"
               onClick={async () => {
                 setShowEliminarInformeDialog(false);
-                await handleEliminarInforme();
+                await handleEliminarInformeBorrador(motivoEliminacion);
               }}
-              disabled={loading}
+              disabled={loading || !motivoEliminacion.trim()}
               className="bg-red-600 hover:bg-red-700"
             >
-              {loading ? "Eliminando..." : "Eliminar Informe"}
+              {loading ? "Eliminando..." : "Confirmar Eliminación"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1807,56 +1766,6 @@ export default function InformeFormDialog({
                 : isEditing
                 ? "Confirmar Actualización"
                 : "Confirmar Creación"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Modal de eliminar informe */}
-      <Dialog
-        open={showEliminarInformeDialog}
-        onOpenChange={setShowEliminarInformeDialog}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar eliminación</DialogTitle>
-            <DialogDescription>
-              ¿Está seguro que desea <b>eliminar</b> este informe en borrador?
-              <br />
-              Podrá crear un nuevo informe para esta orden.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Label htmlFor="motivo_eliminacion">
-              Motivo de la eliminación *
-            </Label>
-            <Textarea
-              id="motivo_eliminacion"
-              value={motivoEliminacion}
-              onChange={(e) => setMotivoEliminacion(e.target.value)}
-              placeholder="Ingrese el motivo de la eliminación..."
-              rows={3}
-              required
-            />
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowEliminarInformeDialog(false)}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={async () => {
-                setShowEliminarInformeDialog(false);
-                await handleEliminarInformeBorrador(motivoEliminacion);
-              }}
-              disabled={loading || !motivoEliminacion.trim()}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {loading ? "Eliminando..." : "Confirmar Eliminación"}
             </Button>
           </DialogFooter>
         </DialogContent>
