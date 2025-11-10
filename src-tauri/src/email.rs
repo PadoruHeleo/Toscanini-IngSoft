@@ -756,10 +756,11 @@ pub async fn send_orden_trabajo_cliente(orden_id: i32, _sent_by: i32) -> Result<
 }
 
 /// Comando de Tauri para enviar email de cotización con PDF al cliente
+/// También actualiza el estado de la cotización y la orden después de enviar exitosamente
 #[tauri::command]
-pub async fn send_cotizacion_email(cotizacion_id: i32, _sent_by: i32) -> Result<String, String> {
-    use crate::commands::cotizacion::get_cotizacion_by_id;
-    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_id;
+pub async fn send_cotizacion_email(cotizacion_id: i32, sent_by: i32) -> Result<String, String> {
+    use crate::commands::cotizacion::{get_cotizacion_by_id, update_cotizacion};
+    use crate::commands::ordenes_trabajo::{get_orden_trabajo_by_id, cambiar_estado_orden_trabajo};
     use crate::commands::equipos::get_equipo_by_id;
     use crate::commands::clientes::get_cliente_by_id;
     use crate::pdf::commands::generate_cotizacion_pdf_command;
@@ -769,12 +770,7 @@ pub async fn send_cotizacion_email(cotizacion_id: i32, _sent_by: i32) -> Result<
     let cotizacion = get_cotizacion_by_id(cotizacion_id).await?
         .ok_or_else(|| "Cotización no encontrada".to_string())?;
 
-    // Verificar que la cotización no sea borrador
-    if cotizacion.is_borrador == Some(true) {
-        return Err("No se puede enviar una cotización en borrador".to_string());
-    }
-
-    // Generar el PDF
+    // Generar el PDF (permite borradores, los actualizaremos después)
     println!("📄 Generando PDF de cotización {}...", cotizacion_id);
     let pdf_bytes = generate_cotizacion_pdf_command(cotizacion_id).await?;
     println!("✅ PDF generado exitosamente ({} bytes)", pdf_bytes.len());
@@ -825,5 +821,36 @@ pub async fn send_cotizacion_email(cotizacion_id: i32, _sent_by: i32) -> Result<
         &pdf_bytes,
     ).await?;
 
-    Ok("Email de cotización con PDF enviado exitosamente".to_string())
+    println!("✅ Email enviado exitosamente. Actualizando estados...");
+
+    // Después de enviar exitosamente, actualizar el estado de la cotización
+    let _ = update_cotizacion(
+        cotizacion_id,
+        crate::commands::cotizacion::UpdateCotizacionRequest {
+            cotizacion_codigo: None,
+            costo_revision: None,
+            costo_reparacion: None,
+            costo_total: None,
+            is_aprobada: None,
+            is_borrador: Some(false), // Marcar como enviada (no borrador)
+            informe: None,
+        },
+        sent_by,
+    ).await.map_err(|e| format!("Error actualizando estado de cotización: {}", e))?;
+
+    println!("✅ Cotización marcada como enviada");
+
+    // Cambiar el estado de la orden a "cotizacion_enviada" si está en "recibido"
+    if let Some(estado_actual) = &orden_trabajo.estado {
+        if estado_actual == "recibido" {
+            let _ = cambiar_estado_orden_trabajo(
+                orden_id,
+                "cotizacion_enviada".to_string(),
+                sent_by,
+            ).await.map_err(|e| format!("Error actualizando estado de orden: {}", e))?;
+            println!("✅ Estado de orden cambiado a 'cotizacion_enviada'");
+        }
+    }
+
+    Ok("Email de cotización con PDF enviado exitosamente y estados actualizados".to_string())
 }

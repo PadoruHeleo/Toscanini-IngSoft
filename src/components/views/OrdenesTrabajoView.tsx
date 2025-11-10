@@ -811,29 +811,9 @@ export function OrdenesTrabajoView() {
         isEditing={!!editingCotizacion}
         ordenTrabajoId={selectedOrdenForCotizacion?.orden_id}
         onSendToClient={async () => {
-          try {
-            if (!user || !selectedOrdenForCotizacion) return;
-
-            await invoke("cambiar_estado_orden_trabajo", {
-              ordenId: selectedOrdenForCotizacion.orden_id,
-              nuevoEstado: "cotizacion_enviada",
-              updatedBy: user.usuario_id,
-            });
-
-            success(
-              "Cotización enviada",
-              "La cotización ha sido enviada al cliente exitosamente."
-            );
-
-            loadOrdenes();
-          } catch (error) {
-            console.error("Error actualizando estado de orden:", error);
-            showError(
-              "Advertencia",
-              "La cotización se envió pero no se pudo actualizar el estado de la orden."
-            );
-            loadOrdenes();
-          }
+          // El backend ya maneja el cambio de estado automáticamente
+          // Solo recargamos las órdenes para reflejar los cambios
+          loadOrdenes();
         }}
       />
       {/* Dialog para crear/editar informe */}

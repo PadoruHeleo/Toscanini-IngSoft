@@ -783,33 +783,30 @@ export default function CotizacionFormDialog({
     try {
       setLoading(true);
 
-      // Actualizar is_borrador a false para marcar como enviada
-      const result = await invoke<boolean>("update_cotizacion", {
+      // Enviar el email con PDF y actualizar estados automáticamente
+      await invoke<string>("send_cotizacion_email", {
         cotizacionId: cotizacion.cotizacion_id,
-        request: { is_borrador: false },
-        updatedBy: user.usuario_id,
+        sentBy: user.usuario_id,
       });
 
-      if (result) {
-        success(
-          "Cotización enviada",
-          "La cotización ha sido enviada al cliente exitosamente."
-        );
+      success(
+        "Cotización enviada",
+        "La cotización ha sido enviada al cliente exitosamente con el PDF adjunto."
+      );
 
-        if (onSendToClient) {
-          onSendToClient(cotizacion.cotizacion_id);
-        }
-
-        onCotizacionAdded(); // Refrescar la lista
-        onOpenChange(false); // Cerrar el diálogo
-      } else {
-        showError("Error", "No se pudo enviar la cotización al cliente.");
+      if (onSendToClient) {
+        onSendToClient(cotizacion.cotizacion_id);
       }
+
+      onCotizacionAdded(); // Refrescar la lista
+      onOpenChange(false); // Cerrar el diálogo
     } catch (error) {
       console.error("Error enviando cotización al cliente:", error);
       showError(
         "Error al enviar cotización",
-        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+        typeof error === "string"
+          ? error
+          : "Ha ocurrido un error inesperado al enviar el correo."
       );
     } finally {
       setLoading(false);
