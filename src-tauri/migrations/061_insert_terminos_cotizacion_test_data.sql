@@ -10,4 +10,4 @@ INSERT IGNORE INTO TERMINOS_COTIZACION (termino_id, cotizacion_id, aplicado) VAL
 (2, 3, 1),  -- Responsabilidad por Pérdida para COT-2025-003
 (3, 1, 1),  -- Condiciones de Pago para COT-2025-001
 (3, 2, 1),  -- Condiciones de Pago para COT-2025-002
-(3, 3, 1),  -- Condiciones de Pago para COT-2025-003
+(3, 3, 1)   -- Condiciones de Pago para COT-2025-003

@@ -59,6 +59,7 @@ pub fn run() {
             commands::users::cleanup_expired_reset_codes,
             commands::users::change_user_password,
             commands::users::change_user_email,
+            commands::users::change_user_phone,
             commands::users::send_password_email,
             commands::users::verify_phone,
             commands::logs::create_audit_log,
