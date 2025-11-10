@@ -5,7 +5,7 @@ pub mod email;
 pub mod config;
 pub mod pdf_generator;
 
-use database::{init_database, start_auto_reconnect_task};
+use database::{init_database, start_auto_reconnect_task, start_periodic_connection_check};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,8 +21,11 @@ pub fn run() {
             eprintln!("Warning: Failed to initialize database: {}", e);
         }
         
-        // Iniciar la tarea de reconexión automática
+        // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
         start_auto_reconnect_task();
+        
+        // Iniciar verificación periódica cada 60 segundos (incluso cuando está conectada)
+        start_periodic_connection_check(10);
     });
     
     // Mantener el runtime vivo usando spawn_blocking

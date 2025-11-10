@@ -260,13 +260,26 @@ fn load_env_file() {
     }
 }
 
-// Nueva función para iniciar el sistema de reconexión automática
+// Nueva función mejorada que verifica periódicamente
 pub fn start_auto_reconnect_task() {
     tokio::spawn(async move {
-        let mut retry_interval = Duration::from_secs(30); // Intervalo inicial de 30 segundos
+        let mut retry_interval = Duration::from_secs(30);
+        let check_interval = Duration::from_secs(60); // Verificar cada 60 segundos
         let mut consecutive_failures = 0u32;
+        let mut last_check = std::time::Instant::now();
         
         loop {
+            // Verificar periódicamente incluso si está conectada
+            if last_check.elapsed() >= check_interval {
+                println!("Verificación periódica de conexión...");
+                let is_connected = check_database_connection().await;
+                last_check = std::time::Instant::now();
+                
+                if !is_connected {
+                    println!("Conexión perdida detectada - iniciando reconexión...");
+                }
+            }
+            
             sleep(retry_interval).await;
             
             // Verificar el estado actual
@@ -279,7 +292,6 @@ pub fn start_auto_reconnect_task() {
                 match retry_database_connection().await {
                     Ok(_) => {
                         println!("Auto-reconnect: Reconexión exitosa!");
-                        // Resetear el intervalo y contador de fallos
                         retry_interval = Duration::from_secs(30);
                         consecutive_failures = 0;
                     }
@@ -287,17 +299,39 @@ pub fn start_auto_reconnect_task() {
                         consecutive_failures += 1;
                         println!("Auto-reconnect: Fallo en el intento {}: {}", consecutive_failures, e);
                         
-                        // Backoff exponencial: aumentar el intervalo con cada fallo
-                        // pero con un máximo
                         retry_interval = Duration::from_secs(
                             (30 * (1 << consecutive_failures.min(4))).min(300)
                         );
                     }
                 }
             } else {
-                // Si está conectado, resetear el intervalo
                 retry_interval = Duration::from_secs(30);
                 consecutive_failures = 0;
+            }
+        }
+    });
+}
+
+/// Inicia una tarea que verifica periódicamente la conexión a la base de datos
+/// independientemente de si está conectada o no
+pub fn start_periodic_connection_check(interval_seconds: u64) {
+    tokio::spawn(async move {
+        let interval = Duration::from_secs(interval_seconds);
+        
+        loop {
+            sleep(interval).await;
+            
+            println!("Verificando conexión a la base de datos...");
+            let is_connected = check_database_connection().await;
+            
+            if is_connected {
+                println!("✓ Conexión verificada exitosamente");
+            } else {
+                println!("✗ Conexión fallida - intentando reconectar...");
+                // Intentar reconectar automáticamente
+                if let Err(e) = retry_database_connection().await {
+                    println!("Error al intentar reconectar: {}", e);
+                }
             }
         }
     });
