@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "../ui/card";
 import { LoginError } from "@/components/ui/login-error";
-import { InitSetup } from "@/components/InitSetup";
+import { InitSetup } from "@/components/common/InitSetup";
 
 export function LoginView() {
   const [email, setEmail] = useState("");

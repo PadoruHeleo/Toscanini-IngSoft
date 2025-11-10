@@ -17,9 +17,9 @@ import {
 import {
   NavMainWithSubmenus,
   type NavItemWithSub,
-} from "@/components/nav-main-with-submenus";
-import { NavSecondary } from "@/components/nav-secondary";
-import { NavUser } from "@/components/nav-user";
+} from "@/components/navigation/nav-main-with-submenus";
+import { NavSecondary } from "@/components/navigation/nav-secondary";
+import { NavUser } from "@/components/navigation/nav-user";
 import { useViewPermissions } from "@/hooks/use-permissions";
 import {
   Sidebar,

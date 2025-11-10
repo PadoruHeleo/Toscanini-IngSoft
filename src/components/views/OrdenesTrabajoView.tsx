@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,12 +20,12 @@ import {
   FileText,
   LogOut,
 } from "lucide-react";
-import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
-import CotizacionFormDialog from "./CotizacionFormDialog";
-import InformeFormDialog from "./InformeFormDialog";
-import { PdfViewer } from "@/components/PdfViewer";
-import { UnificarFiltros } from "./UnificarFiltros";
-import { RegistrarSalidaDialog } from "./RegistrarSalidaDialog";
+import OrdenTrabajoFormDialog from "./dialogs/OrdenTrabajoFormDialog";
+import CotizacionFormDialog from "./dialogs/CotizacionFormDialog";
+import InformeFormDialog from "./dialogs/InformeFormDialog";
+import { PdfViewer } from "@/components/features/documents/PdfViewer";
+import { UnificarFiltros } from "./filters/UnificarFiltros";
+import { RegistrarSalidaDialog } from "./dialogs/RegistrarSalidaDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";

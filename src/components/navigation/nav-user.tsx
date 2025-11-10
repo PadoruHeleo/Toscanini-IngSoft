@@ -23,7 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { SessionInfo } from "@/components/SessionInfo";
+import { SessionInfo } from "@/components/features/session/SessionInfo";
 
 export function NavUser() {
   const { isMobile } = useSidebar();

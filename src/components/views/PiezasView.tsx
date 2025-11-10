@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { usePiezasPermissions } from "@/hooks/use-permissions";
-import { AccessDenied } from "@/components/AccessDenied";
+import { AccessDenied } from "@/components/common/AccessDenied";
 
 interface Pieza {
   pieza_id: number;

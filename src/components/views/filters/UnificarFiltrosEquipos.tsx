@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
-import { FiltrarEquiposPorMarca } from "@/components/views/FiltrarEquiposPorMarca";
-import { FiltrarEquiposPorTipo } from "@/components/views/FiltrarEquiposPorTipo";
-import { FiltrarEquiposPorCliente } from "@/components/views/FiltrarEquiposPorCliente";
-import { FiltrarEquiposPorEstado } from "@/components/views/FiltrarEquiposPorEstado";
-import { FiltrarEquiposPorUbicacion } from "@/components/views/FiltrarEquiposPorUbicacion";
+import { FiltrarEquiposPorMarca } from "./FiltrarEquiposPorMarca";
+import { FiltrarEquiposPorTipo } from "./FiltrarEquiposPorTipo";
+import { FiltrarEquiposPorCliente } from "./FiltrarEquiposPorCliente";
+import { FiltrarEquiposPorEstado } from "./FiltrarEquiposPorEstado";
+import { FiltrarEquiposPorUbicacion } from "./FiltrarEquiposPorUbicacion";
 
 interface EquipoConEstado {
   equipo_id: number;
