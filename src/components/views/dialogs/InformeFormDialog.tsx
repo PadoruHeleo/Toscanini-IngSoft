@@ -1707,38 +1707,6 @@ export default function InformeFormDialog({
                 Cancelar
               </Button>{" "}
               <Button
-                type="button"
-                variant="outline"
-                onClick={handlePreviewPdf}
-                disabled={
-                  loading ||
-                  loadingSendToClient ||
-                  loadingSendExisting ||
-                  loadingPdf
-                }
-                className="bg-orange-600 hover:bg-orange-700 text-white"
-              >
-                {loadingPdf ? (
-                  "Generando..."
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4 mr-1" />
-                    PDF
-                  </>
-                )}
-              </Button>
-              {isEditing && informe && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setShowEliminarInformeDialog(true)}
-                  disabled={loading}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  Eliminar Informe
-                </Button>
-              )}
-              <Button
                 type="submit"
                 disabled={
                   loading ||
@@ -1802,44 +1770,6 @@ export default function InformeFormDialog({
           </form>
         </Tabs>
       </DialogContent>
-
-      {/* Diálogo de confirmación para eliminar informe */}
-      <Dialog
-        open={showEliminarInformeDialog}
-        onOpenChange={setShowEliminarInformeDialog}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Eliminación</DialogTitle>
-            <DialogDescription>
-              ¿Está seguro que desea eliminar este informe? Esta acción no se
-              puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowEliminarInformeDialog(false)}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={async () => {
-                setShowEliminarInformeDialog(false);
-                await handleEliminarInforme();
-              }}
-              disabled={loading}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {loading ? "Eliminando..." : "Eliminar Informe"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal de confirmación */}
       <Dialog
