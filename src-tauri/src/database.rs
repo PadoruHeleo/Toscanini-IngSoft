@@ -271,7 +271,6 @@ pub fn start_auto_reconnect_task() {
         loop {
             // Verificar periódicamente incluso si está conectada
             if last_check.elapsed() >= check_interval {
-                println!("Verificación periódica de conexión...");
                 let is_connected = check_database_connection().await;
                 last_check = std::time::Instant::now();
                 
