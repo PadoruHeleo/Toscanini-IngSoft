@@ -235,7 +235,23 @@ export function OrdenesTrabajoView() {
     const baseDate = new Date(base);
     const now = new Date();
     const diffMs = now.getTime() - baseDate.getTime();
-    return diffMs > 60 * 60 * 1000;
+
+    // Ajustar el tiempo según el estado y prioridad para coincidir con las alertas
+    if (orden.estado === "recibido") {
+      // Para órdenes de prioridad alta: 24 horas (como checkOrdenPrioridadNoAtendida)
+      if (orden.prioridad === "alta") {
+        return diffMs >= 24 * 60 * 60 * 1000; // 24 horas
+      }
+      // Para órdenes normales en recibido: 3 días (como checkOrdenCotNoEnviada)
+      return diffMs >= 3 * 24 * 60 * 60 * 1000; // 3 días
+    }
+
+    // Para estado "en_reparacion": usar 3 días (tiempo razonable para reparación)
+    if (orden.estado === "en_reparacion") {
+      return diffMs >= 3 * 24 * 60 * 60 * 1000; // 3 días
+    }
+
+    return false;
   };
 
   const ordenesOrdenadas = [...filteredOrdenes].sort((a, b) => {
