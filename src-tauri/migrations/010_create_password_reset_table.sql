@@ -11,3 +11,4 @@ CREATE TABLE IF NOT EXISTS PASSWORD_RESET (
     INDEX idx_usuario_id (usuario_id),
     INDEX idx_expires_at (expires_at)
 );
+

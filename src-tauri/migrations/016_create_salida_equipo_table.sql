@@ -17,3 +17,4 @@ CREATE INDEX IF NOT EXISTS idx_salida_equipo_orden ON SALIDA_EQUIPO(orden_trabaj
 CREATE INDEX IF NOT EXISTS idx_salida_equipo_fecha ON SALIDA_EQUIPO(fecha_salida);
 CREATE INDEX IF NOT EXISTS idx_salida_equipo_motivo ON SALIDA_EQUIPO(motivo_salida);
 CREATE INDEX IF NOT EXISTS idx_salida_equipo_usuario ON SALIDA_EQUIPO(usuario_id);
+
