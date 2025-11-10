@@ -89,6 +89,7 @@ pub struct Filtros {
     pub modelos: Option<Vec<String>>, 
     pub prioridades: Option<Vec<String>>,
     pub clientes: Option<Vec<String>>,
+    pub estados: Option<Vec<String>>, // ← NUEVO
 }
 
 /// Obtener todas las órdenes de trabajo
@@ -846,6 +847,17 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
             query.push_str(&format!(" AND c.cliente_nombre IN ({})", placeholders));
             for cliente in clientes {
                 params.push(cliente);
+            }
+        }
+    }
+    
+    // Nuevo filtro por estados
+    if let Some(estados) = filtros.estados {
+        if !estados.is_empty() {
+            let placeholders = vec!["?"; estados.len()].join(",");
+            query.push_str(&format!(" AND LOWER(ot.estado) IN ({})", placeholders));
+            for estado in estados {
+                params.push(estado.to_lowercase());
             }
         }
     }

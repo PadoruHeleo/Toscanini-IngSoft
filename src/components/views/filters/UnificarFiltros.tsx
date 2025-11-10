@@ -7,6 +7,7 @@ import { FiltrarOrdenesPorMarca } from "./FiltrarOrdenesPorMarca";
 import { FiltrarOrdenesPorModelo } from "./FiltrarOrdenesPorModelo";
 import { FiltrarOrdenesPorPrioridad } from "./FiltrarOrdenesPorPrioridad";
 import { FiltrarOrdenesPorCliente } from "./FiltrarOrdenesPorCliente";
+import { FiltrarOrdenesPorEstado } from "./FiltrarOrdenesPorEstado";
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -23,6 +24,18 @@ interface Props {
 }
 
 export function UnificarFiltros({ onFiltrar }: Props) {
+  // Estados por defecto: todos excepto "entregado"
+  const estadosPorDefecto = [
+    "recibido",
+    "cotizacion_enviada",
+    "aprobacion_pendiente",
+    "en_reparacion",
+    "espera_de_retiro",
+    "abandonado",
+    "equipo_no_reparable",
+    "cotizacion_rechazada",
+  ];
+
   const filtrosIniciales = {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
@@ -30,6 +43,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     modelos: [] as string[],
     prioridades: [] as string[],
     clientes: [] as string[],
+    estados: estadosPorDefecto, // ← Inicializar con estados por defecto
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -54,6 +68,9 @@ export function UnificarFiltros({ onFiltrar }: Props) {
             : null,
         clientes:
           filtrosActuales.clientes.length > 0 ? filtrosActuales.clientes : null,
+        // ← NUEVO
+        estados:
+          filtrosActuales.estados.length > 0 ? filtrosActuales.estados : null,
       };
 
       const ordenes = await invoke<OrdenTrabajo[]>(
@@ -77,7 +94,9 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     filtros.marcas.length > 0 ||
     filtros.modelos.length > 0 ||
     filtros.prioridades.length > 0 ||
-    filtros.clientes.length > 0;
+    filtros.clientes.length > 0 ||
+    filtros.estados.length !== estadosPorDefecto.length || // Cambiar la lógica
+    !filtros.estados.every((e) => estadosPorDefecto.includes(e)); // Verificar si difiere del default
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -113,6 +132,15 @@ export function UnificarFiltros({ onFiltrar }: Props) {
         resetKey={resetKey}
         onChange={(prioridades) => {
           actualizarFiltro({ prioridades });
+        }}
+      />
+
+      {/* ← NUEVO COMPONENTE */}
+      <FiltrarOrdenesPorEstado
+        resetKey={resetKey}
+        initialEstados={estadosPorDefecto} // ← Pasar estados por defecto
+        onChange={(estados) => {
+          actualizarFiltro({ estados });
         }}
       />
 
