@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use printpdf::{PdfDocument, BuiltinFont, Color, Rgb, Mm, Line, Point};
-use crate::pdf::common::{EmpresaInfo, ClienteInfo, EquipoInfo, PiezaPdf, TerminoPdf, wrap_text, compile_terminos_text};
+use crate::pdf::common::{EmpresaInfo, ClienteInfo, EquipoInfo, PiezaPdf, TerminoPdf, wrap_text};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CotizacionPdfData {
@@ -56,8 +56,8 @@ impl CotizacionPdfGenerator {
         
         // === FECHAS (derecha, debajo del número) ===
         current_layer.set_fill_color(gray_color.clone());
-        current_layer.use_text(&format!("Fecha de Emisión: {}", data.fecha.format("%d/%m/%Y %H:%M:%S")), 9.0, Mm(140.0), Mm(260.0), &font_regular);
-        current_layer.use_text(&format!("Documento Impreso: {}", chrono::Utc::now().format("%d/%m/%Y %H:%M:%S")), 9.0, Mm(140.0), Mm(253.0), &font_regular);
+        current_layer.use_text(&format!("Fecha de Emisión: {}", data.fecha.format("%d/%m/%Y")), 9.0, Mm(140.0), Mm(260.0), &font_regular);
+        current_layer.use_text(&format!("Documento Impreso: {}", chrono::Utc::now().format("%d/%m/%Y")), 9.0, Mm(140.0), Mm(253.0), &font_regular);
         
         // Estado de aprobación
         current_layer.set_fill_color(black_color.clone());
@@ -72,56 +72,56 @@ impl CotizacionPdfGenerator {
         current_layer.set_fill_color(black_color.clone());
         current_layer.use_text("Cliente", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
         current_layer.use_text(&data.cliente.nombre, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
-        y_pos -= 8.0;
+        y_pos -= 6.0;
         
         if let Some(direccion) = &data.cliente.direccion {
             current_layer.use_text("Dirección", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
             current_layer.use_text(direccion, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
-            y_pos -= 8.0;
+            y_pos -= 6.0;
         }
         
         if let Some(email) = &data.cliente.email {
             current_layer.use_text("Atención Sr.", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
             current_layer.use_text(email, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
-            y_pos -= 8.0;
+            y_pos -= 6.0;
         }
         
-        // Información de contacto (derecha)
         if let Some(telefono) = &data.cliente.telefono {
-            current_layer.use_text("Teléfono", 11.0, Mm(110.0), Mm(250.0), &font_bold);
-            current_layer.use_text(telefono, 10.0, Mm(150.0), Mm(250.0), &font_regular);
+            current_layer.use_text("Teléfono", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
+            current_layer.use_text(telefono, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
+            y_pos -= 6.0;
         }
 
         // === INFORMACIÓN DEL EQUIPO ===
-        y_pos -= 15.0;
+        y_pos -= 10.0;
         current_layer.use_text("Marca", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
         if let Some(marca) = &data.equipo.marca {
             current_layer.use_text(marca, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
         }
-        y_pos -= 8.0;
+        y_pos -= 6.0;
         
         current_layer.use_text("Modelo", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
         if let Some(modelo) = &data.equipo.modelo {
             current_layer.use_text(modelo, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
         }
-        y_pos -= 8.0;
+        y_pos -= 6.0;
         
         current_layer.use_text("Serie", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
         if let Some(serie) = &data.equipo.numero_serie {
             current_layer.use_text(serie, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
         }
-        y_pos -= 8.0;
+        y_pos -= 6.0;
         
         current_layer.use_text("Tipo de Producto", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
         if let Some(tipo) = &data.equipo.tipo {
             current_layer.use_text(tipo, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
         }
-        y_pos -= 8.0;
+        y_pos -= 6.0;
 
         // === TRABAJO SOLICITADO ===
         y_pos -= 10.0;
-        current_layer.use_text("Trabajo Solicitado", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
-        y_pos -= 10.0;
+        current_layer.use_text("Diagnóstico y Trabajo a Realizado", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
+        y_pos -= 6.0;
         
         if !data.informe_tecnico.trim().is_empty() {
             let informe_lines = wrap_text(&data.informe_tecnico, 85);
@@ -135,7 +135,7 @@ impl CotizacionPdfGenerator {
         }
 
         // === DETALLE DE COSTOS (TABLA) ===
-        y_pos -= 10.0;
+        y_pos -= 8.0;
         current_layer.use_text("Detalle de Costos", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
         y_pos -= 12.0;
         
@@ -145,21 +145,34 @@ impl CotizacionPdfGenerator {
         let col_precio_x = 135.0;
         let col_subtotal_x = 165.0;
         let table_width = 170.0;
-        let row_height = 8.0;
-        let table_start_y = y_pos;
+        let row_height = 4.0;
+        let table_top_y = y_pos + 4.0; // Posición superior de la tabla
+        
+        // Línea superior de la tabla (borde superior)
+        let top_line = Line {
+            points: vec![
+                (Point::new(Mm(col_desc_x), Mm(table_top_y)), false),
+                (Point::new(Mm(col_desc_x + table_width), Mm(table_top_y)), false)
+            ],
+            is_closed: false
+        };
+        current_layer.set_outline_thickness(0.5);
+        current_layer.set_outline_color(black_color.clone());
+        current_layer.add_line(top_line);
         
         // Dibujar encabezado de la tabla
         current_layer.set_fill_color(black_color.clone());
-        current_layer.use_text("Descripción", 9.0, Mm(col_desc_x), Mm(y_pos), &font_bold);
+        current_layer.use_text("Descripción", 9.0, Mm(col_desc_x + 2.0), Mm(y_pos), &font_bold);
         current_layer.use_text("Cant.", 9.0, Mm(col_cant_x), Mm(y_pos), &font_bold);
         current_layer.use_text("Precio Unit.", 9.0, Mm(col_precio_x), Mm(y_pos), &font_bold);
         current_layer.use_text("Subtotal", 9.0, Mm(col_subtotal_x), Mm(y_pos), &font_bold);
         
         // Línea debajo del encabezado
+        y_pos -= row_height;
         let header_line = Line {
             points: vec![
-                (Point::new(Mm(col_desc_x), Mm(y_pos - 2.0)), false),
-                (Point::new(Mm(col_desc_x + table_width), Mm(y_pos - 2.0)), false)
+                (Point::new(Mm(col_desc_x), Mm(y_pos + 1.0)), false),
+                (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 1.0)), false)
             ],
             is_closed: false
         };
@@ -167,10 +180,10 @@ impl CotizacionPdfGenerator {
         current_layer.set_outline_color(black_color.clone());
         current_layer.add_line(header_line);
         
-        y_pos -= row_height;
+        y_pos -= 3.0; // Espacio adicional después de la línea del encabezado
         
         // Línea vertical izquierda (se extenderá después)
-        let header_top_y = table_start_y + 2.0;
+        let header_top_y = table_top_y;
         
         // Agregar filas de datos
         current_layer.set_fill_color(black_color.clone());
@@ -183,15 +196,16 @@ impl CotizacionPdfGenerator {
             current_layer.use_text(&format!("${}", revision), 9.0, Mm(col_subtotal_x), Mm(y_pos), &font_regular);
             y_pos -= row_height;
             
-            // Línea horizontal entre filas
+            // Línea horizontal entre filas (con espacio adecuado)
             let h_line = Line {
                 points: vec![
-                    (Point::new(Mm(col_desc_x), Mm(y_pos + 2.0)), false),
-                    (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 2.0)), false)
+                    (Point::new(Mm(col_desc_x), Mm(y_pos + 1.0)), false),
+                    (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 1.0)), false)
                 ],
                 is_closed: false
             };
             current_layer.add_line(h_line);
+            y_pos -= 3.0; // Espacio adicional después de la línea
         }
         
         // Fila de costo de reparación
@@ -202,15 +216,16 @@ impl CotizacionPdfGenerator {
             current_layer.use_text(&format!("${}", reparacion), 9.0, Mm(col_subtotal_x), Mm(y_pos), &font_regular);
             y_pos -= row_height;
             
-            // Línea horizontal entre filas
+            // Línea horizontal entre filas (con espacio adecuado)
             let h_line = Line {
                 points: vec![
-                    (Point::new(Mm(col_desc_x), Mm(y_pos + 2.0)), false),
-                    (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 2.0)), false)
+                    (Point::new(Mm(col_desc_x), Mm(y_pos + 1.0)), false),
+                    (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 1.0)), false)
                 ],
                 is_closed: false
             };
             current_layer.add_line(h_line);
+            y_pos -= 3.0; // Espacio adicional después de la línea
         }
         
         // Filas de piezas
@@ -234,39 +249,45 @@ impl CotizacionPdfGenerator {
             current_layer.use_text(&format!("${}", pieza.subtotal), 9.0, Mm(col_subtotal_x), Mm(y_pos), &font_regular);
             y_pos -= row_height;
             
-            // Línea horizontal entre filas
+            // Línea horizontal entre filas (con espacio adecuado)
             let h_line = Line {
                 points: vec![
-                    (Point::new(Mm(col_desc_x), Mm(y_pos + 2.0)), false),
-                    (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 2.0)), false)
+                    (Point::new(Mm(col_desc_x), Mm(y_pos + 1.0)), false),
+                    (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 1.0)), false)
                 ],
                 is_closed: false
             };
             current_layer.add_line(h_line);
+            y_pos -= 3.0; // Espacio adicional después de la línea
         }
         
         // Fila de total (con línea más gruesa arriba, solo en las columnas de precio y subtotal)
-        let total_line = Line {
-            points: vec![
-                (Point::new(Mm(col_precio_x - 2.0), Mm(y_pos + 2.0)), false),
-                (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 2.0)), false)
-            ],
-            is_closed: false
-        };
+        // Primero dibujar la línea más arriba para dar espacio adecuado
+        y_pos -= 0.0; // Espacio adicional antes de la línea del TOTAL
+        //let total_line = Line {
+         //   points: vec![
+        //        (Point::new(Mm(col_precio_x - 2.0), Mm(y_pos + 2.0)), false),
+        //        (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 2.0)), false)
+        //    ],
+        //    is_closed: false
+        //};
         current_layer.set_outline_thickness(1.0);
-        current_layer.add_line(total_line);
+        //current_layer.add_line(total_line);
         current_layer.set_outline_thickness(0.5);
         
+        // Ahora escribir el texto del TOTAL más abajo con espacio adecuado
+        y_pos -= 0.0; // Espacio entre la línea y el texto del TOTAL
         current_layer.set_fill_color(black_color.clone());
         current_layer.use_text("TOTAL", 10.0, Mm(col_desc_x + 2.0), Mm(y_pos), &font_bold);
         // Las columnas Cant. y Precio Unit. quedan vacías en la fila de TOTAL
         current_layer.use_text(&format!("${}", data.costo_total), 10.0, Mm(col_subtotal_x), Mm(y_pos), &font_bold);
         
         // Línea inferior de la tabla
+        y_pos -= row_height;
         let bottom_line = Line {
             points: vec![
-                (Point::new(Mm(col_desc_x), Mm(y_pos - 2.0)), false),
-                (Point::new(Mm(col_desc_x + table_width), Mm(y_pos - 2.0)), false)
+                (Point::new(Mm(col_desc_x), Mm(y_pos + 1.0)), false),
+                (Point::new(Mm(col_desc_x + table_width), Mm(y_pos + 1.0)), false)
             ],
             is_closed: false
         };
@@ -274,7 +295,7 @@ impl CotizacionPdfGenerator {
         current_layer.add_line(bottom_line);
         
         // Dibujar líneas verticales de la tabla (después de conocer la altura final)
-        let table_bottom_y = y_pos - 2.0;
+        let table_bottom_y = y_pos + 1.0;
         
         // Línea vertical izquierda
         let v_line_left = Line {
@@ -329,68 +350,57 @@ impl CotizacionPdfGenerator {
         y_pos -= 5.0;
 
         // === NOTAS Y TÉRMINOS Y CONDICIONES ===
-        let mut y_terminos = y_pos - 20.0;
-        println!("DEBUG: Renderizando {} términos en cotización PDF", data.terminos_condiciones.len());
+        let mut y_terminos = y_pos - 8.0;
         
         current_layer.set_fill_color(black_color.clone());
-        current_layer.use_text("Notas", 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
+        current_layer.use_text("Términos y Condiciones", 11.0, Mm(20.0), Mm(y_terminos), &font_bold);
         
-        // Compilar TODOS los términos en un solo texto
-        let texto_terminos = compile_terminos_text(&data.terminos_condiciones);
-        
-        // Renderizar el texto completo con wrapping y soporte para múltiples páginas
-        y_terminos -= 10.0;
-        let terminos_lines = wrap_text(&texto_terminos, 85);
+        // Renderizar cada término y condición en su propia línea
+        y_terminos -= 8.0;
         
         // Variables para el manejo de páginas
         let mut current_page_id = page1;
         let mut current_layer_id = layer1;
         let mut current_y = y_terminos;
         
-        for (i, line) in terminos_lines.iter().enumerate() {
+        for (i, termino) in data.terminos_condiciones.iter().enumerate() {
             let page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
             
-            if current_y > 50.0 {
-                page_layer.set_fill_color(black_color.clone());
-                page_layer.use_text(line, 8.5, Mm(25.0), Mm(current_y), &font_regular);
-                current_y -= 5.0;
+            // Construir el texto del término completo
+            let termino_texto = if !termino.descripcion.is_empty() {
+                format!("{}. {} - {}", i + 1, termino.nombre, termino.descripcion)
             } else {
-                // Crear nueva página para continuar con los términos
-                println!("DEBUG: Creando nueva página para términos restantes (línea {})", i + 1);
-                
-                let (new_page, new_layer) = doc.add_page(Mm(210.0), Mm(297.0), "Notas - Página 2");
-                current_page_id = new_page;
-                current_layer_id = new_layer;
-                current_y = 280.0; // Empezar desde arriba de la nueva página
-                
-                let new_page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
-                
-                // Header en la nueva página
-                new_page_layer.set_fill_color(black_color.clone());
-                new_page_layer.use_text("TOSCANINI - Cotización (Continuación)", 11.0, Mm(20.0), Mm(current_y), &font_bold);
-                current_y -= 20.0;
-                
-                // Continuar renderizando
-                new_page_layer.set_fill_color(black_color.clone());
-                new_page_layer.use_text(line, 8.5, Mm(25.0), Mm(current_y), &font_regular);
-                current_y -= 5.0;
+                format!("{}. {}", i + 1, termino.nombre)
+            };
+            
+            // Si el término es muy largo, dividirlo en múltiples líneas pero manteniendo el término completo
+            let termino_lines = wrap_text(&termino_texto, 120);
+            
+            for line in termino_lines.iter() {
+                if current_y > 50.0 {
+                    page_layer.set_fill_color(black_color.clone());
+                    page_layer.use_text(line, 8.5, Mm(25.0), Mm(current_y), &font_regular);
+                    current_y -= 4.5;
+                } else {
+                    // Crear nueva página para continuar con los términos
+                    let (new_page, new_layer) = doc.add_page(Mm(210.0), Mm(297.0), "Términos - Página 2");
+                    current_page_id = new_page;
+                    current_layer_id = new_layer;
+                    current_y = 280.0; // Empezar desde arriba de la nueva página
+                    
+                    let new_page_layer = doc.get_page(current_page_id).get_layer(current_layer_id);
+                    
+                    // Header en la nueva página
+                    new_page_layer.set_fill_color(black_color.clone());
+                    new_page_layer.use_text("TOSCANINI - Cotización", 11.0, Mm(20.0), Mm(current_y), &font_bold);
+                    current_y -= 20.0;
+                    
+                    // Continuar renderizando
+                    new_page_layer.set_fill_color(black_color.clone());
+                    new_page_layer.use_text(line, 8.5, Mm(25.0), Mm(current_y), &font_regular);
+                }
             }
         }
-
-        // === FOOTER PROFESIONAL ===
-        // Usar la primera página para el footer
-        let footer_layer = doc.get_page(page1).get_layer(layer1);
-        footer_layer.set_fill_color(gray_color.clone());
-        
-        // Información de contacto en el footer
-        footer_layer.use_text("Consultas al Teléfono 2336 11 00, mail servicio@toscanini.cl o por Internet en www.toscanini.cl", 8.0, Mm(20.0), Mm(40.0), &font_regular);
-        footer_layer.use_text("Regístrese en www.toscanini.cl y conozca el estado de sus equipos en reparación, ofertas y otras características solo disponibles para los usuarios registrados.", 8.0, Mm(20.0), Mm(33.0), &font_regular);
-        
-        if let Some(direccion_empresa) = &data.empresa.direccion {
-            footer_layer.use_text(&format!("Oficina Central en {}", direccion_empresa), 8.0, Mm(20.0), Mm(26.0), &font_regular);
-        }
-        
-        footer_layer.use_text("Esta cotización tiene validez por 30 días a partir de la fecha de emisión.", 8.0, Mm(20.0), Mm(19.0), &font_regular);
 
         // Generar PDF
         doc.save_to_bytes()
