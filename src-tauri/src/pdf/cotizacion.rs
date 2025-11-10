@@ -398,6 +398,7 @@ impl CotizacionPdfGenerator {
                     // Continuar renderizando
                     new_page_layer.set_fill_color(black_color.clone());
                     new_page_layer.use_text(line, 8.5, Mm(25.0), Mm(current_y), &font_regular);
+                    current_y -= 4.5;
                 }
             }
         }
