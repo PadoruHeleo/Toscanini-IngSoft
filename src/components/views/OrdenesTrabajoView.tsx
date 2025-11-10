@@ -436,7 +436,9 @@ export function OrdenesTrabajoView() {
     if (orden.estado !== "en_reparacion") {
       showError(
         "Estado inválido",
-        `No se puede crear un informe para una orden en estado "${formatEstadoText(orden.estado)}". Solo se pueden crear informes cuando la orden está en estado "En Reparación".`
+        `No se puede crear un informe para una orden en estado "${formatEstadoText(
+          orden.estado
+        )}". Solo se pueden crear informes cuando la orden está en estado "En Reparación".`
       );
       return;
     }
