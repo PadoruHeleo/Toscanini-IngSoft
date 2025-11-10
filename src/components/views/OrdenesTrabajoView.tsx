@@ -114,7 +114,6 @@ const getCotizacionButtonInfo = (orden: OrdenTrabajo) => {
     return {
       hasQuote: false,
       text: "Crear Cotización",
-      icon: "plus",
       className: "text-green-600 hover:text-green-700",
       title: "Crear nueva cotización para esta orden",
     };
@@ -615,140 +614,153 @@ export function OrdenesTrabajoView() {
                   </TableCell>
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex gap-1 justify-end flex-wrap">
+                    <div className="flex gap-1 justify-between items-center flex-wrap w-full">
                       {(() => {
                         const actions = getVisibleActions(orden);
 
                         return (
                           <>
-                            {/* Botones de cotización */}
-                            {actions.showCreateCotizacion &&
-                              (() => {
-                                const buttonInfo =
-                                  getCotizacionButtonInfo(orden);
-                                return (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleCrearCotizacion(orden)}
-                                    disabled={
-                                      loadingCotizacion === orden.orden_id
-                                    }
-                                    className={`${buttonInfo.className} disabled:opacity-50`}
-                                    title={buttonInfo.title}
-                                  >
-                                    {loadingCotizacion === orden.orden_id ? (
-                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                    ) : (
-                                      <Plus className="h-3 w-3" />
-                                    )}
-                                    {buttonInfo.text}
-                                  </Button>
-                                );
-                              })()}
+                            {/* Grupo de botones principales (izquierda) */}
+                            <div className="flex gap-1 flex-wrap">
+                              {/* Botones de cotización */}
+                              {actions.showCreateCotizacion &&
+                                (() => {
+                                  const buttonInfo =
+                                    getCotizacionButtonInfo(orden);
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleCrearCotizacion(orden)
+                                      }
+                                      disabled={
+                                        loadingCotizacion === orden.orden_id
+                                      }
+                                      className={`${buttonInfo.className} disabled:opacity-50`}
+                                      title={buttonInfo.title}
+                                    >
+                                      {loadingCotizacion === orden.orden_id ? (
+                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Plus className="h-3 w-3" />
+                                      )}
+                                      {buttonInfo.text}
+                                    </Button>
+                                  );
+                                })()}
 
-                            {actions.showViewCotizacion &&
-                              (() => {
-                                const buttonInfo =
-                                  getCotizacionButtonInfo(orden);
-                                return (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleVerCotizacion(orden)}
-                                    disabled={
-                                      loadingCotizacion === orden.orden_id
-                                    }
-                                    className={`${buttonInfo.className} disabled:opacity-50`}
-                                    title={buttonInfo.title}
-                                  >
-                                    {loadingCotizacion === orden.orden_id ? (
-                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                    ) : (
-                                      <Eye className="h-3 w-3" />
-                                    )}
-                                    {buttonInfo.text}
-                                  </Button>
-                                );
-                              })()}
+                              {actions.showViewCotizacion &&
+                                (() => {
+                                  const buttonInfo =
+                                    getCotizacionButtonInfo(orden);
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleVerCotizacion(orden)}
+                                      disabled={
+                                        loadingCotizacion === orden.orden_id
+                                      }
+                                      className={`${buttonInfo.className} disabled:opacity-50`}
+                                      title={buttonInfo.title}
+                                    >
+                                      {loadingCotizacion === orden.orden_id ? (
+                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Eye className="h-3 w-3" />
+                                      )}
+                                      {buttonInfo.text}
+                                    </Button>
+                                  );
+                                })()}
 
-                            {/* Botones de informe */}
-                            {actions.showCreateInforme && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCrearInforme(orden)}
-                                className="text-green-600 hover:text-green-700"
-                                title="Crear nuevo informe"
-                              >
-                                <Plus className="h-3 w-3" />
-                                Crear Informe
-                              </Button>
-                            )}
+                              {/* Botones de informe */}
+                              {actions.showCreateInforme && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCrearInforme(orden)}
+                                  className="text-green-600 hover:text-green-700"
+                                  title="Crear nuevo informe"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Crear Informe
+                                </Button>
+                              )}
 
-                            {actions.showViewInforme && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleVerInforme(orden)}
-                                className="text-blue-600 hover:text-blue-700"
-                                title="Ver informe existente"
-                              >
-                                <Eye className="h-3 w-3" />
-                                Ver Informe
-                              </Button>
-                            )}
+                              {actions.showViewInforme && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleVerInforme(orden)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                  title="Ver informe existente"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  Ver Informe
+                                </Button>
+                              )}
 
-                            {/* Botón PDF - visible si hay cotización O informe */}
-                            {(orden.cotizacion_id || orden.informe_id) && (
+                              {/* Botón registrar salida - visible en estados compatibles */}
+                              {actions.showRegistrarSalida && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRegistrarSalida(orden)}
+                                  className="text-orange-600 hover:text-orange-700"
+                                  title="Registrar salida del equipo"
+                                >
+                                  <LogOut className="h-3 w-3" />
+                                  Registrar Salida
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Grupo de botones de acción (derecha) - Editar, Ver PDF, Borrar */}
+                            <div className="flex gap-1 flex-wrap">
+                              {/* Botón PDF - siempre visible, deshabilitado si no hay cotización ni informe */}
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleVerInformePdf(orden)}
-                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                title="Ver PDF (Cotización e Informe)"
+                                disabled={
+                                  !orden.cotizacion_id && !orden.informe_id
+                                }
+                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={
+                                  orden.cotizacion_id || orden.informe_id
+                                    ? "Ver PDF (Cotización e Informe)"
+                                    : "No hay documentos disponibles"
+                                }
                               >
                                 <FileText className="h-3 w-3" />
                               </Button>
-                            )}
 
-                            {/* Botón editar - siempre visible */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditOrden(orden)}
-                              className="text-gray-600 hover:text-gray-700"
-                              title="Editar orden"
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-
-                            {/* Botón registrar salida - visible en estados compatibles */}
-                            {actions.showRegistrarSalida && (
+                              {/* Botón editar - siempre visible */}
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleRegistrarSalida(orden)}
-                                className="text-orange-600 hover:text-orange-700"
-                                title="Registrar salida del equipo"
+                                onClick={() => handleEditOrden(orden)}
+                                className="text-gray-600 hover:text-gray-700"
+                                title="Editar orden"
                               >
-                                <LogOut className="h-3 w-3" />
-                                Registrar Salida
+                                <Edit className="h-3 w-3" />
                               </Button>
-                            )}
 
-                            {/* Botón eliminar - solo para admin y técnico */}
-                            {actions.showDeleteOrden && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteOrden(orden)}
-                                className="text-red-600 hover:text-red-700"
-                                title="Eliminar orden"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            )}
+                              {/* Botón eliminar - solo para admin y técnico */}
+                              {actions.showDeleteOrden && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDeleteOrden(orden)}
+                                  className="text-red-600 hover:text-red-700"
+                                  title="Eliminar orden"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </>
                         );
                       })()}
