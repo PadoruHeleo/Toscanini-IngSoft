@@ -567,20 +567,31 @@ export function OrdenesTrabajoView() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    {getTiempoEnEstado(
-                      orden.estado_updated_at || orden.created_at
-                    )}
-                    {isTiempoEnEstadoCritico(orden) && (
-                      <span
-                        style={{
-                          color: "#dc2626",
-                          fontWeight: "bold",
-                          marginLeft: 8,
-                        }}
-                      >
-                        Atrasado
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 w-[5.5rem] inline-block text-right">
+                        {getTiempoEnEstado(
+                          orden.estado_updated_at || orden.created_at
+                        )}
                       </span>
-                    )}
+                      {isTiempoEnEstadoCritico(orden) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-300 animate-pulse">
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          Atrasado
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span
