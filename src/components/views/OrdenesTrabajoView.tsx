@@ -102,9 +102,9 @@ const formatEstadoText = (estado?: string) => {
 
 const formatPrioridadText = (prioridad?: string) => {
   const prioridadMap: { [key: string]: string } = {
-    alta: "🔴 Alta",
-    media: "🟡 Media",
-    baja: "🟢 Baja",
+    alta: "Alta",
+    media: "Media",
+    baja: "Baja",
   };
   return prioridadMap[prioridad || ""] || "N/A";
 };
@@ -584,7 +584,7 @@ export function OrdenesTrabajoView() {
                   </TableCell>
                   <TableCell>
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs transition-colors ${getPrioridadStyles(
+                      className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs transition-colors min-w-[4.5rem] ${getPrioridadStyles(
                         orden.prioridad
                       )}`}
                     >
@@ -593,13 +593,13 @@ export function OrdenesTrabajoView() {
                   </TableCell>{" "}
                   <TableCell>
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                      className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors min-w-[3rem] ${
                         orden.has_garantia
                           ? "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200"
                           : "bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200"
                       }`}
                     >
-                      {orden.has_garantia ? "✅ Sí" : "❌ No"}
+                      {orden.has_garantia ? "Sí" : "No"}
                     </span>
                   </TableCell>
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
