@@ -12,3 +12,4 @@ CREATE TABLE IF NOT EXISTS TERMINOS_CONDICIONES (
     INDEX idx_is_active (is_active),
     INDEX idx_is_default (is_default)
 );
+

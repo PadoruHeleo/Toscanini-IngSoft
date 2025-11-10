@@ -1,0 +1,2 @@
+-- No hay datos de salidas de equipos en la base de datos real
+-- Esta migración queda vacía pero se mantiene para mantener la estructura
