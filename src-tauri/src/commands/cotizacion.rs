@@ -5,6 +5,7 @@ use crate::commands::logs::log_action;
 use crate::commands::terminos_condiciones::apply_default_terminos_to_cotizacion;
 use chrono::{DateTime, Utc};
 use chrono::Datelike;
+use sqlx::Row;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Cotizacion {
@@ -96,6 +97,15 @@ pub struct PiezaCotizacionRequest {
     pub cantidad: i32,
 }
 
+#[derive(Debug)]
+struct OrdenInfoRow {
+    // orden_id: i32,  // Campo no utilizado
+    orden_codigo: Option<String>,
+    estado: String,
+    // equipo_nombre: Option<String>,  // Campo no utilizado
+    // cliente_nombre: Option<String>,  // Campo no utilizado
+}
+
 /// Obtener todas las cotizaciones
 #[tauri::command]
 pub async fn get_cotizaciones() -> Result<Vec<Cotizacion>, String> {
@@ -107,7 +117,7 @@ pub async fn get_cotizaciones() -> Result<Vec<Cotizacion>, String> {
          FROM COTIZACION \
          ORDER BY created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -127,7 +137,7 @@ pub async fn get_cotizaciones_detalladas() -> Result<Vec<CotizacionDetallada>, S
          LEFT JOIN USUARIO u ON c.created_by = u.usuario_id
          ORDER BY c.created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -146,7 +156,7 @@ pub async fn get_cotizacion_by_id(cotizacion_id: i32) -> Result<Option<Cotizacio
          WHERE cotizacion_id = ?"
     )
     .bind(cotizacion_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -165,7 +175,7 @@ pub async fn get_cotizacion_by_codigo(cotizacion_codigo: String) -> Result<Optio
          WHERE cotizacion_codigo = ?"
     )
     .bind(&cotizacion_codigo)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -183,7 +193,7 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
         "SELECT cotizacion_codigo FROM COTIZACION WHERE cotizacion_codigo LIKE ? ORDER BY cotizacion_id DESC LIMIT 1"
     )
     .bind(format!("COT-{}-%", year))
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .ok();
     let next_number = if let Some(codigo) = last_codigo {
@@ -266,7 +276,7 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
             // Desvincular la cotización de la orden de trabajo
             sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
                 .bind(cotizacion_id)
-                .execute(pool)
+                .execute(&*pool)
                 .await
                 .map_err(|e| format!("Database error al desvincular cotización: {}", e))?;
 
@@ -314,7 +324,7 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
     .bind(request.is_borrador)
     .bind(&request.informe)
     .bind(cotizacion_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -377,7 +387,7 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
         "SELECT COUNT(*) FROM ORDEN_TRABAJO WHERE cotizacion_id = ?"
     )
     .bind(cotizacion_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
     
@@ -433,7 +443,7 @@ pub async fn get_piezas() -> Result<Vec<Pieza>, String> {
     let piezas = sqlx::query_as::<_, Pieza>(
         "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA ORDER BY pieza_nombre ASC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(piezas)
@@ -447,7 +457,7 @@ pub async fn get_pieza_by_id(pieza_id: i32) -> Result<Option<Pieza>, String> {
         "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(pieza)
@@ -464,7 +474,7 @@ pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> 
     .bind(&request.pieza_marca)
     .bind(&request.pieza_desc)
     .bind(request.pieza_precio)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     let pieza_id = result.last_insert_id() as i32;
@@ -472,7 +482,7 @@ pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> 
         "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     // Log de creación de pieza
@@ -504,7 +514,7 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
         "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     let result = sqlx::query(
@@ -520,7 +530,7 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
     .bind(&request.pieza_desc)
     .bind(request.pieza_precio)
     .bind(pieza_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     if result.rows_affected() == 0 {
@@ -530,7 +540,7 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
         "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     // Log de actualización de pieza
@@ -556,12 +566,12 @@ pub async fn delete_pieza(pieza_id: i32) -> Result<bool, String> {
         "SELECT pieza_id, pieza_nombre, pieza_marca, pieza_desc, pieza_precio, pieza_stock, created_at FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     let result = sqlx::query("DELETE FROM PIEZA WHERE pieza_id = ?")
         .bind(pieza_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     let deleted = result.rows_affected() > 0;
@@ -598,7 +608,7 @@ pub async fn search_cotizaciones(search_term: String) -> Result<Vec<CotizacionDe
          WHERE c.cotizacion_codigo LIKE ? \n         ORDER BY c.created_at DESC"
     )
     .bind(&search_pattern)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -611,7 +621,7 @@ pub async fn count_cotizaciones() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM COTIZACION")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -633,7 +643,7 @@ pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result
     )
     .bind(limit)
     .bind(offset)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -652,7 +662,7 @@ pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotiza
          WHERE pc.cotizacion_id = ?"
     )
     .bind(cotizacion_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(piezas)
@@ -672,7 +682,7 @@ pub async fn get_cotizaciones_by_cliente(cliente_id: i32) -> Result<Vec<Cotizaci
          ORDER BY c.created_at DESC"
     )
     .bind(cliente_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error al obtener cotizaciones del cliente: {}", e))?;
     Ok(cotizaciones)
@@ -687,7 +697,7 @@ pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
          FROM PIEZA 
          ORDER BY pieza_nombre ASC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(piezas)
@@ -703,7 +713,7 @@ pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> R
         "SELECT pieza_stock FROM PIEZA WHERE pieza_id = ?"
     )
     .bind(pieza_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error getting current stock: {}", e))?
     .unwrap_or(0);
@@ -721,7 +731,7 @@ pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> R
     )
     .bind(new_stock)
     .bind(pieza_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error updating stock: {}", e))?;
     
@@ -789,7 +799,7 @@ pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
     let equipos = sqlx::query_as::<_, InventarioEquipo>(
         "SELECT * FROM INVENTARIO_EQUIPO ORDER BY equipo_nombre"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| {
         println!("Error en query INVENTARIO_EQUIPO: {}", e);
@@ -823,7 +833,7 @@ pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Resul
     .bind(&request.proveedor)
     .bind(&request.numero_serie)
     .bind(&request.observaciones)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -866,7 +876,7 @@ pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoR
     .bind(&request.numero_serie)
     .bind(&request.observaciones)
     .bind(equipo_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -894,7 +904,7 @@ pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
         "SELECT * FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?"
     )
     .bind(equipo_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -902,7 +912,7 @@ pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
         "DELETE FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?"
     )
     .bind(equipo_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -934,7 +944,7 @@ pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo:
         "SELECT equipo_stock FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?"
     )
     .bind(equipo_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?
     .unwrap_or(0);
@@ -950,7 +960,7 @@ pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo:
     )
     .bind(new_stock)
     .bind(equipo_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error updating stock: {}", e))?;
     
@@ -1004,21 +1014,39 @@ pub async fn registrar_salida_equipo_v2(request: RegistrarSalidaRequest) -> Resu
     let pool = get_db_pool_safe()?;
     
     // Verificar que la orden existe y está en estado válido
-    let orden_info = sqlx::query!(
+    let orden_info = sqlx::query(
         "SELECT ot.orden_id, ot.orden_codigo, ot.estado, 
                 CONCAT(e.equipo_marca, ' ', e.equipo_modelo) as equipo_nombre, 
                 c.cliente_nombre
          FROM ORDEN_TRABAJO ot
          JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
          JOIN CLIENTE c ON e.cliente_id = c.cliente_id
-         WHERE ot.orden_id = ?",
-        request.orden_trabajo_id
+         WHERE ot.orden_id = ?"
     )
-    .fetch_optional(pool)
+    .bind(request.orden_trabajo_id)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Error al verificar orden: {}", e))?;
     
-    let orden = orden_info.ok_or("Orden de trabajo no encontrada")?;
+    let orden_row = orden_info.ok_or("Orden de trabajo no encontrada")?;
+    
+    // Extraer los campos usando try_get
+    // let orden_id: i32 = orden_row.try_get("orden_id")  // Campo no utilizado
+    //     .map_err(|e| format!("Error obteniendo orden_id: {}", e))?;
+    let orden_codigo: Option<String> = orden_row.try_get("orden_codigo").ok().flatten();
+    let estado: String = orden_row.try_get("estado")
+        .map_err(|e| format!("Error obteniendo estado: {}", e))?;
+    // let equipo_nombre: Option<String> = orden_row.try_get("equipo_nombre").ok().flatten();  // Campo no utilizado
+    // let cliente_nombre: Option<String> = orden_row.try_get("cliente_nombre").ok().flatten();  // Campo no utilizado
+
+    // Crear una estructura para usar en el resto del código
+    let orden = OrdenInfoRow {
+        // orden_id,  // Campo no utilizado
+        orden_codigo,
+        estado,
+        // equipo_nombre,  // Campo no utilizado
+        // cliente_nombre,  // Campo no utilizado
+    };
     
     // Estados que permiten salida
     let estados_validos = vec![
@@ -1035,7 +1063,7 @@ pub async fn registrar_salida_equipo_v2(request: RegistrarSalidaRequest) -> Resu
         "SELECT COUNT(*) FROM SALIDA_EQUIPO WHERE orden_trabajo_id = ?"
     )
     .bind(request.orden_trabajo_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Error al verificar salida existente: {}", e))?;
     
@@ -1113,7 +1141,7 @@ pub async fn get_salidas_equipo() -> Result<Vec<SalidaEquipo>, String> {
          LEFT JOIN USUARIO u ON s.usuario_id = u.usuario_id
          ORDER BY s.fecha_salida DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo salidas: {}", e))?;
     
@@ -1130,7 +1158,7 @@ pub async fn puede_registrar_salida_v2(orden_trabajo_id: i32) -> Result<(bool, S
         "SELECT estado FROM ORDEN_TRABAJO WHERE orden_id = ?"
     )
     .bind(orden_trabajo_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Error verificando estado: {}", e))?
     .flatten();
@@ -1142,7 +1170,7 @@ pub async fn puede_registrar_salida_v2(orden_trabajo_id: i32) -> Result<(bool, S
         "SELECT COUNT(*) FROM SALIDA_EQUIPO WHERE orden_trabajo_id = ?"
     )
     .bind(orden_trabajo_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Error verificando salida: {}", e))?;
     
@@ -1183,7 +1211,7 @@ pub async fn get_salida_by_orden(orden_trabajo_id: i32) -> Result<Option<SalidaE
          WHERE s.orden_trabajo_id = ?"
     )
     .bind(orden_trabajo_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo salida: {}", e))?;
     

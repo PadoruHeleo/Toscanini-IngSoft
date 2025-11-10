@@ -102,7 +102,7 @@ pub async fn get_equipos() -> Result<Vec<Equipo>, String> {
          FROM EQUIPO 
          ORDER BY equipo_marca, equipo_modelo"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -119,7 +119,7 @@ pub async fn get_equipo_by_id(equipo_id: i32) -> Result<Option<Equipo>, String> 
          WHERE equipo_id = ?"
     )
     .bind(equipo_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -136,7 +136,7 @@ pub async fn get_equipo_by_numero_serie(numero_serie: String) -> Result<Option<E
          WHERE numero_serie = ?"
     )
     .bind(numero_serie)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -154,7 +154,7 @@ pub async fn get_equipos_by_cliente(cliente_id: i32) -> Result<Vec<Equipo>, Stri
          ORDER BY equipo_marca, equipo_modelo"
     )
     .bind(cliente_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -172,7 +172,7 @@ pub async fn get_equipos_by_tipo(equipo_tipo: String) -> Result<Vec<Equipo>, Str
          ORDER BY equipo_marca, equipo_modelo"
     )
     .bind(equipo_tipo)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -190,7 +190,7 @@ pub async fn get_equipos_by_created_by(created_by: i32) -> Result<Vec<Equipo>, S
          ORDER BY created_at DESC"
     )
     .bind(created_by)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -216,7 +216,7 @@ pub async fn search_equipos(search_term: String) -> Result<Vec<Equipo>, String> 
     .bind(&search_pattern)
     .bind(&search_pattern)
     .bind(&search_pattern)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -238,7 +238,7 @@ pub async fn create_equipo(request: CreateEquipoRequest) -> Result<Equipo, Strin
         "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ?"
     )
     .bind(request.cliente_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -258,7 +258,7 @@ pub async fn create_equipo(request: CreateEquipoRequest) -> Result<Equipo, Strin
     .bind(&request.equipo_ubicacion)
     .bind(&request.cliente_id)
     .bind(&request.created_by)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -307,7 +307,7 @@ pub async fn update_equipo(equipo_id: i32, request: UpdateEquipoRequest, updated
             "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ?"
         )
         .bind(cliente_id)
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
         
@@ -335,7 +335,7 @@ pub async fn update_equipo(equipo_id: i32, request: UpdateEquipoRequest, updated
     .bind(&request.equipo_ubicacion)
     .bind(&request.cliente_id)
     .bind(equipo_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -390,7 +390,7 @@ pub async fn delete_equipo(equipo_id: i32, deleted_by: i32) -> Result<bool, Stri
         "SELECT COUNT(*) FROM ORDEN_TRABAJO WHERE equipo_id = ?"
     )
     .bind(equipo_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
     
@@ -400,7 +400,7 @@ pub async fn delete_equipo(equipo_id: i32, deleted_by: i32) -> Result<bool, Stri
     
     let result = sqlx::query("DELETE FROM EQUIPO WHERE equipo_id = ?")
         .bind(equipo_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -432,7 +432,7 @@ pub async fn delete_equipo(equipo_id: i32, deleted_by: i32) -> Result<bool, Stri
 pub async fn count_equipos() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM EQUIPO")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -451,7 +451,7 @@ pub async fn get_equipos_with_pagination(offset: i64, limit: i64) -> Result<Vec<
     )
     .bind(limit)
     .bind(offset)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -468,7 +468,7 @@ pub async fn get_equipos_stats_by_tipo() -> Result<Vec<(String, i64)>, String> {
          GROUP BY equipo_tipo 
          ORDER BY count DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -502,7 +502,7 @@ pub async fn get_equipos_by_price_range(min_price: Option<i32>, max_price: Optio
     }
     
     let equipos = sql_query
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -538,7 +538,7 @@ pub async fn get_equipos_with_cliente() -> Result<Vec<EquipoWithCliente>, String
          LEFT JOIN CLIENTE c ON e.cliente_id = c.cliente_id
          ORDER BY e.equipo_marca, e.equipo_modelo"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -561,7 +561,7 @@ pub async fn transfer_equipo_to_cliente(equipo_id: i32, new_cliente_id: i32, upd
         "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ?"
     )
     .bind(new_cliente_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -574,7 +574,7 @@ pub async fn transfer_equipo_to_cliente(equipo_id: i32, new_cliente_id: i32, upd
     )
     .bind(new_cliente_id)
     .bind(equipo_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -606,7 +606,7 @@ pub async fn get_equipos_marcas() -> Result<Vec<String>, String> {
          WHERE equipo_marca IS NOT NULL AND equipo_marca != ''
          ORDER BY equipo_marca"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -624,7 +624,7 @@ pub async fn get_equipos_modelos_by_marca(marca: String) -> Result<Vec<String>, 
          ORDER BY equipo_modelo"
     )
     .bind(marca)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -641,7 +641,7 @@ pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
          WHERE equipo_ubicacion IS NOT NULL AND equipo_ubicacion != ''
          ORDER BY equipo_ubicacion"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -1127,7 +1127,7 @@ pub async fn get_equipos_filtrados(filtros: FiltrosEquipos) -> Result<Vec<Equipo
     }
     
     let equipos = query_builder
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Database error en get_equipos_filtrados: {}", e))?;
 
@@ -1167,7 +1167,7 @@ pub async fn get_clientes_con_equipos() -> Result<Vec<String>, String> {
          WHERE c.cliente_nombre IS NOT NULL 
          ORDER BY c.cliente_nombre"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -1185,7 +1185,7 @@ pub async fn get_tipos_equipos() -> Result<Vec<String>, String> {
          WHERE equipo_tipo IS NOT NULL 
          ORDER BY equipo_tipo"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -1203,7 +1203,7 @@ pub async fn get_estados_ordenes_trabajo() -> Result<Vec<String>, String> {
          WHERE estado IS NOT NULL 
          ORDER BY estado"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -1230,7 +1230,7 @@ pub async fn get_estadisticas_equipos_por_estado() -> Result<Vec<(String, i64)>,
         GROUP BY ot_ultima.estado
         ORDER BY cantidad DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 

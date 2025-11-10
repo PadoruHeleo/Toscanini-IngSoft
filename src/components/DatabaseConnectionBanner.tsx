@@ -30,7 +30,9 @@ export function DatabaseConnectionBanner() {
   const [showDetails, setShowDetails] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
 
-  const checkDatabaseStatus = async (showLoading = false) => {
+  const checkDatabaseStatus = async (
+    showLoading = false
+  ): Promise<DatabaseStatus | null> => {
     try {
       if (showLoading) setIsChecking(true);
       const result = await invoke<DatabaseStatus>("get_database_status");
@@ -41,12 +43,16 @@ export function DatabaseConnectionBanner() {
         setIsDismissed(false);
         setConnectionAttempts(0);
       }
+
+      return result;
     } catch (error) {
       console.error("Error checking database status:", error);
-      setStatus({
+      const errorStatus: DatabaseStatus = {
         is_connected: false,
         error_message: "Error al verificar el estado de la base de datos",
-      });
+      };
+      setStatus(errorStatus);
+      return errorStatus;
     } finally {
       if (showLoading) setIsChecking(false);
     }
@@ -122,10 +128,19 @@ export function DatabaseConnectionBanner() {
   };
   useEffect(() => {
     checkDatabaseStatus();
+
     // Verificar el estado cada 30 segundos
-    const interval = setInterval(() => checkDatabaseStatus(false), 30000);
+    const interval = setInterval(async () => {
+      const result = await checkDatabaseStatus(false);
+      // Si está desconectado, intentar reconectar automáticamente
+      if (result && !result.is_connected && !isRetrying) {
+        console.log("Auto-reconnect: Intentando reconectar automáticamente...");
+        retryConnection();
+      }
+    }, 30000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [isRetrying]);
 
   // No mostrar nada si está conectado, no hay estado, o fue descartado
   if (!status || status.is_connected || isDismissed) {
