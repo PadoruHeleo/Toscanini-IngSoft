@@ -321,11 +321,9 @@ pub fn start_periodic_connection_check(interval_seconds: u64) {
         loop {
             sleep(interval).await;
             
-            println!("Verificando conexión a la base de datos...");
             let is_connected = check_database_connection().await;
             
             if is_connected {
-                println!("✓ Conexión verificada exitosamente");
             } else {
                 println!("✗ Conexión fallida - intentando reconectar...");
                 // Intentar reconectar automáticamente
