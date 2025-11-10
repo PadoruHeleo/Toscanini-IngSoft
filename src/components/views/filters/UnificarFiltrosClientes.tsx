@@ -5,7 +5,7 @@ import { FiltrarOrdenesPorFechaClientes } from "./FiltrarOrdenesPorFechaClientes
 import { FiltrarClientesPorCorreo } from "./FiltrarClientesPorCorreo";
 import { FiltrarClientesPorRuts } from "./FiltrarClientesPorRuts";
 import { FiltrarClientesPorCiudad } from "./FiltrarClientesPorCiudad";
-import { FiltrarClienteActivoeInactivos } from "./FiltrarClientesActivoseInactivos.tsx";
+import { FiltrarClienteActivoeInactivos } from "./FiltrarClientesActivoseInactivos";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 interface Cliente {

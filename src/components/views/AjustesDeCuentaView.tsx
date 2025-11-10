@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuth } from "@/contexts/AuthContext";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

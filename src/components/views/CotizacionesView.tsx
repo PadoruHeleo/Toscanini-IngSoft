@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,8 +21,8 @@ import {
   XCircle,
   FileText,
 } from "lucide-react";
-import CotizacionFormDialog from "./CotizacionFormDialog";
-import { PdfViewer } from "@/components/PdfViewer";
+import CotizacionFormDialog from "./dialogs/CotizacionFormDialog";
+import { PdfViewer } from "@/components/features/documents/PdfViewer";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 

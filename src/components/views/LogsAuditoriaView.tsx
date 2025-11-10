@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Eye } from "lucide-react";
@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { UnificarFiltrosLogs } from "./UnificarFiltrosLogs";
+import { UnificarFiltrosLogs } from "./filters/UnificarFiltrosLogs";
 
 interface AuditLogWithUser {
   log_id: number;

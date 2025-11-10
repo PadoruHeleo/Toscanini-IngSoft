@@ -8,13 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Edit, History } from "lucide-react";
-import { EquipoFormDialog } from "@/components/views/EquipoFormDialog";
-import { EquipoHistorialDialog } from "@/components/views/EquipoHistorialDialog";
-import { UnificarFiltrosEquipos } from "@/components/views/UnificarFiltrosEquipos";
+import { EquipoFormDialog } from "./dialogs/EquipoFormDialog";
+import { EquipoHistorialDialog } from "./dialogs/EquipoHistorialDialog";
+import { UnificarFiltrosEquipos } from "./filters/UnificarFiltrosEquipos";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/use-permissions";
 

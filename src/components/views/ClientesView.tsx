@@ -8,15 +8,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Edit, Trash2, History } from "lucide-react";
-import { ClienteFormDialog } from "./ClienteFormDialog";
-import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
+import { ClienteFormDialog } from "./dialogs/ClienteFormDialog";
+import { ClienteHistorialDialog } from "./dialogs/ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
+import { UnificarFiltrosClientes } from "./filters/UnificarFiltrosClientes";
 import { useClientePermissions } from "@/hooks/use-permissions";
 import {
   Dialog,

@@ -1,6 +1,6 @@
 "use client";
 
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 
 export function HelpView() {
   return (
