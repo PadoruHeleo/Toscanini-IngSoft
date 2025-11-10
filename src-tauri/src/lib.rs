@@ -5,22 +5,37 @@ pub mod email;
 pub mod config;
 pub mod pdf_generator;
 
-use database::init_database;
+use database::{init_database, start_auto_reconnect_task};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Cargar variables de entorno desde .env
     dotenv::dotenv().ok();
     
-    // Inicializar runtime de Tokio para operaciones async
+    // Crear runtime de Tokio que se mantenga vivo
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-      // Inicializar la base de datos
+    
+    // Inicializar la base de datos
     rt.block_on(async {
         if let Err(e) = init_database().await {
             eprintln!("Warning: Failed to initialize database: {}", e);
-            // No terminar la aplicación, solo mostrar advertencia
         }
-    });tauri::Builder::default()
+        
+        // Iniciar la tarea de reconexión automática
+        start_auto_reconnect_task();
+    });
+    
+    // Mantener el runtime vivo usando spawn_blocking
+    std::thread::spawn(move || {
+        rt.block_on(async {
+            // Mantener el runtime corriendo indefinidamente
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            }
+        });
+    });
+    
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())        
         .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,

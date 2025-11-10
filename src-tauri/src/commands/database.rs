@@ -1,6 +1,9 @@
 use crate::database::{get_database_status as get_db_status, check_database_connection as check_db_connection};
 use serde::{Deserialize, Serialize};
 
+use std::time::Duration;
+use tokio::time::sleep;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DatabaseStatusResponse {
     pub is_connected: bool,
@@ -31,7 +34,8 @@ pub async fn check_database_connection() -> DatabaseStatusResponse {
 
 #[tauri::command]
 pub async fn retry_database_connection() -> DatabaseStatusResponse {
-    match crate::database::init_database().await {        Ok(_) => {
+    match crate::database::retry_database_connection().await {
+        Ok(_) => {
             let status = get_db_status();
             DatabaseStatusResponse {
                 is_connected: true,
@@ -103,4 +107,48 @@ pub async fn check_equipo_ids() -> Result<String, String> {
     }
     
     Ok(result)
+}
+
+// Nueva función para iniciar el sistema de reconexión automática
+pub fn start_auto_reconnect_task() {
+    tokio::spawn(async move {
+        let mut retry_interval = Duration::from_secs(30); // Intervalo inicial de 30 segundos
+        let max_interval = Duration::from_secs(300); // Máximo 5 minutos entre intentos
+        let mut consecutive_failures = 0u32;
+        
+        loop {
+            sleep(retry_interval).await;
+            
+            // Verificar el estado actual - usar get_db_status() que es síncrona
+            let status = get_db_status();
+            
+            // Solo intentar reconectar si no está conectado
+            if !status.is_connected {
+                println!("Auto-reconnect: Intentando reconectar a la base de datos...");
+                
+                match crate::database::retry_database_connection().await {
+                    Ok(_) => {
+                        println!("Auto-reconnect: Reconexión exitosa!");
+                        // Resetear el intervalo y contador de fallos
+                        retry_interval = Duration::from_secs(30);
+                        consecutive_failures = 0;
+                    }
+                    Err(e) => {
+                        consecutive_failures += 1;
+                        println!("Auto-reconnect: Fallo en el intento {}: {}", consecutive_failures, e);
+                        
+                        // Backoff exponencial: aumentar el intervalo con cada fallo
+                        // pero con un máximo
+                        retry_interval = Duration::from_secs(
+                            (30 * (1 << consecutive_failures.min(4))).min(300)
+                        );
+                    }
+                }
+            } else {
+                // Si está conectado, resetear el intervalo
+                retry_interval = Duration::from_secs(30);
+                consecutive_failures = 0;
+            }
+        }
+    });
 }

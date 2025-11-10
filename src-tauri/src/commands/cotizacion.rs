@@ -5,6 +5,7 @@ use crate::commands::logs::log_action;
 use crate::commands::terminos_condiciones::apply_default_terminos_to_cotizacion;
 use chrono::{DateTime, Utc};
 use chrono::Datelike;
+use sqlx::Row;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Cotizacion {
@@ -94,6 +95,15 @@ pub struct CreatePiezaRequest {
 pub struct PiezaCotizacionRequest {
     pub pieza_id: i32,
     pub cantidad: i32,
+}
+
+#[derive(Debug)]
+struct OrdenInfoRow {
+    orden_id: i32,
+    orden_codigo: Option<String>,
+    estado: String,
+    equipo_nombre: Option<String>,
+    cliente_nombre: Option<String>,
 }
 
 /// Obtener todas las cotizaciones
@@ -1004,21 +1014,39 @@ pub async fn registrar_salida_equipo_v2(request: RegistrarSalidaRequest) -> Resu
     let pool = get_db_pool_safe()?;
     
     // Verificar que la orden existe y está en estado válido
-    let orden_info = sqlx::query!(
+    let orden_info = sqlx::query(
         "SELECT ot.orden_id, ot.orden_codigo, ot.estado, 
                 CONCAT(e.equipo_marca, ' ', e.equipo_modelo) as equipo_nombre, 
                 c.cliente_nombre
          FROM ORDEN_TRABAJO ot
          JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
          JOIN CLIENTE c ON e.cliente_id = c.cliente_id
-         WHERE ot.orden_id = ?",
-        request.orden_trabajo_id
+         WHERE ot.orden_id = ?"
     )
+    .bind(request.orden_trabajo_id)
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Error al verificar orden: {}", e))?;
     
-    let orden = orden_info.ok_or("Orden de trabajo no encontrada")?;
+    let orden_row = orden_info.ok_or("Orden de trabajo no encontrada")?;
+    
+    // Extraer los campos usando try_get
+    let orden_id: i32 = orden_row.try_get("orden_id")
+        .map_err(|e| format!("Error obteniendo orden_id: {}", e))?;
+    let orden_codigo: Option<String> = orden_row.try_get("orden_codigo").ok().flatten();
+    let estado: String = orden_row.try_get("estado")
+        .map_err(|e| format!("Error obteniendo estado: {}", e))?;
+    let equipo_nombre: Option<String> = orden_row.try_get("equipo_nombre").ok().flatten();
+    let cliente_nombre: Option<String> = orden_row.try_get("cliente_nombre").ok().flatten();
+
+    // Crear una estructura para usar en el resto del código
+    let orden = OrdenInfoRow {
+        orden_id,
+        orden_codigo,
+        estado,
+        equipo_nombre,
+        cliente_nombre,
+    };
     
     // Estados que permiten salida
     let estados_validos = vec![

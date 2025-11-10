@@ -2,10 +2,13 @@ use sqlx::{MySql, Pool};
 use std::sync::{OnceLock, Arc, Mutex};
 use std::path::Path;
 use crate::config::load_database_config;
+use std::time::Duration;
+use tokio::time::sleep;
 
 pub type DbPool = Pool<MySql>;
 
-static DB_POOL: OnceLock<DbPool> = OnceLock::new();
+// Cambiar de OnceLock a Arc<Mutex<Option>> para permitir reemplazar el pool
+static DB_POOL: OnceLock<Arc<Mutex<Option<DbPool>>>> = OnceLock::new();
 static DB_CONNECTION_STATUS: OnceLock<Arc<Mutex<DatabaseStatus>>> = OnceLock::new();
 
 // Macro para funciones que requieren base de datos
@@ -59,6 +62,11 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
     println!("Attempting to connect to database with URL: {}", 
         database_url.split('@').next().unwrap_or("***").to_string() + "@***");
     
+    // Inicializar DB_POOL si no existe
+    if DB_POOL.get().is_none() {
+        let _ = DB_POOL.set(Arc::new(Mutex::new(None)));
+    }
+    
     // Inicializar el estado de conexión si no existe
     if DB_CONNECTION_STATUS.get().is_none() {
         let _ = DB_CONNECTION_STATUS.set(Arc::new(Mutex::new(DatabaseStatus::default())));
@@ -72,9 +80,11 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
                 return Err(sqlx::Error::Configuration(error_msg.into()));
             }
             
-            if let Err(_) = DB_POOL.set(pool) {
-                update_database_status(false, Some("Failed to set database pool".to_string()));
-                return Err(sqlx::Error::Configuration("Failed to set database pool".into()));
+            // Guardar el pool en el Mutex
+            if let Some(pool_arc) = DB_POOL.get() {
+                if let Ok(mut pool_guard) = pool_arc.lock() {
+                    *pool_guard = Some(pool);
+                }
             }
             
             update_database_status(true, None);
@@ -88,16 +98,21 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
 }
 
 pub fn get_db_pool() -> Option<&'static DbPool> {
-    DB_POOL.get()
+    if let Some(pool_arc) = DB_POOL.get() {
+        if let Ok(pool_guard) = pool_arc.lock() {
+            return pool_guard.as_ref();
+        }
+    }
+    None
 }
 
 pub fn get_db_pool_unchecked() -> &'static DbPool {
-    DB_POOL.get().expect("Database pool not initialized")
+    get_db_pool().expect("Database pool not initialized")
 }
 
 // Nueva función segura que no hace panic
 pub fn get_db_pool_safe() -> Result<&'static DbPool, String> {
-    DB_POOL.get().ok_or_else(|| "Database not connected".to_string())
+    get_db_pool().ok_or_else(|| "Database not connected".to_string())
 }
 
 pub fn update_database_status(is_connected: bool, error_message: Option<String>) {
@@ -151,7 +166,6 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
         }
         Err(e) => {
             println!("Warning: Could not load secure config for retry ({}), trying .env fallback", e);
-            // Fallback a la recarga de variables de entorno
             load_env_file();
             
             std::env::var("DATABASE_URL")
@@ -171,21 +185,28 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
             if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
                 let error_msg = format!("Migration failed during retry: {}", e);
                 println!("Warning: {}", error_msg);
-                update_database_status(false, Some(error_msg.clone()));
                 // No fallar por migraciones en retry, puede que ya estén aplicadas
             }
             
-            // Como OnceLock no permite reemplazar valores, vamos a usar un enfoque diferente
-            // Simplemente verificamos que la conexión funciona y actualizamos el estado
+            // Verificar que la conexión funciona
             match sqlx::query("SELECT 1").execute(&pool).await {
                 Ok(_) => {
+                    // IMPORTANTE: Reemplazar el pool en DB_POOL
+                    if let Some(pool_arc) = DB_POOL.get() {
+                        if let Ok(mut pool_guard) = pool_arc.lock() {
+                            *pool_guard = Some(pool);
+                            update_database_status(true, None);
+                            println!("Database connection retry successful! Pool replaced.");
+                            return Ok(());
+                        }
+                    }
+                    // Si no se pudo guardar, aún así actualizar el estado
                     update_database_status(true, None);
-                    println!("Database connection retry successful!");
-                    Ok(())
+                    Err(sqlx::Error::Configuration("Failed to store database pool".into()))
                 }
                 Err(e) => {
                     let error_msg = format!("Connection test failed: {}", e);
-                    update_database_status(false, Some(error_msg));
+                    update_database_status(false, Some(error_msg.clone()));
                     Err(e)
                 }
             }
@@ -237,4 +258,48 @@ fn load_env_file() {
         Ok(_) => println!("Loaded .env from default location"),
         Err(_) => println!("Warning: No .env file found. Using environment variables or defaults."),
     }
+}
+
+// Nueva función para iniciar el sistema de reconexión automática
+pub fn start_auto_reconnect_task() {
+    tokio::spawn(async move {
+        let mut retry_interval = Duration::from_secs(30); // Intervalo inicial de 30 segundos
+        let max_interval = Duration::from_secs(300); // Máximo 5 minutos entre intentos
+        let mut consecutive_failures = 0u32;
+        
+        loop {
+            sleep(retry_interval).await;
+            
+            // Verificar el estado actual
+            let status = get_database_status();
+            
+            // Solo intentar reconectar si no está conectado
+            if !status.is_connected {
+                println!("Auto-reconnect: Intentando reconectar a la base de datos...");
+                
+                match retry_database_connection().await {
+                    Ok(_) => {
+                        println!("Auto-reconnect: Reconexión exitosa!");
+                        // Resetear el intervalo y contador de fallos
+                        retry_interval = Duration::from_secs(30);
+                        consecutive_failures = 0;
+                    }
+                    Err(e) => {
+                        consecutive_failures += 1;
+                        println!("Auto-reconnect: Fallo en el intento {}: {}", consecutive_failures, e);
+                        
+                        // Backoff exponencial: aumentar el intervalo con cada fallo
+                        // pero con un máximo
+                        retry_interval = Duration::from_secs(
+                            (30 * (1 << consecutive_failures.min(4))).min(300)
+                        );
+                    }
+                }
+            } else {
+                // Si está conectado, resetear el intervalo
+                retry_interval = Duration::from_secs(30);
+                consecutive_failures = 0;
+            }
+        }
+    });
 }
