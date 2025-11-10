@@ -229,6 +229,7 @@ export default function CotizacionFormDialog({
         is_aprobada: cotizacion.is_aprobada || false,
         informe: cotizacion.informe || "",
       });
+      // NO resetear selectedPiezas aquí - se cargarán en el otro useEffect solo si están vacías
     } else if (!isEditing && open) {
       // Resetear formulario para crear nueva cotización
       setFormData({
@@ -237,12 +238,13 @@ export default function CotizacionFormDialog({
         is_aprobada: false,
         informe: "",
       });
+      // Solo resetear selectedPiezas cuando se abre el diálogo para crear nueva cotización
       setSelectedPiezas([]);
       // Resetear términos seleccionados para que loadTerminosCondiciones pueda aplicar los por defecto
       setSelectedTerminos([]);
     }
     setErrors({});
-  }, [isEditing, cotizacion, open]);
+  }, [isEditing, cotizacion?.cotizacion_id, open]); // Usar cotizacion_id en lugar del objeto completo
 
   const loadPiezas = async () => {
     try {
@@ -272,10 +274,10 @@ export default function CotizacionFormDialog({
         (pc) => ({
           pieza_id: pc.pieza_id,
           cotizacion_id: pc.cotizacion_id,
-          cantidad: pc.cantidad,
+          cantidad: pc.cantidad ?? 1, // Manejar None correctamente
           pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
           pieza_marca: pc.pieza_marca,
-          pieza_precio: pc.pieza_precio || 0,
+          pieza_precio: pc.pieza_precio ?? 0,
         })
       );
 
@@ -622,12 +624,29 @@ export default function CotizacionFormDialog({
           // Aplicar términos y condiciones seleccionados
           if (selectedTerminos.length > 0) {
             try {
+              // Convertir los IDs a la estructura esperada por el backend
+              const terminoRequests = selectedTerminos.map((id) => ({
+                termino_id: id,
+                aplicado: true,
+              }));
+
+              console.log("📡 Aplicando términos a cotización:", {
+                cotizacionId: cotizacion.cotizacion_id,
+                terminos: terminoRequests, // Cambiar de terminoIds a terminos
+                appliedBy: user.usuario_id, // Agregar appliedBy
+              });
+
               await invoke("apply_terminos_to_cotizacion", {
                 cotizacionId: cotizacion.cotizacion_id,
-                terminoIds: selectedTerminos,
+                terminos: terminoRequests, // Cambiar de terminoIds a terminos
+                appliedBy: user.usuario_id, // Agregar appliedBy
               });
             } catch (error) {
               console.error("Error aplicando términos y condiciones:", error);
+              console.error("Detalles del error:", {
+                error,
+                message: error instanceof Error ? error.message : String(error),
+              });
               showError(
                 "Advertencia",
                 "La cotización se actualizó pero no se pudieron aplicar todos los términos y condiciones."
@@ -645,6 +664,10 @@ export default function CotizacionFormDialog({
         }
       } else {
         // Crear nueva cotización
+        console.log("🔍 Estado antes de crear cotización:");
+        console.log("  - selectedPiezas:", selectedPiezas);
+        console.log("  - selectedPiezas.length:", selectedPiezas.length);
+
         const createData = {
           costo_revision: parseInt(formData.costo_revision),
           costo_reparacion: parseInt(formData.costo_reparacion),
@@ -655,12 +678,20 @@ export default function CotizacionFormDialog({
           informe: formData.informe,
           piezas:
             selectedPiezas.length > 0
-              ? selectedPiezas.map((pieza) => ({
-                  pieza_id: pieza.pieza_id,
-                  cantidad: pieza.cantidad,
-                }))
+              ? selectedPiezas.map((pieza) => {
+                  const piezaData = {
+                    pieza_id: pieza.pieza_id,
+                    cantidad: pieza.cantidad ?? 1, // Asegurar que siempre haya una cantidad
+                  };
+                  console.log("  - Mapeando pieza:", piezaData);
+                  return piezaData;
+                })
               : undefined,
         };
+
+        console.log("📤 Enviando datos de cotización:", createData);
+        console.log("📤 Piezas a enviar:", createData.piezas);
+        console.log("📤 Tipo de piezas:", typeof createData.piezas);
 
         const cotizacionResult = await invoke<any>("create_cotizacion", {
           request: createData,
@@ -752,17 +783,45 @@ export default function CotizacionFormDialog({
         "cotizacionId inválido al agregar piezas a la cotización"
       );
     }
-    // Solo soportado para creación, no para edición
+
+    console.log(
+      "🔄 updateCotizacionPiezas: Actualizando piezas para cotización",
+      cotizacionId
+    );
+    console.log("  - isEditing:", isEditing);
+    console.log("  - selectedPiezas:", selectedPiezas);
+    console.log("  - selectedPiezas.length:", selectedPiezas.length);
+
     if (!isEditing) {
-      // Ya se envían las piezas en create_cotizacion
-      return;
-    } else {
-      // Si se desea soportar edición de piezas, implementar en backend y aquí
-      showError(
-        "No soportado",
-        "La edición de piezas en cotizaciones existentes no está soportada."
+      // Para creación nueva, las piezas ya se envían en create_cotizacion
+      console.log(
+        "ℹ️ Creación nueva - las piezas ya se enviaron en create_cotizacion"
       );
       return;
+    } else {
+      // Actualizar piezas de una cotización existente
+      if (!user) {
+        throw new Error("Usuario no autenticado");
+      }
+
+      const piezasData = selectedPiezas.map((pieza) => ({
+        pieza_id: pieza.pieza_id,
+        cantidad: pieza.cantidad ?? 1,
+      }));
+
+      console.log("📤 Enviando piezas para actualizar:", piezasData);
+
+      const result = await invoke<boolean>("update_cotizacion_piezas", {
+        cotizacionId: cotizacionId,
+        piezas: piezasData,
+        updatedBy: user.usuario_id,
+      });
+
+      if (result) {
+        console.log("✅ Piezas actualizadas correctamente");
+      } else {
+        throw new Error("No se pudieron actualizar las piezas");
+      }
     }
   };
 
@@ -783,33 +842,30 @@ export default function CotizacionFormDialog({
     try {
       setLoading(true);
 
-      // Actualizar is_borrador a false para marcar como enviada
-      const result = await invoke<boolean>("update_cotizacion", {
+      // Enviar el email con PDF y actualizar estados automáticamente
+      await invoke<string>("send_cotizacion_email", {
         cotizacionId: cotizacion.cotizacion_id,
-        request: { is_borrador: false },
-        updatedBy: user.usuario_id,
+        sentBy: user.usuario_id,
       });
 
-      if (result) {
-        success(
-          "Cotización enviada",
-          "La cotización ha sido enviada al cliente exitosamente."
-        );
+      success(
+        "Cotización enviada",
+        "La cotización ha sido enviada al cliente exitosamente con el PDF adjunto."
+      );
 
-        if (onSendToClient) {
-          onSendToClient(cotizacion.cotizacion_id);
-        }
-
-        onCotizacionAdded(); // Refrescar la lista
-        onOpenChange(false); // Cerrar el diálogo
-      } else {
-        showError("Error", "No se pudo enviar la cotización al cliente.");
+      if (onSendToClient) {
+        onSendToClient(cotizacion.cotizacion_id);
       }
+
+      onCotizacionAdded(); // Refrescar la lista
+      onOpenChange(false); // Cerrar el diálogo
     } catch (error) {
       console.error("Error enviando cotización al cliente:", error);
       showError(
         "Error al enviar cotización",
-        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+        typeof error === "string"
+          ? error
+          : "Ha ocurrido un error inesperado al enviar el correo."
       );
     } finally {
       setLoading(false);

@@ -3,6 +3,7 @@ use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
 use chrono::{DateTime, Utc};
+use std::collections::HashSet;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct TerminoCondicion {
@@ -392,12 +393,38 @@ pub async fn apply_terminos_to_informe(
     applied_by: i32
 ) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
+    
+    // Obtener términos actuales del informe
+    let terminos_actuales = get_terminos_by_informe(informe_id).await?;
+    
+    // Normalizar los términos actuales para comparación (solo IDs y estado aplicado)
+    let terminos_actuales_set: HashSet<(i32, bool)> = terminos_actuales
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Normalizar los términos nuevos para comparación
+    let terminos_nuevos_set: HashSet<(i32, bool)> = terminos
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Comparar si hay cambios
+    if terminos_actuales_set == terminos_nuevos_set {
+        println!("ℹ️ apply_terminos_to_informe: No hay cambios en los términos para informe_id {}. No se actualiza ni registra en auditoría.", informe_id);
+        return Ok(()); // No hay cambios, retornar sin hacer nada ni registrar en auditoría
+    }
+    
+    println!("🔄 apply_terminos_to_informe: Detectados cambios en términos para informe_id {}, procediendo con actualización", informe_id);
     let terminos_count = terminos.len();
     
-    // Primero, eliminar términos existentes para este informe
+    // Iniciar transacción
+    let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
+    
+    // Eliminar términos existentes para este informe
     sqlx::query("DELETE FROM TERMINOS_INFORME WHERE informe_id = ?")
         .bind(informe_id)
-        .execute(&*pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error removing existing terms: {}", e))?;
     
@@ -409,12 +436,15 @@ pub async fn apply_terminos_to_informe(
         .bind(termino.termino_id)
         .bind(informe_id)
         .bind(termino.aplicado.unwrap_or(true))
-        .execute(&*pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error applying term: {}", e))?;
     }
     
-    // Registrar en el log de auditoría
+    // Confirmar transacción
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
+    
+    // Registrar en el log de auditoría solo si hubo cambios
     let _ = log_action(
         "APPLY_TERMINOS_INFORME",
         Some(applied_by),
@@ -435,12 +465,38 @@ pub async fn apply_terminos_to_cotizacion(
     applied_by: i32
 ) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
+    
+    // Obtener términos actuales de la cotización
+    let terminos_actuales = get_terminos_by_cotizacion(cotizacion_id).await?;
+    
+    // Normalizar los términos actuales para comparación (solo IDs y estado aplicado)
+    let terminos_actuales_set: HashSet<(i32, bool)> = terminos_actuales
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Normalizar los términos nuevos para comparación
+    let terminos_nuevos_set: HashSet<(i32, bool)> = terminos
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Comparar si hay cambios
+    if terminos_actuales_set == terminos_nuevos_set {
+        println!("ℹ️ apply_terminos_to_cotizacion: No hay cambios en los términos para cotizacion_id {}. No se actualiza ni registra en auditoría.", cotizacion_id);
+        return Ok(()); // No hay cambios, retornar sin hacer nada ni registrar en auditoría
+    }
+    
+    println!("🔄 apply_terminos_to_cotizacion: Detectados cambios en términos para cotizacion_id {}, procediendo con actualización", cotizacion_id);
     let terminos_count = terminos.len();
     
-    // Primero, eliminar términos existentes para esta cotización
+    // Iniciar transacción
+    let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
+    
+    // Eliminar términos existentes para esta cotización
     sqlx::query("DELETE FROM TERMINOS_COTIZACION WHERE cotizacion_id = ?")
         .bind(cotizacion_id)
-        .execute(&*pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error removing existing terms: {}", e))?;
     
@@ -452,12 +508,15 @@ pub async fn apply_terminos_to_cotizacion(
         .bind(termino.termino_id)
         .bind(cotizacion_id)
         .bind(termino.aplicado.unwrap_or(true))
-        .execute(&*pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error applying term: {}", e))?;
     }
     
-    // Registrar en el log de auditoría
+    // Confirmar transacción
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
+    
+    // Registrar en el log de auditoría solo si hubo cambios
     let _ = log_action(
         "APPLY_TERMINOS_COTIZACION",
         Some(applied_by),

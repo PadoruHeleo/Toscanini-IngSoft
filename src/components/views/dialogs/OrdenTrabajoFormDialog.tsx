@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface OrdenTrabajo {
   orden_id: number;
@@ -146,14 +147,26 @@ export default function OrdenTrabajoFormDialog({
   const { user } = useAuth();
   const { success, error: showError } = useToastContext();
   const { isRecepcion } = useOrdenTrabajoPermissions();
+  const { isAdmin, isTecnico } = usePermissions();
   const [loading, setLoading] = useState(false);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
-  // Check if the work order is locked (has associated quote or report)
-  const isOrderLocked = Boolean(
+
+  // Verificar si la orden tiene cotización o informe asociado
+  const hasCotizacionOrInforme = Boolean(
     isEditing && orden && (orden.cotizacion_id || orden.informe_id)
   );
+
+  // Verificar si el usuario puede editar campos restringidos (admin o técnico)
+  const canEditRestrictedFields = isAdmin() || isTecnico();
+
+  // La orden está bloqueada solo si tiene cotización/informe Y el usuario NO es admin/tecnico
+  const isOrderLocked = hasCotizacionOrInforme && !canEditRestrictedFields;
+
+  // Campos específicos que pueden editarse si es admin/tecnico (aunque haya cotización/informe)
+  const canEditPrioridad = !hasCotizacionOrInforme || canEditRestrictedFields;
+  const canEditEstado = !hasCotizacionOrInforme || canEditRestrictedFields;
   const [formData, setFormData] = useState<FormData>({
     prioridad: "media",
     estado: "recibido",
@@ -551,39 +564,51 @@ export default function OrdenTrabajoFormDialog({
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    if (!formData.prioridad) {
-      newErrors.prioridad = "La prioridad es requerida";
-    }
-
-    if (!formData.estado) {
-      newErrors.estado = "El estado es requerido";
-    }
-
-    if (!formData.pre_informe.trim()) {
-      newErrors.pre_informe = "El pre-informe es requerido";
-    }
-
-    // Validar según el tipo de equipo
-    if (tipoEquipo === "existente") {
-      if (!formData.equipo_id) {
-        newErrors.equipo_id = "Debe seleccionar un equipo";
+    // Si tiene cotización/informe y el usuario puede editar campos restringidos,
+    // solo validar prioridad y estado
+    if (hasCotizacionOrInforme && canEditRestrictedFields) {
+      if (!formData.prioridad) {
+        newErrors.prioridad = "La prioridad es requerida";
+      }
+      if (!formData.estado) {
+        newErrors.estado = "El estado es requerido";
       }
     } else {
-      // Validar datos del equipo nuevo
-      if (!equipoFormData.numero_serie?.trim()) {
-        newErrors.numero_serie = "El número de serie es obligatorio";
+      // Validación completa para otros casos
+      if (!formData.prioridad) {
+        newErrors.prioridad = "La prioridad es requerida";
       }
-      if (!equipoFormData.equipo_marca?.trim()) {
-        newErrors.equipo_marca = "La marca es obligatoria";
+
+      if (!formData.estado) {
+        newErrors.estado = "El estado es requerido";
       }
-      if (!equipoFormData.equipo_modelo?.trim()) {
-        newErrors.equipo_modelo = "El modelo es obligatorio";
+
+      if (!formData.pre_informe.trim()) {
+        newErrors.pre_informe = "El pre-informe es requerido";
       }
-      if (!equipoFormData.equipo_tipo) {
-        newErrors.equipo_tipo = "El tipo es obligatorio";
-      }
-      if (!equipoFormData.cliente_id) {
-        newErrors.cliente_id = "Debe seleccionar un cliente";
+
+      // Validar según el tipo de equipo
+      if (tipoEquipo === "existente") {
+        if (!formData.equipo_id) {
+          newErrors.equipo_id = "Debe seleccionar un equipo";
+        }
+      } else {
+        // Validar datos del equipo nuevo
+        if (!equipoFormData.numero_serie?.trim()) {
+          newErrors.numero_serie = "El número de serie es obligatorio";
+        }
+        if (!equipoFormData.equipo_marca?.trim()) {
+          newErrors.equipo_marca = "La marca es obligatoria";
+        }
+        if (!equipoFormData.equipo_modelo?.trim()) {
+          newErrors.equipo_modelo = "El modelo es obligatorio";
+        }
+        if (!equipoFormData.equipo_tipo) {
+          newErrors.equipo_tipo = "El tipo es obligatorio";
+        }
+        if (!equipoFormData.cliente_id) {
+          newErrors.cliente_id = "Debe seleccionar un cliente";
+        }
       }
     }
 
@@ -636,12 +661,12 @@ export default function OrdenTrabajoFormDialog({
       return;
     }
 
-    // Check if the order is locked for editing
+    // Verificar si la orden está bloqueada (tiene cotización/informe y usuario no es admin/tecnico)
     if (isOrderLocked) {
       const lockReason = orden?.cotizacion_id ? "cotización" : "informe";
       showError(
         "Edición no permitida",
-        `No se puede editar esta orden de trabajo porque ya tiene una ${lockReason} asociada.`
+        `No se puede editar esta orden de trabajo porque ya tiene una ${lockReason} asociada. Solo administradores y técnicos pueden modificar prioridad y estado en este caso.`
       );
       return;
     }
@@ -664,40 +689,56 @@ export default function OrdenTrabajoFormDialog({
       setLoading(true);
       if (isEditing && orden) {
         // Actualizar orden existente
-        const updateData = {
-          prioridad:
-            formData.prioridad !== orden.prioridad
-              ? formData.prioridad
-              : undefined,
-          estado:
-            formData.estado !== orden.estado ? formData.estado : undefined,
-          has_garantia:
-            formData.has_garantia !== orden.has_garantia
-              ? formData.has_garantia
-              : undefined,
-          equipo_id:
-            parseInt(formData.equipo_id) !== orden.equipo_id
-              ? parseInt(formData.equipo_id)
-              : undefined,
-          pre_informe:
-            formData.pre_informe !== orden.pre_informe
-              ? formData.pre_informe
-              : undefined,
-        };
-        const result = await invoke<boolean>("update_orden_trabajo", {
-          ordenId: orden.orden_id,
-          request: updateData,
-          updatedBy: user.usuario_id,
-        });
+        const updateData: any = {};
 
-        if (result) {
-          success(
-            "Orden actualizada",
-            `La orden ha sido actualizada exitosamente.`
-          );
-          onOrdenAdded();
+        // Si tiene cotización/informe, solo permitir actualizar prioridad y estado si es admin/tecnico
+        if (hasCotizacionOrInforme && canEditRestrictedFields) {
+          // Solo actualizar prioridad y estado
+          if (formData.prioridad !== orden.prioridad) {
+            updateData.prioridad = formData.prioridad;
+          }
+          if (formData.estado !== orden.estado) {
+            updateData.estado = formData.estado;
+          }
+        } else if (!hasCotizacionOrInforme) {
+          // Si no tiene cotización/informe, permitir actualizar todos los campos
+          if (formData.prioridad !== orden.prioridad) {
+            updateData.prioridad = formData.prioridad;
+          }
+          if (formData.estado !== orden.estado) {
+            updateData.estado = formData.estado;
+          }
+          if (formData.has_garantia !== orden.has_garantia) {
+            updateData.has_garantia = formData.has_garantia;
+          }
+          if (parseInt(formData.equipo_id) !== orden.equipo_id) {
+            updateData.equipo_id = parseInt(formData.equipo_id);
+          }
+          if (formData.pre_informe !== orden.pre_informe) {
+            updateData.pre_informe = formData.pre_informe;
+          }
+        }
+
+        // Solo hacer la actualización si hay cambios
+        if (Object.keys(updateData).length > 0) {
+          const result = await invoke<boolean>("update_orden_trabajo", {
+            ordenId: orden.orden_id,
+            request: updateData,
+            updatedBy: user.usuario_id,
+          });
+
+          if (result) {
+            success(
+              "Orden actualizada",
+              `La orden ha sido actualizada exitosamente.`
+            );
+            onOrdenAdded();
+          } else {
+            showError("Error", "No se pudo actualizar la orden de trabajo.");
+          }
         } else {
-          showError("Error", "No se pudo actualizar la orden de trabajo.");
+          // No hay cambios, solo cerrar el diálogo
+          onOrdenAdded();
         }
       } else {
         // Crear nueva orden
@@ -793,12 +834,22 @@ export default function OrdenTrabajoFormDialog({
           </DialogDescription>
         </DialogHeader>
         {/* Warning message for locked orders */}
-        {isOrderLocked && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+        {hasCotizacionOrInforme && (
+          <div
+            className={`border rounded-md p-4 mb-4 ${
+              canEditRestrictedFields
+                ? "bg-blue-50 border-blue-200"
+                : "bg-yellow-50 border-yellow-200"
+            }`}
+          >
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-yellow-400"
+                  className={`h-5 w-5 ${
+                    canEditRestrictedFields
+                      ? "text-blue-400"
+                      : "text-yellow-400"
+                  }`}
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -810,13 +861,39 @@ export default function OrdenTrabajoFormDialog({
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">
-                  Edición restringida
+                <h3
+                  className={`text-sm font-medium ${
+                    canEditRestrictedFields
+                      ? "text-blue-800"
+                      : "text-yellow-800"
+                  }`}
+                >
+                  {canEditRestrictedFields
+                    ? "Edición parcial permitida"
+                    : "Edición restringida"}
                 </h3>
-                <div className="mt-1 text-sm text-yellow-700">
-                  Esta orden de trabajo no se puede editar porque ya tiene una{" "}
-                  {orden?.cotizacion_id ? "cotización" : "informe"} asociada.
-                  Los campos se muestran en modo de solo lectura.
+                <div
+                  className={`mt-1 text-sm ${
+                    canEditRestrictedFields
+                      ? "text-blue-700"
+                      : "text-yellow-700"
+                  }`}
+                >
+                  {canEditRestrictedFields ? (
+                    <>
+                      Esta orden de trabajo tiene una{" "}
+                      {orden?.cotizacion_id ? "cotización" : "informe"}{" "}
+                      asociada. Como {isAdmin() ? "administrador" : "técnico"},
+                      solo puede modificar la prioridad y el estado. Los demás
+                      campos están bloqueados.
+                    </>
+                  ) : (
+                    <>
+                      Esta orden de trabajo no se puede editar porque ya tiene
+                      una {orden?.cotizacion_id ? "cotización" : "informe"}{" "}
+                      asociada. Los campos se muestran en modo de solo lectura.
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1211,7 +1288,7 @@ export default function OrdenTrabajoFormDialog({
                         onValueChange={(value) =>
                           handleInputChange("equipo_id", value)
                         }
-                        disabled={isOrderLocked}
+                        disabled={hasCotizacionOrInforme}
                       >
                         <SelectTrigger
                           className={errors.equipo_id ? "border-red-500" : ""}
@@ -1255,7 +1332,7 @@ export default function OrdenTrabajoFormDialog({
                   onValueChange={(value) =>
                     handleInputChange("equipo_id", value)
                   }
-                  disabled={isOrderLocked}
+                  disabled={hasCotizacionOrInforme}
                 >
                   <SelectTrigger
                     className={errors.equipo_id ? "border-red-500" : ""}
@@ -1351,7 +1428,7 @@ export default function OrdenTrabajoFormDialog({
               <Select
                 value={formData.prioridad}
                 onValueChange={(value) => handleInputChange("prioridad", value)}
-                disabled={isOrderLocked}
+                disabled={!canEditPrioridad}
               >
                 <SelectTrigger
                   className={errors.prioridad ? "border-red-500" : ""}
@@ -1377,7 +1454,7 @@ export default function OrdenTrabajoFormDialog({
               <Select
                 value={formData.estado}
                 onValueChange={(value) => handleInputChange("estado", value)}
-                disabled={isOrderLocked}
+                disabled={!canEditEstado}
               >
                 <SelectTrigger
                   className={errors.estado ? "border-red-500" : ""}
@@ -1409,7 +1486,7 @@ export default function OrdenTrabajoFormDialog({
               placeholder="Diagnóstico inicial del equipo"
               className={errors.pre_informe ? "border-red-500" : ""}
               rows={4}
-              disabled={isOrderLocked}
+              disabled={hasCotizacionOrInforme}
             />
             {errors.pre_informe && (
               <p className="text-sm text-red-500">{errors.pre_informe}</p>
@@ -1431,9 +1508,12 @@ export default function OrdenTrabajoFormDialog({
                   formData.has_garantia
                     ? "border-green-500 bg-green-50 ring-2 ring-green-200"
                     : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                } ${isOrderLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                } ${
+                  hasCotizacionOrInforme ? "cursor-not-allowed opacity-60" : ""
+                }`}
                 onClick={() =>
-                  !isOrderLocked && handleInputChange("has_garantia", true)
+                  !hasCotizacionOrInforme &&
+                  handleInputChange("has_garantia", true)
                 }
               >
                 <div className="flex items-center space-x-3">
@@ -1469,9 +1549,12 @@ export default function OrdenTrabajoFormDialog({
                   !formData.has_garantia
                     ? "border-orange-500 bg-orange-50 ring-2 ring-orange-200"
                     : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                } ${isOrderLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                } ${
+                  hasCotizacionOrInforme ? "cursor-not-allowed opacity-60" : ""
+                }`}
                 onClick={() =>
-                  !isOrderLocked && handleInputChange("has_garantia", false)
+                  !hasCotizacionOrInforme &&
+                  handleInputChange("has_garantia", false)
                 }
               >
                 <div className="flex items-center space-x-3">
@@ -1541,7 +1624,7 @@ export default function OrdenTrabajoFormDialog({
             >
               {isOrderLocked ? "Cerrar" : "Cancelar"}
             </Button>
-            {!isOrderLocked && (
+            {(!isOrderLocked || canEditRestrictedFields) && (
               <Button type="submit" disabled={loading}>
                 {loading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
               </Button>

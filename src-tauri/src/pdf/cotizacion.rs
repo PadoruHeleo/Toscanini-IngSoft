@@ -111,12 +111,6 @@ impl CotizacionPdfGenerator {
             current_layer.use_text(serie, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
         }
         y_pos -= 6.0;
-        
-        current_layer.use_text("Tipo de Producto", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
-        if let Some(tipo) = &data.equipo.tipo {
-            current_layer.use_text(tipo, 10.0, Mm(70.0), Mm(y_pos), &font_regular);
-        }
-        y_pos -= 6.0;
 
         // === TRABAJO SOLICITADO ===
         y_pos -= 10.0;
@@ -398,6 +392,7 @@ impl CotizacionPdfGenerator {
                     // Continuar renderizando
                     new_page_layer.set_fill_color(black_color.clone());
                     new_page_layer.use_text(line, 8.5, Mm(25.0), Mm(current_y), &font_regular);
+                    current_y -= 4.5;
                 }
             }
         }

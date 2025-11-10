@@ -505,51 +505,132 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
 
 /// Enviar informe por email al cliente
 #[tauri::command]
-pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {    use crate::email::EmailService;
+pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {
     use crate::commands::ordenes_trabajo::get_orden_trabajo_by_informe_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+    use crate::pdf::commands::generate_informe_pdf_command;
     
-    let pool = get_db_pool_safe()?;
+    println!("🔍 [DEBUG] send_informe_to_client: inicio, informe_id={}", informe_id);
     
     // Obtener el informe
     let informe = get_informe_by_id(informe_id).await?
-        .ok_or_else(|| "Informe no encontrado".to_string())?;
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] Informe no encontrado: {}", informe_id);
+            "Informe no encontrado".to_string()
+        })?;
+    println!("✅ [DEBUG] Informe encontrado: {:?}", informe.informe_codigo);
     
     // Obtener la orden de trabajo asociada al informe
-    let orden_trabajo = get_orden_trabajo_by_informe_id(informe_id).await?
-        .ok_or_else(|| "No se encontró orden de trabajo asociada al informe".to_string())?;
+    println!("🔍 [DEBUG] Buscando orden de trabajo para informe_id={}", informe_id);
+    let orden_trabajo = match get_orden_trabajo_by_informe_id(informe_id).await {
+        Ok(Some(orden)) => {
+            println!("✅ [DEBUG] Orden de trabajo encontrada: {:?}", orden.orden_codigo);
+            orden
+        }
+        Ok(None) => {
+            println!("❌ [DEBUG] No se encontró orden de trabajo para informe_id={}", informe_id);
+            return Err("No se encontró orden de trabajo asociada al informe. Asegúrate de que el informe esté asociado a una orden de trabajo antes de enviarlo.".to_string());
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error al buscar orden de trabajo: {}", e);
+            return Err(format!("Error al buscar orden de trabajo: {}", e));
+        }
+    };
+
+    // Obtener el equipo
+    let equipo_id = orden_trabajo.equipo_id
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] La orden {} no tiene equipo asociado", orden_trabajo.orden_id);
+            "La orden no tiene equipo asociado".to_string()
+        })?;
+    println!("✅ [DEBUG] Equipo ID: {}", equipo_id);
     
-    // Obtener información del cliente desde el equipo
-    let cliente_info = sqlx::query_as::<_, (i32, String, Option<String>)>(
-        "SELECT c.cliente_id, c.cliente_nombre, c.cliente_correo 
-         FROM CLIENTE c 
-         INNER JOIN EQUIPO e ON c.cliente_id = e.cliente_id 
-         WHERE e.equipo_id = ?"
-    )
-    .bind(orden_trabajo.equipo_id)
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?
-    .ok_or_else(|| "No se encontró información del cliente".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] Equipo no encontrado: {}", equipo_id);
+            "Equipo no encontrado".to_string()
+        })?;
     
-    let cliente_email = cliente_info.2
-        .ok_or_else(|| "El cliente no tiene un correo electrónico registrado".to_string())?;
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] El equipo {} no tiene cliente asociado", equipo_id);
+            "El equipo no tiene cliente asociado".to_string()
+        })?;
+    println!("✅ [DEBUG] Cliente ID: {}", cliente_id);
     
-    // Obtener las piezas del informe
-    let piezas_informe = get_piezas_informe(informe_id).await?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] Cliente no encontrado: {}", cliente_id);
+            "Cliente no encontrado".to_string()
+        })?;
+    
+    // Verificar email del cliente
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        println!("❌ [DEBUG] Cliente {} no tiene email configurado", cliente_id);
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+    println!("✅ [DEBUG] Email del cliente: {}", cliente.cliente_correo.as_ref().unwrap());
+    
+    // Generar el PDF del informe
+    println!("📄 [DEBUG] Generando PDF de informe {}...", informe_id);
+    let pdf_bytes = match generate_informe_pdf_command(informe_id).await {
+        Ok(bytes) => {
+            println!("✅ [DEBUG] PDF generado exitosamente ({} bytes)", bytes.len());
+            bytes
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error generando PDF: {}", e);
+            return Err(format!("Error generando PDF del informe: {}", e));
+        }
+    };
+    
+    // Obtener el email del cliente (clonar para evitar problemas de borrow)
+    let cliente_email = cliente.cliente_correo
+        .clone()
+        .ok_or_else(|| "El cliente no tiene email configurado".to_string())?;
+    
+    // Verificar RESEND_API_KEY
+    use std::env;
+    match env::var("RESEND_API_KEY") {
+        Ok(_) => println!("✅ [DEBUG] RESEND_API_KEY encontrada"),
+        Err(_) => {
+            println!("❌ [DEBUG] RESEND_API_KEY no encontrada");
+            return Err("RESEND_API_KEY no configurada en las variables de entorno".to_string());
+        }
+    }
     
     // Crear el servicio de email
-    let email_service = EmailService::new()
-        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
+    let email_service = match crate::email::EmailService::new() {
+        Ok(service) => {
+            println!("✅ [DEBUG] EmailService inicializado");
+            service
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error inicializando EmailService: {}", e);
+            return Err(format!("Error inicializando servicio de email: {}", e));
+        }
+    };
     
-    // Enviar el email
-    email_service.send_informe_email(
+    // Enviar el email con PDF
+    println!("📧 [DEBUG] Enviando email de informe con PDF a {}...", cliente_email);
+    match email_service.send_informe_email_with_pdf(
         &cliente_email,
-        &cliente_info.1,
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
         &informe,
         &orden_trabajo,
-        &piezas_informe,
-    ).await
-    .map_err(|e| format!("Error enviando email: {}", e))?;
+        &equipo,
+        &pdf_bytes,
+    ).await {
+        Ok(_) => {
+            println!("✅ [DEBUG] Email enviado exitosamente");
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error enviando email: {}", e);
+            return Err(format!("Error enviando email: {}", e));
+        }
+    }
     
     // Registrar la acción en el log de auditoría
     let _ = log_action(
@@ -558,12 +639,13 @@ pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<boo
         "INFORME",
         Some(informe_id),
         None,
-        Some(&format!("Informe {} enviado a {}", 
+        Some(&format!("Informe {} enviado a {} con PDF adjunto", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"),
             cliente_email
         ))
     ).await;
     
+    println!("✅ [DEBUG] send_informe_to_client completado exitosamente");
     Ok(true)
 }
 

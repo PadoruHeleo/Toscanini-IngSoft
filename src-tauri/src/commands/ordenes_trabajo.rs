@@ -89,6 +89,7 @@ pub struct Filtros {
     pub modelos: Option<Vec<String>>, 
     pub prioridades: Option<Vec<String>>,
     pub clientes: Option<Vec<String>>,
+    pub estados: Option<Vec<String>>, // ← NUEVO
 }
 
 /// Obtener todas las órdenes de trabajo
@@ -472,7 +473,8 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
 #[tauri::command]
 pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
-      // Validar que el estado sea válido
+    
+    // Validar que el estado sea válido
     let estados_validos = vec![
         "recibido",
         "cotizacion_enviada", 
@@ -486,7 +488,41 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
     ];
     if !estados_validos.contains(&nuevo_estado.as_str()) {
         return Err("Estado no válido".to_string());
-    }    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    }
+    
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    
+    // NUEVA VALIDACIÓN: Si se intenta cambiar a "en_reparacion", validar que la cotización esté aprobada
+    if nuevo_estado == "en_reparacion" {
+        if let Some(ref orden) = current_orden {
+            // Verificar que el estado actual permita este cambio
+            let estado_actual = orden.estado.as_deref().unwrap_or("");
+            if estado_actual != "cotizacion_enviada" && estado_actual != "aprobacion_pendiente" {
+                return Err(format!(
+                    "No se puede cambiar a 'en_reparacion' desde el estado '{}'. Solo se permite desde 'cotizacion_enviada' o 'aprobacion_pendiente'.",
+                    estado_actual
+                ));
+            }
+            
+            // Verificar que existe una cotización asociada
+            if let Some(cotizacion_id) = orden.cotizacion_id {
+                // Verificar que la cotización esté aprobada
+                let cotizacion_aprobada: Option<i32> = sqlx::query_scalar(
+                    "SELECT is_aprobada FROM COTIZACION WHERE cotizacion_id = ?"
+                )
+                .bind(cotizacion_id)
+                .fetch_optional(&*pool)
+                .await
+                .map_err(|e| format!("Error verificando estado de cotización: {}", e))?;
+                
+                if cotizacion_aprobada != Some(1) {
+                    return Err("No se puede cambiar a 'en_reparacion' porque la cotización no está aprobada. Debe aprobar la cotización primero.".to_string());
+                }
+            } else {
+                return Err("No se puede cambiar a 'en_reparacion' porque la orden no tiene una cotización asociada.".to_string());
+            }
+        }
+    }
     
     // Si el estado es 'entregado', actualizar finished_at
     let query_builder = if nuevo_estado == "entregado" {
@@ -513,7 +549,23 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
         current_orden.as_ref().and_then(|o| o.estado.as_deref()),
         Some(&nuevo_estado)
     ).await;
-    
+
+    // Si el nuevo estado es "espera_de_retiro", enviar email automáticamente con el informe
+    if nuevo_estado == "espera_de_retiro" {
+        println!("🔄 Estado cambiado a 'espera_de_retiro', enviando email automáticamente al cliente...");
+        // Intentar enviar el email, pero no fallar si hay algún problema (solo loguear)
+        match crate::email::send_informe_email(orden_id, updated_by).await {
+            Ok(msg) => {
+                println!("✅ Email de informe enviado exitosamente: {}", msg);
+            }
+            Err(e) => {
+                eprintln!("⚠️ No se pudo enviar el email de informe automáticamente: {}", e);
+                // No retornamos error aquí para que el cambio de estado se complete
+                // El email puede enviarse manualmente después si es necesario
+            }
+        }
+    }
+
     get_orden_trabajo_by_id(orden_id).await
 }
 
@@ -546,6 +598,21 @@ pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32,
 #[tauri::command]
 pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
+    
+    // NUEVA VALIDACIÓN: Verificar que la orden esté en estado "en_reparacion"
+    let orden = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+    
+    if let Some(estado) = &orden.estado {
+        if estado != "en_reparacion" {
+            return Err(format!(
+                "No se puede asignar un informe a una orden en estado '{}'. Solo se pueden crear informes cuando la orden está en estado 'en_reparacion'.",
+                estado
+            ));
+        }
+    } else {
+        return Err("No se puede determinar el estado de la orden.".to_string());
+    }
     
     sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = ? WHERE orden_id = ?")
         .bind(informe_id)
@@ -761,7 +828,7 @@ pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<O
     let orden = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, 
                 has_garantia, equipo_id, cotizacion_id, informe_id, 
-                created_by, created_at 
+                pre_informe, created_by, created_at, finished_at
          FROM ORDEN_TRABAJO 
          WHERE informe_id = ?"
     )
@@ -846,6 +913,17 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
             query.push_str(&format!(" AND c.cliente_nombre IN ({})", placeholders));
             for cliente in clientes {
                 params.push(cliente);
+            }
+        }
+    }
+    
+    // Nuevo filtro por estados
+    if let Some(estados) = filtros.estados {
+        if !estados.is_empty() {
+            let placeholders = vec!["?"; estados.len()].join(",");
+            query.push_str(&format!(" AND LOWER(ot.estado) IN ({})", placeholders));
+            for estado in estados {
+                params.push(estado.to_lowercase());
             }
         }
     }
