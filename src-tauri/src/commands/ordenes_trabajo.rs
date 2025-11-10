@@ -473,7 +473,8 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
 #[tauri::command]
 pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
-      // Validar que el estado sea válido
+    
+    // Validar que el estado sea válido
     let estados_validos = vec![
         "recibido",
         "cotizacion_enviada", 
@@ -487,7 +488,41 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
     ];
     if !estados_validos.contains(&nuevo_estado.as_str()) {
         return Err("Estado no válido".to_string());
-    }    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    }
+    
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    
+    // NUEVA VALIDACIÓN: Si se intenta cambiar a "en_reparacion", validar que la cotización esté aprobada
+    if nuevo_estado == "en_reparacion" {
+        if let Some(ref orden) = current_orden {
+            // Verificar que el estado actual permita este cambio
+            let estado_actual = orden.estado.as_deref().unwrap_or("");
+            if estado_actual != "cotizacion_enviada" && estado_actual != "aprobacion_pendiente" {
+                return Err(format!(
+                    "No se puede cambiar a 'en_reparacion' desde el estado '{}'. Solo se permite desde 'cotizacion_enviada' o 'aprobacion_pendiente'.",
+                    estado_actual
+                ));
+            }
+            
+            // Verificar que existe una cotización asociada
+            if let Some(cotizacion_id) = orden.cotizacion_id {
+                // Verificar que la cotización esté aprobada
+                let cotizacion_aprobada: Option<i32> = sqlx::query_scalar(
+                    "SELECT is_aprobada FROM COTIZACION WHERE cotizacion_id = ?"
+                )
+                .bind(cotizacion_id)
+                .fetch_optional(&*pool)
+                .await
+                .map_err(|e| format!("Error verificando estado de cotización: {}", e))?;
+                
+                if cotizacion_aprobada != Some(1) {
+                    return Err("No se puede cambiar a 'en_reparacion' porque la cotización no está aprobada. Debe aprobar la cotización primero.".to_string());
+                }
+            } else {
+                return Err("No se puede cambiar a 'en_reparacion' porque la orden no tiene una cotización asociada.".to_string());
+            }
+        }
+    }
     
     // Si el estado es 'entregado', actualizar finished_at
     let query_builder = if nuevo_estado == "entregado" {
@@ -547,6 +582,21 @@ pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32,
 #[tauri::command]
 pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
+    
+    // NUEVA VALIDACIÓN: Verificar que la orden esté en estado "en_reparacion"
+    let orden = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+    
+    if let Some(estado) = &orden.estado {
+        if estado != "en_reparacion" {
+            return Err(format!(
+                "No se puede asignar un informe a una orden en estado '{}'. Solo se pueden crear informes cuando la orden está en estado 'en_reparacion'.",
+                estado
+            ));
+        }
+    } else {
+        return Err("No se puede determinar el estado de la orden.".to_string());
+    }
     
     sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = ? WHERE orden_id = ?")
         .bind(informe_id)

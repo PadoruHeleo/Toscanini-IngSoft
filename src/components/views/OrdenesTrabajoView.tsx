@@ -432,6 +432,15 @@ export function OrdenesTrabajoView() {
       return;
     }
 
+    // NUEVA VALIDACIÓN: Verificar que la orden esté en estado "en_reparacion"
+    if (orden.estado !== "en_reparacion") {
+      showError(
+        "Estado inválido",
+        `No se puede crear un informe para una orden en estado "${formatEstadoText(orden.estado)}". Solo se pueden crear informes cuando la orden está en estado "En Reparación".`
+      );
+      return;
+    }
+
     try {
       // Abrir diálogo de creación de informe
       setEditingInforme(null);
