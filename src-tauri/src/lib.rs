@@ -212,6 +212,7 @@ pub fn run() {
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
             email::send_orden_trabajo_cliente,
+            email::send_cotizacion_email,
             pdf::commands::generate_cotizacion_pdf_command,
             pdf::commands::generate_informe_pdf_command
         ])

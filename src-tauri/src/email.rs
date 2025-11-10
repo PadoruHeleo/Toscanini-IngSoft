@@ -577,6 +577,141 @@ impl EmailService {
             }
         }
     }
+
+    /// Enviar email de cotización con PDF adjunto usando API REST de Resend
+    pub async fn send_cotizacion_email_with_pdf(
+        &self,
+        cliente_email: &str,
+        cliente_nombre: &str,
+        cotizacion: &crate::commands::cotizacion::Cotizacion,
+        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
+        equipo: &crate::commands::equipos::Equipo,
+        pdf_bytes: &[u8],
+    ) -> Result<(), String> {
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use reqwest::Client;
+        use serde_json::json;
+        use std::env;
+
+        let api_key = env::var("RESEND_API_KEY")
+            .map_err(|_| "RESEND_API_KEY no encontrada".to_string())?;
+
+        // Nombre del archivo PDF
+        let pdf_filename = format!(
+            "Cotizacion_{}.pdf",
+            cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A")
+        );
+
+        // Codificar PDF en base64
+        let pdf_base64 = STANDARD.encode(pdf_bytes);
+
+        // Calcular totales para mostrar en el email
+        let costo_revision = cotizacion.costo_revision.unwrap_or(0);
+        let costo_reparacion = cotizacion.costo_reparacion.unwrap_or(0);
+        let costo_total = cotizacion.costo_total.unwrap_or(costo_revision + costo_reparacion);
+
+        // Contenido HTML conciso (el PDF tiene toda la información detallada)
+        let html_content = format!(
+            r#"
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #333; margin: 0;">Toscanini</h1>
+                    <p style="color: #666; margin: 5px 0;">Servicio Técnico Especializado</p>
+                </div>
+                
+                <h2 style="color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+                    Cotización de Reparación
+                </h2>
+                
+                <p>Estimado/a <strong>{}</strong>,</p>
+                
+                <p>Te enviamos la cotización para la reparación de tu equipo. La cotización completa con todos los detalles, piezas y términos y condiciones está disponible en el archivo PDF adjunto.</p>
+                
+                <div style="background-color: #e8f4f8; padding: 20px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #007bff;">
+                    <p style="margin: 0; color: #333; font-size: 16px;">
+                        <strong>📎 Archivo adjunto:</strong> {}.pdf
+                    </p>
+                    <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
+                        Por favor, revisa el documento PDF adjunto para ver todos los detalles de la cotización.
+                    </p>
+                </div>
+                
+                <div style="background-color: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                    <h3 style="margin-top: 0; color: #333; font-size: 16px;">Resumen</h3>
+                    <p style="margin: 5px 0;"><strong>Código de Cotización:</strong> {}</p>
+                    <p style="margin: 5px 0;"><strong>Código de Orden:</strong> {}</p>
+                    <p style="margin: 5px 0;"><strong>Equipo:</strong> {} {}</p>
+                    <p style="margin: 5px 0;"><strong>Total:</strong> <span style="color: #007bff; font-size: 18px; font-weight: bold;">${}</span></p>
+                </div>
+                
+                <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0; color: #856404;">
+                        <strong>⚠️ Importante:</strong> Por favor revisa el PDF adjunto para ver el diagnóstico técnico completo, desglose detallado de costos, piezas requeridas y términos y condiciones.
+                    </p>
+                </div>
+                
+                <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0; text-align: center; color: #333;">
+                        <strong>Próximos pasos:</strong><br>
+                        1. Revisa la cotización detallada en el PDF adjunto.<br>
+                        2. Puedes aprobar o rechazar esta cotización.<br>
+                        3. Una vez aprobada, procederemos con la reparación.<br>
+                        4. Te mantendremos informado sobre el avance.<br>
+                    </p>
+                </div>
+                
+                <hr style="margin: 30px 0; border: 1px solid #eee;">
+                <p style="color: #666; font-size: 12px; text-align: center;">
+                    Este es un correo automático, por favor no respondas a este mensaje.<br>
+                    Para consultas o aprobar esta cotización, contáctanos directamente.
+                </p>
+            </div>
+            "#,
+            cliente_nombre,
+            cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A"),
+            cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A"),
+            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"),
+            equipo.equipo_marca.as_deref().unwrap_or("N/A"),
+            equipo.equipo_modelo.as_deref().unwrap_or("N/A"),
+            costo_total
+        );
+
+        // Preparar el payload para Resend API
+        let payload = json!({
+            "from": "noreply@beniteztech.com",
+            "to": [cliente_email],
+            "subject": format!(
+                "Cotización de Reparación - Toscanini (Código: {})",
+                cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A")
+            ),
+            "html": html_content,
+            "attachments": [{
+                "filename": pdf_filename,
+                "content": pdf_base64,
+                "content_type": "application/pdf"
+            }]
+        });
+
+        let client = Client::new();
+        let response = client
+            .post("https://api.resend.com/emails")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("Error enviando request a Resend API: {}", e))?;
+
+        let status = response.status();
+        if status.is_success() {
+            println!("📧 Email de cotización con PDF enviado exitosamente a: {}", cliente_email);
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_else(|_| "Error desconocido".to_string());
+            eprintln!("❌ Error de API Resend: {}", error_text);
+            Err(format!("Error enviando email: Status {} - {}", status, error_text))
+        }
+    }
 }
 
 /// Comando de Tauri para enviar email de orden de trabajo al cliente
@@ -618,4 +753,77 @@ pub async fn send_orden_trabajo_cliente(orden_id: i32, _sent_by: i32) -> Result<
     ).await?;
 
     Ok("Email enviado exitosamente".to_string())
+}
+
+/// Comando de Tauri para enviar email de cotización con PDF al cliente
+#[tauri::command]
+pub async fn send_cotizacion_email(cotizacion_id: i32, _sent_by: i32) -> Result<String, String> {
+    use crate::commands::cotizacion::get_cotizacion_by_id;
+    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+    use crate::pdf::commands::generate_cotizacion_pdf_command;
+    use crate::database::get_db_pool_safe;
+
+    // Obtener la cotización
+    let cotizacion = get_cotizacion_by_id(cotizacion_id).await?
+        .ok_or_else(|| "Cotización no encontrada".to_string())?;
+
+    // Verificar que la cotización no sea borrador
+    if cotizacion.is_borrador == Some(true) {
+        return Err("No se puede enviar una cotización en borrador".to_string());
+    }
+
+    // Generar el PDF
+    println!("📄 Generando PDF de cotización {}...", cotizacion_id);
+    let pdf_bytes = generate_cotizacion_pdf_command(cotizacion_id).await?;
+    println!("✅ PDF generado exitosamente ({} bytes)", pdf_bytes.len());
+
+    // Buscar la orden de trabajo asociada
+    let pool = get_db_pool_safe()?;
+    let orden_id: Option<i32> = sqlx::query_scalar(
+        "SELECT orden_id FROM ORDEN_TRABAJO WHERE cotizacion_id = ? LIMIT 1"
+    )
+    .bind(cotizacion_id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| format!("Error buscando orden asociada: {}", e))?;
+
+    let orden_id = orden_id.ok_or_else(|| "La cotización no está asociada a ninguna orden de trabajo".to_string())?;
+
+    // Obtener la orden de trabajo
+    let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+
+    // Obtener el equipo
+    let equipo_id = orden_trabajo.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id.ok_or_else(|| "El equipo no tiene cliente asociado".to_string())?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| "Cliente no encontrado".to_string())?;
+
+    // Verificar que el cliente tenga email
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+
+    // Enviar el email con PDF
+    println!("📧 Enviando email de cotización con PDF a {}...", cliente.cliente_correo.as_ref().unwrap());
+    email_service.send_cotizacion_email_with_pdf(
+        &cliente.cliente_correo.unwrap(),
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
+        &cotizacion,
+        &orden_trabajo,
+        &equipo,
+        &pdf_bytes,
+    ).await?;
+
+    Ok("Email de cotización con PDF enviado exitosamente".to_string())
 }
