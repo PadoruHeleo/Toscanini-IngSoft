@@ -208,8 +208,13 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
         1
     };
     let codigo = format!("COT-{}-{:03}", year, next_number);
+    
+    println!("🔍 create_cotizacion: Creando cotización con código {}", codigo);
+    println!("🔍 create_cotizacion: Piezas recibidas: {:?}", request.piezas);
+    
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
+    
     // Crear la cotización
     let result = sqlx::query(
         "INSERT INTO COTIZACION (cotizacion_codigo, costo_revision, costo_reparacion, \
@@ -227,23 +232,43 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
+    
     let cotizacion_id = result.last_insert_id() as i32;
+    println!("✅ create_cotizacion: Cotización creada con ID {}", cotizacion_id);
+    
     // Agregar piezas si se proporcionaron
     if let Some(ref piezas) = request.piezas {
-        for pieza in piezas {
+        println!("📦 create_cotizacion: Insertando {} piezas", piezas.len());
+        for (idx, pieza) in piezas.iter().enumerate() {
+            // Asegurar que la cantidad sea al menos 1
+            let cantidad = if pieza.cantidad <= 0 { 1 } else { pieza.cantidad };
+            println!("  Pieza {}: pieza_id={}, cantidad={}", idx + 1, pieza.pieza_id, cantidad);
+            
             sqlx::query(
                 "INSERT INTO PIEZAS_COTIZACION (pieza_id, cotizacion_id, cantidad) VALUES (?, ?, ?)"
             )
             .bind(pieza.pieza_id)
             .bind(cotizacion_id)
-            .bind(pieza.cantidad)
+            .bind(cantidad)
             .execute(&mut *tx)
             .await
-            .map_err(|e| format!("Database error adding part: {}", e))?;
+            .map_err(|e| {
+                let error_msg = format!("Database error adding part {} (pieza_id={}, cantidad={}): {}", 
+                    idx + 1, pieza.pieza_id, cantidad, e);
+                println!("❌ {}", error_msg);
+                error_msg
+            })?;
+            
+            println!("  ✅ Pieza {} insertada correctamente", idx + 1);
         }
+        println!("✅ create_cotizacion: Todas las piezas insertadas correctamente");
+    } else {
+        println!("⚠️ create_cotizacion: No se proporcionaron piezas");
     }
+    
     // Confirmar transacción
-    tx.commit().await.map_err(|e| format!("Database error: {}", e))?;
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
+    println!("✅ create_cotizacion: Transacción confirmada");
     
     // Aplicar términos y condiciones por defecto automáticamente
     let _ = apply_default_terminos_to_cotizacion(cotizacion_id, request.created_by).await;
@@ -257,6 +282,7 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
         None,
         Some(&format!("Cotización creada: {}", codigo))
     ).await;
+    
     // Obtener la cotización recién creada
     get_cotizacion_by_id(cotizacion_id)
         .await?
@@ -1227,4 +1253,69 @@ pub async fn get_salida_by_orden(orden_trabajo_id: i32) -> Result<Option<SalidaE
     .map_err(|e| format!("Error obteniendo salida: {}", e))?;
     
     Ok(salida)
+}
+
+/// Actualizar las piezas de una cotización
+#[tauri::command]
+pub async fn update_cotizacion_piezas(
+    cotizacion_id: i32,
+    piezas: Vec<PiezaCotizacionRequest>,
+    updated_by: i32,
+) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    println!("🔍 update_cotizacion_piezas: Actualizando {} piezas para cotización_id {}", piezas.len(), cotizacion_id);
+    
+    // Iniciar transacción
+    let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
+    
+    // Eliminar todas las piezas existentes de la cotización
+    sqlx::query("DELETE FROM PIEZAS_COTIZACION WHERE cotizacion_id = ?")
+        .bind(cotizacion_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("Database error deleting existing parts: {}", e))?;
+    
+    println!("✅ Piezas existentes eliminadas");
+    
+    // Insertar las nuevas piezas
+    if !piezas.is_empty() {
+        for (idx, pieza) in piezas.iter().enumerate() {
+            let cantidad = if pieza.cantidad <= 0 { 1 } else { pieza.cantidad };
+            println!("  Insertando pieza {}: pieza_id={}, cantidad={}", idx + 1, pieza.pieza_id, cantidad);
+            
+            sqlx::query(
+                "INSERT INTO PIEZAS_COTIZACION (pieza_id, cotizacion_id, cantidad) VALUES (?, ?, ?)"
+            )
+            .bind(pieza.pieza_id)
+            .bind(cotizacion_id)
+            .bind(cantidad)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                let error_msg = format!("Database error adding part {} (pieza_id={}, cantidad={}): {}", 
+                    idx + 1, pieza.pieza_id, cantidad, e);
+                println!("❌ {}", error_msg);
+                error_msg
+            })?;
+        }
+        println!("✅ Todas las piezas insertadas correctamente");
+    } else {
+        println!("⚠️ No se proporcionaron piezas, solo se eliminaron las existentes");
+    }
+    
+    // Confirmar transacción
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
+    
+    // Registrar la acción en el log de auditoría
+    let _ = log_action(
+        "UPDATE_COTIZACION_PIEZAS",
+        Some(updated_by),
+        "COTIZACION",
+        Some(cotizacion_id),
+        None,
+        Some(&format!("Actualizadas {} piezas", piezas.len()))
+    ).await;
+    
+    Ok(true)
 }

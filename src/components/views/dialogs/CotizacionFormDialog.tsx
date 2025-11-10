@@ -229,6 +229,7 @@ export default function CotizacionFormDialog({
         is_aprobada: cotizacion.is_aprobada || false,
         informe: cotizacion.informe || "",
       });
+      // NO resetear selectedPiezas aquí - se cargarán en el otro useEffect solo si están vacías
     } else if (!isEditing && open) {
       // Resetear formulario para crear nueva cotización
       setFormData({
@@ -237,12 +238,13 @@ export default function CotizacionFormDialog({
         is_aprobada: false,
         informe: "",
       });
+      // Solo resetear selectedPiezas cuando se abre el diálogo para crear nueva cotización
       setSelectedPiezas([]);
       // Resetear términos seleccionados para que loadTerminosCondiciones pueda aplicar los por defecto
       setSelectedTerminos([]);
     }
     setErrors({});
-  }, [isEditing, cotizacion, open]);
+  }, [isEditing, cotizacion?.cotizacion_id, open]); // Usar cotizacion_id en lugar del objeto completo
 
   const loadPiezas = async () => {
     try {
@@ -272,10 +274,10 @@ export default function CotizacionFormDialog({
         (pc) => ({
           pieza_id: pc.pieza_id,
           cotizacion_id: pc.cotizacion_id,
-          cantidad: pc.cantidad,
+          cantidad: pc.cantidad ?? 1, // Manejar None correctamente
           pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
           pieza_marca: pc.pieza_marca,
-          pieza_precio: pc.pieza_precio || 0,
+          pieza_precio: pc.pieza_precio ?? 0,
         })
       );
 
@@ -645,6 +647,10 @@ export default function CotizacionFormDialog({
         }
       } else {
         // Crear nueva cotización
+        console.log("🔍 Estado antes de crear cotización:");
+        console.log("  - selectedPiezas:", selectedPiezas);
+        console.log("  - selectedPiezas.length:", selectedPiezas.length);
+
         const createData = {
           costo_revision: parseInt(formData.costo_revision),
           costo_reparacion: parseInt(formData.costo_reparacion),
@@ -655,12 +661,20 @@ export default function CotizacionFormDialog({
           informe: formData.informe,
           piezas:
             selectedPiezas.length > 0
-              ? selectedPiezas.map((pieza) => ({
-                  pieza_id: pieza.pieza_id,
-                  cantidad: pieza.cantidad,
-                }))
+              ? selectedPiezas.map((pieza) => {
+                  const piezaData = {
+                    pieza_id: pieza.pieza_id,
+                    cantidad: pieza.cantidad ?? 1, // Asegurar que siempre haya una cantidad
+                  };
+                  console.log("  - Mapeando pieza:", piezaData);
+                  return piezaData;
+                })
               : undefined,
         };
+
+        console.log("📤 Enviando datos de cotización:", createData);
+        console.log("📤 Piezas a enviar:", createData.piezas);
+        console.log("📤 Tipo de piezas:", typeof createData.piezas);
 
         const cotizacionResult = await invoke<any>("create_cotizacion", {
           request: createData,
@@ -752,17 +766,45 @@ export default function CotizacionFormDialog({
         "cotizacionId inválido al agregar piezas a la cotización"
       );
     }
-    // Solo soportado para creación, no para edición
+
+    console.log(
+      "🔄 updateCotizacionPiezas: Actualizando piezas para cotización",
+      cotizacionId
+    );
+    console.log("  - isEditing:", isEditing);
+    console.log("  - selectedPiezas:", selectedPiezas);
+    console.log("  - selectedPiezas.length:", selectedPiezas.length);
+
     if (!isEditing) {
-      // Ya se envían las piezas en create_cotizacion, no necesitamos hacer nada aquí
-      // Las piezas se crean automáticamente en el backend durante create_cotizacion
+      // Para creación nueva, las piezas ya se envían en create_cotizacion
+      console.log(
+        "ℹ️ Creación nueva - las piezas ya se enviaron en create_cotizacion"
+      );
       return;
     } else {
-      // Si se desea soportar edición de piezas, implementar en backend y aquí
-      // Por ahora, simplemente no hacemos nada en lugar de mostrar un error
-      // porque las piezas no se pueden editar después de crear la cotización
-      console.log("⚠️ Edición de piezas no soportada para cotizaciones existentes");
-      return;
+      // Actualizar piezas de una cotización existente
+      if (!user) {
+        throw new Error("Usuario no autenticado");
+      }
+
+      const piezasData = selectedPiezas.map((pieza) => ({
+        pieza_id: pieza.pieza_id,
+        cantidad: pieza.cantidad ?? 1,
+      }));
+
+      console.log("📤 Enviando piezas para actualizar:", piezasData);
+
+      const result = await invoke<boolean>("update_cotizacion_piezas", {
+        cotizacionId: cotizacionId,
+        piezas: piezasData,
+        updatedBy: user.usuario_id,
+      });
+
+      if (result) {
+        console.log("✅ Piezas actualizadas correctamente");
+      } else {
+        throw new Error("No se pudieron actualizar las piezas");
+      }
     }
   };
 

@@ -214,7 +214,8 @@ pub fn run() {
             email::send_orden_trabajo_cliente,
             email::send_cotizacion_email,
             pdf::commands::generate_cotizacion_pdf_command,
-            pdf::commands::generate_informe_pdf_command
+            pdf::commands::generate_informe_pdf_command,
+            commands::cotizacion::update_cotizacion_piezas,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
