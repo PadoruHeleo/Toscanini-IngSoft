@@ -162,8 +162,8 @@ export default function PiezasView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold">Administrar Piezas</h2>
         <Button onClick={() => handleOpenForm()}>
           <Plus className="h-4 w-4 mr-2" /> Agregar Pieza
