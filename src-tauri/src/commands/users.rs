@@ -83,7 +83,7 @@ pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
             let usuarios = sqlx::query_as::<_, Usuario>(
                 "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -97,7 +97,7 @@ pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, Strin
                 "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_id = ?"
     )
     .bind(usuario_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -111,7 +111,7 @@ pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, 
                 "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_rut = ?"
     )
     .bind(usuario_rut)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -135,7 +135,7 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
     .bind(&request.usuario_telefono)
     .bind(&request.usuario_rol)
     .bind(true)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -188,7 +188,7 @@ pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> R
     .bind(&request.usuario_telefono)
     .bind(&request.usuario_rol)
     .bind(usuario_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -231,7 +231,7 @@ pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
     
     let result = sqlx::query("UPDATE USUARIO SET is_active = FALSE WHERE usuario_id = ?")
         .bind(usuario_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -266,7 +266,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
         "SELECT usuario_id, usuario_rut, usuario_nombre, usuario_correo, usuario_contrasena, usuario_telefono, usuario_rol, is_active, last_login_at, session_expires_at, session_token FROM USUARIO WHERE usuario_correo = ?"
     )
     .bind(&usuario_correo)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -299,7 +299,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                 .bind(session_expires)
                 .bind(&session_token)
                 .bind(user.usuario_id)
-                .execute(pool)
+                .execute(&*pool)
                 .await;
                 // Registrar login exitoso en el log de auditoría
                 let _ = log_action(
@@ -365,7 +365,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     )
     .bind("admin@toscanini.com")
     .bind("12345678-9")
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -410,7 +410,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     .bind("+56912345678")
     .bind("admin")
     .bind(true)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -469,7 +469,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
          WHERE usuario_correo = ?"
     )
     .bind(&request.usuario_correo)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| {
         eprintln!("❌ Error ejecutando consulta SQL para buscar usuario: {}", e);
@@ -516,7 +516,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
         "UPDATE PASSWORD_RESET SET used = TRUE WHERE usuario_id = ? AND used = FALSE"
     )
     .bind(user.usuario_id)
-    .execute(pool)
+    .execute(&*pool)
     .await;
     
     // Insertar nuevo código de recuperación
@@ -527,7 +527,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     .bind(user.usuario_id)
     .bind(&reset_code)
     .bind(expires_at)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| {
         eprintln!("❌ Error insertando código en la base de datos: {}", e);
@@ -579,7 +579,7 @@ pub async fn verify_reset_code(reset_code: String) -> Result<bool, String> {
          WHERE reset_code = ? AND used = FALSE AND expires_at > UTC_TIMESTAMP()"
     )
     .bind(&reset_code)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -611,7 +611,7 @@ pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<S
          WHERE reset_code = ? AND used = FALSE AND expires_at > UTC_TIMESTAMP()"
     )
     .bind(&request.reset_code)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -639,7 +639,7 @@ pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<S
     )
     .bind(&hashed_password)
     .bind(reset.usuario_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -650,7 +650,7 @@ pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<S
     // Marcar el código como usado
     sqlx::query("UPDATE PASSWORD_RESET SET used = TRUE WHERE reset_id = ?")
         .bind(reset.reset_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -673,7 +673,7 @@ pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
       let result = sqlx::query(
         "DELETE FROM PASSWORD_RESET WHERE expires_at < UTC_TIMESTAMP() OR used = TRUE"
     )
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -703,7 +703,7 @@ pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, 
          WHERE session_token = ? AND session_expires_at > UTC_TIMESTAMP() AND is_active = TRUE"
     )
     .bind(&session_token)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -758,7 +758,7 @@ pub async fn logout_user(session_token: String) -> Result<bool, String> {
         "UPDATE USUARIO SET session_token = NULL, session_expires_at = NULL WHERE session_token = ?"
     )
     .bind(&session_token)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -786,7 +786,7 @@ pub async fn cleanup_expired_sessions() -> Result<u64, String> {
         "UPDATE USUARIO SET session_token = NULL, session_expires_at = NULL, last_login_at = NULL 
          WHERE session_expires_at < UTC_TIMESTAMP() AND session_token IS NOT NULL"
     )
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -844,7 +844,7 @@ pub async fn change_user_password(usuario_id: i32, request: ChangePasswordReques
     )
     .bind(&hashed_password)
     .bind(usuario_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -904,7 +904,7 @@ pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> 
     )
     .bind(&request.new_email)
     .bind(usuario_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -919,7 +919,7 @@ pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> 
     )
     .bind(&request.new_email)
     .bind(usuario_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -943,12 +943,12 @@ pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> 
 
 #[tauri::command]
 pub async fn verify_email_in_use(correo: String) -> bool {
-    let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
+    let pool = get_db_pool_safe().unwrap();
     
     // Consulta la base de datos y retorna true si el correo existe
     match sqlx::query("SELECT COUNT(*) FROM USUARIO WHERE usuario_correo = ?")
         .bind(correo)
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await {
         Ok(row) => {
             let count: i64 = row.get(0);
@@ -988,12 +988,12 @@ pub async fn send_password_email(
 
 #[tauri::command]
 pub async fn verify_rut_in_use(rut: String) -> bool {
-    let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
+    let pool = get_db_pool_safe().unwrap();
 
     // Consulta la base de datos y retorna true si el RUT existe
     match sqlx::query("SELECT COUNT(*) FROM USUARIO WHERE usuario_rut = ?")
         .bind(rut)
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await {
         Ok(row) => {
             let count: i64 = row.get(0);
@@ -1023,7 +1023,7 @@ pub fn verify_phone(phone: String) -> bool {
 
 /// Obtiene los emails de usuarios con roles de admin y técnico
 pub async fn get_admin_and_tech_emails() -> Result<Vec<String>, String> {
-    let pool: &'static sqlx::Pool<sqlx::MySql> = get_db_pool_safe().unwrap();
+    let pool = get_db_pool_safe().unwrap();
     
     let emails = sqlx::query_scalar::<_, String>(
         "SELECT usuario_correo FROM USUARIO 
@@ -1032,7 +1032,7 @@ pub async fn get_admin_and_tech_emails() -> Result<Vec<String>, String> {
          AND usuario_correo IS NOT NULL 
          AND usuario_correo != ''"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo emails de admins y técnicos: {}", e))?;
     

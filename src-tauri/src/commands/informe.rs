@@ -96,7 +96,7 @@ pub async fn get_informes() -> Result<Vec<Informe>, String> {
          FROM INFORME 
          ORDER BY created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -116,7 +116,7 @@ pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> 
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
          ORDER BY i.created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -136,7 +136,7 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
          WHERE informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     println!("[DEBUG] get_informe_by_id: Resultado = {:?}", informe);
@@ -155,7 +155,7 @@ pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Info
          WHERE informe_codigo = ?"
     )
     .bind(&informe_codigo)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -175,7 +175,7 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
         "SELECT informe_codigo FROM INFORME WHERE informe_codigo LIKE ? ORDER BY informe_id DESC LIMIT 1"
     )
     .bind(format!("INF-{}-%", year))
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .ok();
     
@@ -266,7 +266,7 @@ pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: Stri
     // Desvincula el informe de la orden de trabajo
     let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
         .bind(informe_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error al desvincular informe: {}", e))?;
 
@@ -323,7 +323,7 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
     .bind(&request.solucion_aplicada)
     .bind(&request.tecnico_responsable)
     .bind(informe_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -374,7 +374,7 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
         "SELECT COUNT(*) FROM ORDEN_TRABAJO WHERE informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
     
@@ -440,7 +440,7 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
          ORDER BY i.created_at DESC"
     )
     .bind(&search_pattern)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -453,7 +453,7 @@ pub async fn count_informes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM INFORME")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -476,7 +476,7 @@ pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec
     )
     .bind(limit)
     .bind(offset)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -496,7 +496,7 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
          WHERE pi.informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -526,7 +526,7 @@ pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<boo
          WHERE e.equipo_id = ?"
     )
     .bind(orden_trabajo.equipo_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?
     .ok_or_else(|| "No se encontró información del cliente".to_string())?;
@@ -581,7 +581,7 @@ pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, St
          ORDER BY i.created_at DESC"
     )
     .bind(cliente_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error al obtener informes del cliente: {}", e))?;
     Ok(informes)

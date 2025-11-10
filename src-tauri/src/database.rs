@@ -7,8 +7,8 @@ use tokio::time::sleep;
 
 pub type DbPool = Pool<MySql>;
 
-// Cambiar de OnceLock a Arc<Mutex<Option>> para permitir reemplazar el pool
-static DB_POOL: OnceLock<Arc<Mutex<Option<DbPool>>>> = OnceLock::new();
+// Cambiar el tipo almacenado para usar Arc directamente
+static DB_POOL: OnceLock<Arc<Mutex<Option<Arc<DbPool>>>>> = OnceLock::new();
 static DB_CONNECTION_STATUS: OnceLock<Arc<Mutex<DatabaseStatus>>> = OnceLock::new();
 
 // Macro para funciones que requieren base de datos
@@ -80,10 +80,10 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
                 return Err(sqlx::Error::Configuration(error_msg.into()));
             }
             
-            // Guardar el pool en el Mutex
+            // Guardar el pool envuelto en Arc
             if let Some(pool_arc) = DB_POOL.get() {
                 if let Ok(mut pool_guard) = pool_arc.lock() {
-                    *pool_guard = Some(pool);
+                    *pool_guard = Some(Arc::new(pool));
                 }
             }
             
@@ -97,21 +97,21 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
     }
 }
 
-pub fn get_db_pool() -> Option<&'static DbPool> {
+pub fn get_db_pool() -> Option<Arc<DbPool>> {
     if let Some(pool_arc) = DB_POOL.get() {
         if let Ok(pool_guard) = pool_arc.lock() {
-            return pool_guard.as_ref();
+            return pool_guard.as_ref().cloned();
         }
     }
     None
 }
 
-pub fn get_db_pool_unchecked() -> &'static DbPool {
+pub fn get_db_pool_unchecked() -> Arc<DbPool> {
     get_db_pool().expect("Database pool not initialized")
 }
 
 // Nueva función segura que no hace panic
-pub fn get_db_pool_safe() -> Result<&'static DbPool, String> {
+pub fn get_db_pool_safe() -> Result<Arc<DbPool>, String> {
     get_db_pool().ok_or_else(|| "Database not connected".to_string())
 }
 
@@ -139,7 +139,7 @@ pub fn get_database_status() -> DatabaseStatus {
 
 pub async fn check_database_connection() -> bool {
     if let Some(pool) = get_db_pool() {
-        match sqlx::query("SELECT 1").execute(pool).await {
+        match sqlx::query("SELECT 1").execute(&*pool).await {
             Ok(_) => {
                 update_database_status(true, None);
                 true
@@ -191,10 +191,10 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
             // Verificar que la conexión funciona
             match sqlx::query("SELECT 1").execute(&pool).await {
                 Ok(_) => {
-                    // IMPORTANTE: Reemplazar el pool en DB_POOL
+                    // IMPORTANTE: Reemplazar el pool envuelto en Arc
                     if let Some(pool_arc) = DB_POOL.get() {
                         if let Ok(mut pool_guard) = pool_arc.lock() {
-                            *pool_guard = Some(pool);
+                            *pool_guard = Some(Arc::new(pool));
                             update_database_status(true, None);
                             println!("Database connection retry successful! Pool replaced.");
                             return Ok(());
@@ -264,7 +264,6 @@ fn load_env_file() {
 pub fn start_auto_reconnect_task() {
     tokio::spawn(async move {
         let mut retry_interval = Duration::from_secs(30); // Intervalo inicial de 30 segundos
-        let max_interval = Duration::from_secs(300); // Máximo 5 minutos entre intentos
         let mut consecutive_failures = 0u32;
         
         loop {

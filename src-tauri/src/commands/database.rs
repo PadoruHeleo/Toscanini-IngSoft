@@ -57,7 +57,7 @@ pub async fn retry_database_connection() -> DatabaseStatusResponse {
 pub async fn force_run_migrations() -> Result<String, String> {
     let pool = crate::database::get_db_pool_safe()?;
     
-    match sqlx::migrate!("./migrations").run(pool).await {
+    match sqlx::migrate!("./migrations").run(&*pool).await {
         Ok(_) => Ok("Migraciones ejecutadas exitosamente".to_string()),
         Err(e) => Err(format!("Error ejecutando migraciones: {}", e)),
     }
@@ -69,22 +69,22 @@ pub async fn insert_test_data() -> Result<String, String> {
     
     // Verificar conteos de tablas
     let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM USUARIO")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Error verificando usuarios: {}", e))?;
     
     let cliente_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM CLIENTE")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Error verificando clientes: {}", e))?;
         
     let equipo_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM EQUIPO")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Error verificando equipos: {}", e))?;
         
     let orden_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ORDEN_TRABAJO")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Error verificando ordenes: {}", e))?;
     
@@ -97,7 +97,7 @@ pub async fn check_equipo_ids() -> Result<String, String> {
     let pool = crate::database::get_db_pool_safe()?;
     
     let equipos: Vec<(i32, String)> = sqlx::query_as("SELECT equipo_id, numero_serie FROM EQUIPO ORDER BY equipo_id LIMIT 10")
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Error consultando equipos: {}", e))?;
     
@@ -113,7 +113,6 @@ pub async fn check_equipo_ids() -> Result<String, String> {
 pub fn start_auto_reconnect_task() {
     tokio::spawn(async move {
         let mut retry_interval = Duration::from_secs(30); // Intervalo inicial de 30 segundos
-        let max_interval = Duration::from_secs(300); // Máximo 5 minutos entre intentos
         let mut consecutive_failures = 0u32;
         
         loop {

@@ -79,61 +79,62 @@ pub struct InformePdfData {
     pub terminos_condiciones: Vec<TerminoPdf>,
 }
 
-#[derive(Debug)]
-struct CotizacionRow {
-    cotizacion_codigo: Option<String>,
-    costo_revision: Option<i32>,
-    costo_reparacion: Option<i32>,
-    costo_total: Option<i32>,
-    is_aprobada: Option<i32>,
-    informe: Option<String>,
-    created_at: chrono::DateTime<chrono::Utc>,
-    orden_codigo: Option<String>,
-    cliente_nombre: Option<String>,
-    cliente_correo: Option<String>,
-    cliente_telefono: Option<String>,
-    cliente_direccion: Option<String>,
-    equipo_marca: Option<String>,
-    equipo_modelo: Option<String>,
-    equipo_tipo: Option<String>,
-    numero_serie: Option<String>,
-    equipo_ubicacion: Option<String>,
-}
+// Estructuras no utilizadas - comentadas para evitar warnings
+// #[derive(Debug)]
+// struct CotizacionRow {
+//     cotizacion_codigo: Option<String>,
+//     costo_revision: Option<i32>,
+//     costo_reparacion: Option<i32>,
+//     costo_total: Option<i32>,
+//     is_aprobada: Option<i32>,
+//     informe: Option<String>,
+//     created_at: chrono::DateTime<chrono::Utc>,
+//     orden_codigo: Option<String>,
+//     cliente_nombre: Option<String>,
+//     cliente_correo: Option<String>,
+//     cliente_telefono: Option<String>,
+//     cliente_direccion: Option<String>,
+//     equipo_marca: Option<String>,
+//     equipo_modelo: Option<String>,
+//     equipo_tipo: Option<String>,
+//     numero_serie: Option<String>,
+//     equipo_ubicacion: Option<String>,
+// }
 
-#[derive(Debug)]
-struct PiezaRow {
-    pieza_nombre: Option<String>,
-    pieza_marca: Option<String>,
-    pieza_precio: Option<i32>,
-    cantidad: Option<i32>,
-}
+// #[derive(Debug)]
+// struct PiezaRow {
+//     pieza_nombre: Option<String>,
+//     pieza_marca: Option<String>,
+//     pieza_precio: Option<i32>,
+//     cantidad: Option<i32>,
+// }
 
-#[derive(Debug)]
-struct TerminoRow {
-    termino_nombre: String,
-    termino_descripcion: String,
-}
+// #[derive(Debug)]
+// struct TerminoRow {
+//     termino_nombre: String,
+//     termino_descripcion: String,
+// }
 
-#[derive(Debug)]
-struct InformeRow {
-    informe_codigo: Option<String>,
-    diagnostico: Option<String>,
-    recomendaciones: Option<String>,
-    solucion_aplicada: Option<String>,
-    tecnico_responsable: Option<String>,
-    created_at: chrono::DateTime<chrono::Utc>,
-    orden_codigo: Option<String>,
-    has_garantia: Option<i32>,
-    cliente_nombre: Option<String>,
-    cliente_correo: Option<String>,
-    cliente_telefono: Option<String>,
-    cliente_direccion: Option<String>,
-    equipo_marca: Option<String>,
-    equipo_modelo: Option<String>,
-    equipo_tipo: Option<String>,
-    numero_serie: Option<String>,
-    equipo_ubicacion: Option<String>,
-}
+// #[derive(Debug)]
+// struct InformeRow {
+//     informe_codigo: Option<String>,
+//     diagnostico: Option<String>,
+//     recomendaciones: Option<String>,
+//     solucion_aplicada: Option<String>,
+//     tecnico_responsable: Option<String>,
+//     created_at: chrono::DateTime<chrono::Utc>,
+//     orden_codigo: Option<String>,
+//     has_garantia: Option<i32>,
+//     cliente_nombre: Option<String>,
+//     cliente_correo: Option<String>,
+//     cliente_telefono: Option<String>,
+//     cliente_direccion: Option<String>,
+//     equipo_marca: Option<String>,
+//     equipo_modelo: Option<String>,
+//     equipo_tipo: Option<String>,
+//     numero_serie: Option<String>,
+//     equipo_ubicacion: Option<String>,
+// }
 
 pub struct PdfGenerator;
 
@@ -718,7 +719,7 @@ pub async fn generate_cotizacion_pdf_command(
          WHERE c.cotizacion_id = ?"
     )
     .bind(cotizacion_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo cotización: {}", e))?
     .ok_or_else(|| format!("Cotización con ID {} no encontrada", cotizacion_id))?;
@@ -750,7 +751,7 @@ pub async fn generate_cotizacion_pdf_command(
          WHERE pc.cotizacion_id = ?"
     )
     .bind(cotizacion_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo piezas: {}", e))?;
 
@@ -763,7 +764,7 @@ pub async fn generate_cotizacion_pdf_command(
          ORDER BY tc.termino_nombre"
     )
     .bind(cotizacion_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo términos y condiciones: {}", e))?;
     
@@ -855,7 +856,7 @@ pub async fn generate_informe_pdf_command(
          WHERE i.informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo informe: {}", e))?
     .ok_or_else(|| format!("Informe con ID {} no encontrado", informe_id))?;
@@ -888,7 +889,7 @@ pub async fn generate_informe_pdf_command(
          ORDER BY tc.termino_nombre"
     )
     .bind(informe_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo términos y condiciones del informe: {}", e))?;
     
@@ -902,7 +903,7 @@ pub async fn generate_informe_pdf_command(
          WHERE pi.informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Error obteniendo piezas del informe: {}", e))?;
 
