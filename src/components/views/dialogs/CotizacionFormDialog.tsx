@@ -624,12 +624,29 @@ export default function CotizacionFormDialog({
           // Aplicar términos y condiciones seleccionados
           if (selectedTerminos.length > 0) {
             try {
+              // Convertir los IDs a la estructura esperada por el backend
+              const terminoRequests = selectedTerminos.map((id) => ({
+                termino_id: id,
+                aplicado: true,
+              }));
+
+              console.log("📡 Aplicando términos a cotización:", {
+                cotizacionId: cotizacion.cotizacion_id,
+                terminos: terminoRequests, // Cambiar de terminoIds a terminos
+                appliedBy: user.usuario_id, // Agregar appliedBy
+              });
+
               await invoke("apply_terminos_to_cotizacion", {
                 cotizacionId: cotizacion.cotizacion_id,
-                terminoIds: selectedTerminos,
+                terminos: terminoRequests, // Cambiar de terminoIds a terminos
+                appliedBy: user.usuario_id, // Agregar appliedBy
               });
             } catch (error) {
               console.error("Error aplicando términos y condiciones:", error);
+              console.error("Detalles del error:", {
+                error,
+                message: error instanceof Error ? error.message : String(error),
+              });
               showError(
                 "Advertencia",
                 "La cotización se actualizó pero no se pudieron aplicar todos los términos y condiciones."
