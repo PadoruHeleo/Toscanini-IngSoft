@@ -754,14 +754,14 @@ export default function CotizacionFormDialog({
     }
     // Solo soportado para creación, no para edición
     if (!isEditing) {
-      // Ya se envían las piezas en create_cotizacion
+      // Ya se envían las piezas en create_cotizacion, no necesitamos hacer nada aquí
+      // Las piezas se crean automáticamente en el backend durante create_cotizacion
       return;
     } else {
       // Si se desea soportar edición de piezas, implementar en backend y aquí
-      showError(
-        "No soportado",
-        "La edición de piezas en cotizaciones existentes no está soportada."
-      );
+      // Por ahora, simplemente no hacemos nada en lugar de mostrar un error
+      // porque las piezas no se pueden editar después de crear la cotización
+      console.log("⚠️ Edición de piezas no soportada para cotizaciones existentes");
       return;
     }
   };

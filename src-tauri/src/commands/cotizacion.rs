@@ -655,7 +655,7 @@ pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result
 pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotizacion>, String> {
     let pool = get_db_pool_safe()?;
     let piezas = sqlx::query_as::<_, PiezaCotizacion>(
-        "SELECT pc.pieza_id, pc.cotizacion_id, COALESCE(pc.cantidad, 1) as cantidad, \
+        "SELECT pc.pieza_id, pc.cotizacion_id, pc.cantidad, \
                 p.pieza_nombre, p.pieza_marca, p.pieza_desc, p.pieza_precio \
          FROM PIEZAS_COTIZACION pc \
          LEFT JOIN PIEZA p ON pc.pieza_id = p.pieza_id \
@@ -665,6 +665,17 @@ pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotiza
     .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
+    
+    println!("🔍 get_piezas_cotizacion: Encontradas {} piezas para cotización_id {}", piezas.len(), cotizacion_id);
+    for (idx, pieza) in piezas.iter().enumerate() {
+        println!("  Pieza {}: pieza_id={}, cantidad={:?}, nombre={:?}", 
+            idx + 1, 
+            pieza.pieza_id, 
+            pieza.cantidad,
+            pieza.pieza_nombre
+        );
+    }
+    
     Ok(piezas)
 }
 

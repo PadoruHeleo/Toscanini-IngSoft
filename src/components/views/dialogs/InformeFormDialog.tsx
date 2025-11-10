@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Dialog,
@@ -255,12 +255,10 @@ export default function InformeFormDialog({
     if (open) {
       loadPiezas();
       loadTerminosCondiciones();
+
       if (isEditing && informe) {
         loadInformePiezas();
         loadTerminosInforme();
-      } else if (!isEditing && ordenTrabajoId) {
-        // Cargar diagnóstico y piezas de la cotización asociada a la orden de trabajo
-        loadDataFromOrdenTrabajo();
       }
 
       // Cargar estado de la orden si existe
@@ -276,7 +274,7 @@ export default function InformeFormDialog({
           });
       }
     }
-  }, [open]);
+  }, [open, ordenTrabajoId, isEditing]);
 
   // Aplicar términos por defecto cuando se tienen los datos necesarios
   useEffect(() => {
@@ -321,6 +319,113 @@ export default function InformeFormDialog({
     }
   }, [terminosCondiciones, selectedTerminos, isEditing, open]);
 
+  // Función para cargar datos de la orden de trabajo (piezas y diagnóstico de la cotización)
+  const loadDataFromOrdenTrabajo = useCallback(async () => {
+    if (!ordenTrabajoId) {
+      console.log("⚠️ loadDataFromOrdenTrabajo: No hay ordenTrabajoId");
+      return;
+    }
+
+    try {
+      console.log("🔄 Cargando datos de la orden de trabajo:", ordenTrabajoId);
+
+      // Primero obtener la orden de trabajo para conseguir la cotización asociada
+      const ordenTrabajo = await invoke<any>("get_orden_trabajo_by_id", {
+        ordenId: ordenTrabajoId,
+      });
+
+      console.log("📋 Orden de trabajo obtenida:", ordenTrabajo);
+
+      if (!ordenTrabajo?.cotizacion_id) {
+        console.log("⚠️ La orden de trabajo no tiene una cotización asociada");
+        return;
+      }
+
+      console.log("✅ Cotización encontrada:", ordenTrabajo.cotizacion_id);
+
+      // Obtener la cotización completa para acceder al campo informe
+      const cotizacion = await invoke<any>("get_cotizacion_by_id", {
+        cotizacionId: ordenTrabajo.cotizacion_id,
+      });
+
+      console.log("📋 Cotización obtenida:", cotizacion);
+
+      // Cargar el diagnóstico desde el campo informe de la cotización
+      if (cotizacion?.informe) {
+        setFormData((prev) => ({
+          ...prev,
+          diagnostico: cotizacion.informe,
+        }));
+        console.log("✅ Diagnóstico cargado desde la cotización asociada");
+      }
+
+      // Obtener las piezas de la cotización
+      console.log("🔄 Obteniendo piezas de la cotización...");
+      const piezasCotizacion = await invoke<any[]>("get_piezas_cotizacion", {
+        cotizacionId: ordenTrabajo.cotizacion_id,
+      });
+
+      console.log(
+        "📦 Piezas obtenidas de la cotización (raw):",
+        piezasCotizacion
+      );
+      console.log("📦 Cantidad de piezas:", piezasCotizacion?.length || 0);
+
+      if (!piezasCotizacion || piezasCotizacion.length === 0) {
+        console.log("⚠️ No se encontraron piezas en la cotización");
+        return;
+      }
+
+      // Convertir las piezas de cotización a formato de piezas de informe
+      const selectedPiezasWithDetails: SelectedPieza[] = piezasCotizacion
+        .filter((pc) => {
+          const isValid = pc && pc.pieza_id;
+          if (!isValid) {
+            console.log("⚠️ Pieza inválida filtrada:", pc);
+          }
+          return isValid;
+        })
+        .map((pc) => {
+          const pieza = {
+            pieza_id: pc.pieza_id,
+            informe_id: 0, // Se asignará cuando se cree el informe
+            cantidad: pc.cantidad ?? 1, // Usar nullish coalescing para manejar null/undefined
+            pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
+            pieza_marca: pc.pieza_marca || undefined,
+            pieza_precio: pc.pieza_precio ?? 0, // Usar nullish coalescing para manejar null/undefined
+          };
+          console.log("🔧 Pieza convertida:", pieza);
+          return pieza;
+        });
+
+      console.log("✅ Piezas convertidas (final):", selectedPiezasWithDetails);
+      console.log(
+        "✅ Cantidad de piezas convertidas:",
+        selectedPiezasWithDetails.length
+      );
+
+      setSelectedPiezas(selectedPiezasWithDetails);
+
+      if (selectedPiezasWithDetails.length > 0) {
+        console.log(
+          `✅ Se cargaron ${selectedPiezasWithDetails.length} pieza(s) de la cotización asociada`
+        );
+        success(
+          "Piezas cargadas",
+          `Se cargaron ${selectedPiezasWithDetails.length} pieza(s) de la cotización asociada a esta orden de trabajo.`
+        );
+      } else {
+        console.log("⚠️ No se encontraron piezas válidas después del filtrado");
+      }
+    } catch (error) {
+      console.error("❌ Error cargando datos de la orden de trabajo:", error);
+      showError(
+        "Error",
+        "No se pudieron cargar las piezas de la cotización asociada."
+      );
+    }
+  }, [ordenTrabajoId, success, showError]);
+
   // Inicializar formulario cuando se pasa un informe para editar
   useEffect(() => {
     if (isEditing && informe && open) {
@@ -339,7 +444,7 @@ export default function InformeFormDialog({
         tecnico_responsable: user?.usuario_nombre || "",
       });
       // No resetear selectedPiezas aquí si venimos de una orden de trabajo
-      // porque se cargarán automáticamente desde loadPiezasFromOrdenTrabajo
+      // porque se cargarán automáticamente desde loadDataFromOrdenTrabajo
       if (!ordenTrabajoId) {
         setSelectedPiezas([]);
       }
@@ -347,7 +452,22 @@ export default function InformeFormDialog({
       setSelectedTerminos([]);
     }
     setErrors({});
-  }, [isEditing, informe, open, user]);
+  }, [isEditing, informe, open, user, ordenTrabajoId]);
+
+  // Cargar piezas de la cotización cuando se abre el modal para crear nuevo informe
+  useEffect(() => {
+    if (open && !isEditing && ordenTrabajoId) {
+      console.log(
+        "🔄 useEffect: Cargando piezas desde cotización, ordenTrabajoId:",
+        ordenTrabajoId
+      );
+      // Usar un pequeño delay para asegurar que el formulario se haya reseteado
+      const timer = setTimeout(() => {
+        loadDataFromOrdenTrabajo();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open, isEditing, ordenTrabajoId, loadDataFromOrdenTrabajo]);
 
   const loadPiezas = async () => {
     try {
@@ -392,64 +512,6 @@ export default function InformeFormDialog({
         errorMsg += `\n${(error as any).message}`;
       }
       showError("Error", errorMsg);
-    }
-  };
-  const loadDataFromOrdenTrabajo = async () => {
-    if (!ordenTrabajoId) return;
-
-    try {
-      // Primero obtener la orden de trabajo para conseguir la cotización asociada
-      const ordenTrabajo = await invoke<any>("get_orden_trabajo_by_id", {
-        ordenId: ordenTrabajoId,
-      });
-
-      if (!ordenTrabajo?.cotizacion_id) {
-        console.log("La orden de trabajo no tiene una cotización asociada");
-        return;
-      }
-
-      // Obtener la cotización completa para acceder al campo informe
-      const cotizacion = await invoke<any>("get_cotizacion_by_id", {
-        cotizacionId: ordenTrabajo.cotizacion_id,
-      });
-
-      // Cargar el diagnóstico desde el campo informe de la cotización
-      if (cotizacion?.informe) {
-        setFormData((prev) => ({
-          ...prev,
-          diagnostico: cotizacion.informe,
-        }));
-        console.log("Diagnóstico cargado desde la cotización asociada");
-      }
-
-      // Obtener las piezas de la cotización
-      const piezasCotizacion = await invoke<any[]>("get_piezas_cotizacion", {
-        cotizacionId: ordenTrabajo.cotizacion_id,
-      });
-
-      // Convertir las piezas de cotización a formato de piezas de informe
-      const selectedPiezasWithDetails: SelectedPieza[] = piezasCotizacion.map(
-        (pc) => ({
-          pieza_id: pc.pieza_id,
-          informe_id: 0, // Se asignará cuando se cree el informe
-          cantidad: pc.cantidad || 1,
-          pieza_nombre: pc.pieza_nombre || "Nombre no disponible",
-          pieza_marca: pc.pieza_marca,
-          pieza_precio: pc.pieza_precio || 0,
-        })
-      );
-
-      setSelectedPiezas(selectedPiezasWithDetails);
-
-      if (selectedPiezasWithDetails.length > 0) {
-        console.log(
-          `Se cargaron ${selectedPiezasWithDetails.length} piezas de la cotización asociada`
-        );
-      }
-    } catch (error) {
-      console.error("Error cargando datos de la orden de trabajo:", error);
-      // No mostrar error al usuario ya que esto es una funcionalidad de conveniencia
-      // Si no se pueden cargar los datos, simplemente no se precargan
     }
   };
   const validateForm = (): boolean => {
