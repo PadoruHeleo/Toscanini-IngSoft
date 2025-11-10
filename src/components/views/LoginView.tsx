@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "../ui/card";
 import { LoginError } from "@/components/ui/login-error";
-import { InitSetup } from "@/components/common/InitSetup";
+import { DatabaseStatusCard } from "@/components/common/DatabaseStatusCard";
 
 export function LoginView() {
   const [email, setEmail] = useState("");
@@ -78,7 +78,7 @@ export function LoginView() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md space-y-4">
-        <InitSetup />
+        <DatabaseStatusCard />
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold text-center">
