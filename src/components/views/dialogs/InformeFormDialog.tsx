@@ -972,13 +972,34 @@ export default function InformeFormDialog({
             sentBy: user.usuario_id,
           });
 
+          // Cambiar el estado de la orden a "espera_de_retiro" para activar el envío automático del correo con PDF
+          if (ordenTrabajoId && asociadoAOrden) {
+            try {
+              await invoke("cambiar_estado_orden_trabajo", {
+                ordenId: ordenTrabajoId,
+                nuevoEstado: "espera_de_retiro",
+                updatedBy: user.usuario_id,
+              });
+              console.log(
+                "✅ Estado cambiado a 'espera_de_retiro' - el correo con PDF se enviará automáticamente"
+              );
+            } catch (error) {
+              console.error(
+                "Error cambiando estado a 'espera_de_retiro':",
+                error
+              );
+              // No mostramos error al usuario porque el informe ya se envió
+              // El correo con PDF se puede enviar manualmente después si es necesario
+            }
+          }
+
           success(
             "Informe creado y enviado",
             `El informe ha sido creado y enviado al cliente exitosamente.` +
-              (ordenTrabajoId
-                ? asociadoAOrden
-                  ? " (Asociado a la orden de trabajo)"
-                  : " (No se pudo asociar a la orden de trabajo)"
+              (ordenTrabajoId && asociadoAOrden
+                ? " El estado de la orden se ha actualizado a 'Espera de Retiro' y el cliente recibirá un correo con el informe PDF adjunto."
+                : ordenTrabajoId
+                ? " (No se pudo asociar a la orden de trabajo)"
                 : "")
           );
           onInformeAdded();
@@ -1023,6 +1044,23 @@ export default function InformeFormDialog({
         sentBy: user.usuario_id,
       });
 
+      // Cambiar el estado de la orden a "espera_de_retiro" para activar el envío automático del correo con PDF
+      if (ordenTrabajoId) {
+        try {
+          await invoke("cambiar_estado_orden_trabajo", {
+            ordenId: ordenTrabajoId,
+            nuevoEstado: "espera_de_retiro",
+            updatedBy: user.usuario_id,
+          });
+          console.log(
+            "✅ Estado cambiado a 'espera_de_retiro' - el correo con PDF se enviará automáticamente"
+          );
+        } catch (error) {
+          console.error("Error cambiando estado a 'espera_de_retiro':", error);
+          // No mostramos error al usuario porque el informe ya se envió
+        }
+      }
+
       // Actualizar el estado del informe para que ya no sea borrador
       await invoke<boolean>("update_informe", {
         informeId: informe.informe_id,
@@ -1032,7 +1070,10 @@ export default function InformeFormDialog({
 
       success(
         "Informe enviado",
-        "El informe ha sido enviado al cliente exitosamente."
+        `El informe ha sido enviado al cliente exitosamente.` +
+          (ordenTrabajoId
+            ? " El estado de la orden se ha actualizado a 'Espera de Retiro' y el cliente recibirá un correo con el informe PDF adjunto."
+            : "")
       );
 
       onInformeAdded(); // Recargar la vista

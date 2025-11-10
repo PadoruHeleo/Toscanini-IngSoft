@@ -712,6 +712,144 @@ impl EmailService {
             Err(format!("Error enviando email: Status {} - {}", status, error_text))
         }
     }
+
+    /// Enviar email al cliente informando que su equipo está listo para retiro con el informe PDF adjunto
+    pub async fn send_informe_email_with_pdf(
+        &self,
+        cliente_email: &str,
+        cliente_nombre: &str,
+        informe: &crate::commands::informe::Informe,
+        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
+        equipo: &crate::commands::equipos::Equipo,
+        pdf_bytes: &[u8],
+    ) -> Result<(), String> {
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use reqwest::Client;
+        use serde_json::json;
+        use std::env;
+
+        let api_key = env::var("RESEND_API_KEY")
+            .map_err(|_| "RESEND_API_KEY no encontrada".to_string())?;
+
+        // Nombre del archivo PDF
+        let pdf_filename = format!(
+            "Informe_{}.pdf",
+            informe.informe_codigo.as_deref().unwrap_or("N/A")
+        );
+
+        // Codificar PDF en base64
+        let pdf_base64 = STANDARD.encode(pdf_bytes);
+
+        // Contenido HTML conciso (el PDF tiene toda la información detallada)
+        let html_content = format!(
+            r#"
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #333; margin: 0;">Toscanini</h1>
+                    <p style="color: #666; margin: 5px 0;">Servicio Técnico Especializado</p>
+                </div>
+                
+                <h2 style="color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 10px;">
+                    ✅ Equipo Listo para Retiro
+                </h2>
+                
+                <p>Estimado/a <strong>{}</strong>,</p>
+                
+                <p>Nos complace informarte que tu equipo ha sido reparado exitosamente y está <strong>listo para su retiro</strong>.</p>
+                
+                <div style="background-color: #d4edda; padding: 20px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #28a745;">
+                    <p style="margin: 0; color: #155724; font-size: 16px;">
+                        <strong>🎉 ¡Tu equipo está listo!</strong>
+                    </p>
+                    <p style="margin: 10px 0 0 0; color: #155724; font-size: 14px;">
+                        Puedes retirar tu equipo en nuestras instalaciones durante nuestro horario de atención.
+                    </p>
+                </div>
+                
+                <div style="background-color: #e8f4f8; padding: 20px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #007bff;">
+                    <p style="margin: 0; color: #333; font-size: 16px;">
+                        <strong>📎 Archivo adjunto:</strong> {}.pdf
+                    </p>
+                    <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
+                        El informe técnico completo con todos los detalles de la reparación, piezas utilizadas y recomendaciones está disponible en el documento PDF adjunto.
+                    </p>
+                </div>
+                
+                <div style="background-color: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                    <h3 style="margin-top: 0; color: #333; font-size: 16px;">Información del Equipo</h3>
+                    <p style="margin: 5px 0;"><strong>Código de Orden:</strong> {}</p>
+                    <p style="margin: 5px 0;"><strong>Código de Informe:</strong> {}</p>
+                    <p style="margin: 5px 0;"><strong>Equipo:</strong> {} {}</p>
+                    <p style="margin: 5px 0;"><strong>Técnico Responsable:</strong> {}</p>
+                </div>
+                
+                <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0; color: #856404;">
+                        <strong>📋 Importante:</strong> Por favor revisa el PDF adjunto para ver el diagnóstico completo, solución aplicada, piezas utilizadas y recomendaciones para el cuidado de tu equipo.
+                    </p>
+                </div>
+                
+                <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0; text-align: center; color: #333;">
+                        <strong>Próximos pasos:</strong><br>
+                        1. Revisa el informe técnico completo en el PDF adjunto.<br>
+                        2. Acude a nuestras instalaciones para retirar tu equipo.<br>
+                        3. Trae tu identificación al momento del retiro.<br>
+                        4. Si tienes alguna consulta, no dudes en contactarnos.<br>
+                    </p>
+                </div>
+                
+                <hr style="margin: 30px 0; border: 1px solid #eee;">
+                <p style="color: #666; font-size: 12px; text-align: center;">
+                    Este es un correo automático, por favor no respondas a este mensaje.<br>
+                    Para consultas o coordinar el retiro, contáctanos directamente.
+                </p>
+            </div>
+            "#,
+            cliente_nombre,
+            informe.informe_codigo.as_deref().unwrap_or("N/A"),
+            orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"),
+            informe.informe_codigo.as_deref().unwrap_or("N/A"),
+            equipo.equipo_marca.as_deref().unwrap_or("N/A"),
+            equipo.equipo_modelo.as_deref().unwrap_or("N/A"),
+            informe.tecnico_responsable.as_deref().unwrap_or("No especificado")
+        );
+
+        // Preparar el payload para Resend API
+        let payload = json!({
+            "from": "noreply@beniteztech.com",
+            "to": [cliente_email],
+            "subject": format!("✅ Tu equipo está listo para retiro - {}", orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")),
+            "html": html_content,
+            "attachments": [
+                {
+                    "filename": pdf_filename,
+                    "content": pdf_base64
+                }
+            ]
+        });
+
+        // Enviar el email usando reqwest directamente (ya que resend_rs no soporta attachments fácilmente)
+        let client = Client::new();
+        let response = client
+            .post("https://api.resend.com/emails")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("Error enviando request a Resend API: {}", e))?;
+
+        let status = response.status();
+        if status.is_success() {
+            println!("📧 Email de informe con PDF enviado exitosamente a: {}", cliente_email);
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_else(|_| "Error desconocido".to_string());
+            eprintln!("❌ Error de API Resend: {}", error_text);
+            Err(format!("Error enviando email: Status {} - {}", status, error_text))
+        }
+    }
 }
 
 /// Comando de Tauri para enviar email de orden de trabajo al cliente
@@ -853,4 +991,66 @@ pub async fn send_cotizacion_email(cotizacion_id: i32, sent_by: i32) -> Result<S
     }
 
     Ok("Email de cotización con PDF enviado exitosamente y estados actualizados".to_string())
+}
+
+/// Comando de Tauri para enviar email de informe con PDF al cliente cuando el equipo está listo para retiro
+/// Se ejecuta automáticamente cuando la orden cambia a "espera_de_retiro"
+#[tauri::command]
+pub async fn send_informe_email(orden_id: i32, _sent_by: i32) -> Result<String, String> {
+    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_id;
+    use crate::commands::informe::get_informe_by_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+    use crate::pdf::commands::generate_informe_pdf_command;
+
+    // Obtener la orden de trabajo
+    let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+
+    // Verificar que la orden tenga un informe asociado
+    let informe_id = orden_trabajo.informe_id
+        .ok_or_else(|| "La orden de trabajo no tiene un informe asociado".to_string())?;
+
+    // Obtener el informe
+    let informe = get_informe_by_id(informe_id).await?
+        .ok_or_else(|| "Informe no encontrado".to_string())?;
+
+    // Generar el PDF del informe
+    println!("📄 Generando PDF de informe {}...", informe_id);
+    let pdf_bytes = generate_informe_pdf_command(informe_id).await?;
+    println!("✅ PDF generado exitosamente ({} bytes)", pdf_bytes.len());
+
+    // Obtener el equipo
+    let equipo_id = orden_trabajo.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| "Equipo no encontrado".to_string())?;
+
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id.ok_or_else(|| "El equipo no tiene cliente asociado".to_string())?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| "Cliente no encontrado".to_string())?;
+
+    // Verificar que el cliente tenga email
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+
+    // Crear el servicio de email
+    let email_service = EmailService::new()
+        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+
+    // Enviar el email con PDF
+    println!("📧 Enviando email de informe con PDF a {}...", cliente.cliente_correo.as_ref().unwrap());
+    email_service.send_informe_email_with_pdf(
+        &cliente.cliente_correo.unwrap(),
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
+        &informe,
+        &orden_trabajo,
+        &equipo,
+        &pdf_bytes,
+    ).await?;
+
+    println!("✅ Email de informe enviado exitosamente");
+
+    Ok("Email de informe con PDF enviado exitosamente al cliente".to_string())
 }

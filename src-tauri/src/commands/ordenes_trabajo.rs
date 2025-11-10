@@ -549,7 +549,23 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
         current_orden.as_ref().and_then(|o| o.estado.as_deref()),
         Some(&nuevo_estado)
     ).await;
-    
+
+    // Si el nuevo estado es "espera_de_retiro", enviar email automáticamente con el informe
+    if nuevo_estado == "espera_de_retiro" {
+        println!("🔄 Estado cambiado a 'espera_de_retiro', enviando email automáticamente al cliente...");
+        // Intentar enviar el email, pero no fallar si hay algún problema (solo loguear)
+        match crate::email::send_informe_email(orden_id, updated_by).await {
+            Ok(msg) => {
+                println!("✅ Email de informe enviado exitosamente: {}", msg);
+            }
+            Err(e) => {
+                eprintln!("⚠️ No se pudo enviar el email de informe automáticamente: {}", e);
+                // No retornamos error aquí para que el cambio de estado se complete
+                // El email puede enviarse manualmente después si es necesario
+            }
+        }
+    }
+
     get_orden_trabajo_by_id(orden_id).await
 }
 
@@ -812,7 +828,7 @@ pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<O
     let orden = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, 
                 has_garantia, equipo_id, cotizacion_id, informe_id, 
-                created_by, created_at 
+                pre_informe, created_by, created_at, finished_at
          FROM ORDEN_TRABAJO 
          WHERE informe_id = ?"
     )
