@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
-import { Plus, Trash2, FileText } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Informe {
@@ -106,7 +106,6 @@ export default function InformeFormDialog({
   const [loading, setLoading] = useState(false);
   const [loadingSendToClient, setLoadingSendToClient] = useState(false);
   const [loadingSendExisting, setLoadingSendExisting] = useState(false);
-  const [loadingPdf, setLoadingPdf] = useState(false);
   const [piezas, setPiezas] = useState<Pieza[]>([]);
   const [loadingPiezas, setLoadingPiezas] = useState(false);
   const [selectedPiezas, setSelectedPiezas] = useState<SelectedPieza[]>([]);
@@ -142,48 +141,6 @@ export default function InformeFormDialog({
   const [errors, setErrors] = useState<FormErrors>({});
   // Estado para el diálogo de confirmación de eliminación
   // Función para manejar la eliminación del informe
-  const handleEliminarInforme = async () => {
-    if (!informe?.informe_id || !user) {
-      showError("Error", "No se puede eliminar el informe.");
-      return;
-    }
-    try {
-      setLoading(true);
-      // Actualizar la orden de trabajo para quitar la referencia al informe
-      const ordenResult = await invoke<boolean>("remove_informe_from_ordenes", {
-        informeId: informe.informe_id,
-        updatedBy: user.usuario_id,
-      });
-
-      if (!ordenResult) {
-        // <-- Cambia aquí la condición
-        showError(
-          "Error",
-          "No se pudo desvincular el informe de la orden de trabajo."
-        );
-        setLoading(false);
-        return;
-      }
-      // Eliminar el informe
-      const result = await invoke<boolean>("delete_informe", {
-        informeId: informe.informe_id,
-        deletedBy: user.usuario_id,
-      });
-
-      if (result) {
-        success("Informe eliminado", "El informe fue eliminado exitosamente.");
-        onInformeAdded();
-        onOpenChange(false);
-      } else {
-        showError("Error", "No se pudo eliminar el informe.");
-      }
-    } catch (error) {
-      showError("Error", "Ocurrió un error al eliminar el informe.");
-      console.log(error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadTerminosCondiciones = async () => {
     try {
@@ -1091,58 +1048,6 @@ export default function InformeFormDialog({
     }
   };
 
-  const handlePreviewPdf = async () => {
-    if (!informe && !formData.diagnostico.trim()) {
-      showError("Error", "No hay datos suficientes para generar el PDF");
-      return;
-    }
-
-    try {
-      setLoadingPdf(true);
-
-      // Si estamos editando, usar datos del informe existente
-      if (isEditing && informe) {
-        // Generar PDF para informe existente
-        await invoke<string>("generate_informe_pdf", {
-          informeId: informe.informe_id,
-        });
-      } else {
-        // Para crear nuevo informe, necesitamos validar los datos primero
-        if (!validateForm()) {
-          return;
-        }
-
-        // Generar PDF con datos del formulario
-        const pdfData = {
-          diagnostico: formData.diagnostico,
-          recomendaciones: formData.recomendaciones.trim() || undefined,
-          solucion_aplicada: formData.solucion_aplicada.trim() || undefined,
-          tecnico_responsable: formData.tecnico_responsable,
-          piezas: selectedPiezas.length > 0 ? selectedPiezas : undefined,
-        };
-
-        await invoke<string>("generate_informe_preview_pdf", {
-          data: pdfData,
-        });
-      }
-
-      success(
-        "PDF generado",
-        "El PDF del informe se ha generado exitosamente."
-      );
-    } catch (error) {
-      console.error("Error generando PDF:", error);
-      showError(
-        "Error al generar PDF",
-        error instanceof Error
-          ? error.message
-          : "No se pudo generar el PDF del informe."
-      );
-    } finally {
-      setLoadingPdf(false);
-    }
-  };
-
   const getPiezaDisplayName = (pieza: Pieza) => {
     const parts = [];
     if (pieza.pieza_nombre) parts.push(pieza.pieza_nombre);
@@ -1697,23 +1602,13 @@ export default function InformeFormDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={
-                  loading ||
-                  loadingSendToClient ||
-                  loadingSendExisting ||
-                  loadingPdf
-                }
+                disabled={loading || loadingSendToClient || loadingSendExisting}
               >
                 Cancelar
               </Button>{" "}
               <Button
                 type="submit"
-                disabled={
-                  loading ||
-                  loadingSendToClient ||
-                  loadingSendExisting ||
-                  loadingPdf
-                }
+                disabled={loading || loadingSendToClient || loadingSendExisting}
               >
                 {loading
                   ? "Procesando..."
@@ -1726,10 +1621,7 @@ export default function InformeFormDialog({
                   type="button"
                   onClick={handleSendExistingToClient}
                   disabled={
-                    loading ||
-                    loadingSendToClient ||
-                    loadingSendExisting ||
-                    loadingPdf
+                    loading || loadingSendToClient || loadingSendExisting
                   }
                   className="bg-blue-600 hover:bg-blue-700"
                 >
@@ -1754,10 +1646,7 @@ export default function InformeFormDialog({
                   type="button"
                   onClick={handleSubmitAndSendToClient}
                   disabled={
-                    loading ||
-                    loadingSendToClient ||
-                    loadingSendExisting ||
-                    loadingPdf
+                    loading || loadingSendToClient || loadingSendExisting
                   }
                   className="bg-green-600 hover:bg-green-700"
                 >
