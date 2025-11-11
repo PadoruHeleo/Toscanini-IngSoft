@@ -174,7 +174,7 @@ export function ClientesView() {
 
   if (loading) {
     return (
-      <div className="p-4">
+      <div className="px-6 pt-6">
         <ViewTitle />
         <div className="text-center py-8">Cargando clientes...</div>
       </div>
@@ -182,8 +182,8 @@ export function ClientesView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <ViewTitle />
         {canCreateCliente && (
           <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
@@ -196,7 +196,7 @@ export function ClientesView() {
       </div>
 
       {/* Barra de búsqueda */}
-      <div className="flex items-center space-x-2 mb-4">
+      <div className="flex items-center space-x-2">
         <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input

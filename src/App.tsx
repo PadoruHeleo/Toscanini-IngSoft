@@ -24,6 +24,7 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { SessionExpirationWarning } from "@/components/features/session/SessionExpirationWarning";
 import { DatabaseConnectionBanner } from "@/components/features/database/DatabaseConnectionBanner";
+import { DatabaseStatusIndicator } from "@/components/common/DatabaseStatusIndicator";
 import { Toaster } from "@/components/ui/toaster";
 
 // Componente de las notificaciones periodicas, actualmente maneja las notificaciones a laboratorio por atraso
@@ -109,6 +110,7 @@ export default function App() {
               </SidebarInset>
             </SidebarProvider>
             <SessionExpirationWarning />
+            <DatabaseStatusIndicator />
             <Toaster />
           </ProtectedRoute>
         </ViewProvider>

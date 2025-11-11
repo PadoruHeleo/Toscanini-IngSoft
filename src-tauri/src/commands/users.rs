@@ -77,6 +77,12 @@ pub struct ChangeEmailRequest {
     pub password: String, // Requiere contraseña actual para confirmar
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChangePhoneRequest {
+    pub new_phone: String,
+    pub password: String, // Requiere contraseña actual para confirmar
+}
+
 #[tauri::command]
 pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
     let pool = get_db_pool_safe()?;
@@ -1019,6 +1025,73 @@ pub fn verify_phone(phone: String) -> bool {
         return false;
     }
     true
+}
+
+#[tauri::command]
+pub async fn change_user_phone(usuario_id: i32, request: ChangePhoneRequest) -> Result<Option<Usuario>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener el usuario actual
+    let user = get_usuario_by_id(usuario_id).await?
+        .ok_or_else(|| "Usuario no encontrado".to_string())?;
+    
+    // Verificar la contraseña para confirmar la identidad
+    if let Some(ref stored_password) = user.usuario_contrasena {
+        if !verify_password(&request.password, stored_password)? {
+            // Registrar intento fallido
+            let _ = log_action(
+                "CHANGE_PHONE_FAILED",
+                Some(usuario_id),
+                "USUARIO",
+                Some(usuario_id),
+                None,
+                Some("Intento de cambio de teléfono con contraseña incorrecta")
+            ).await;
+            return Err("Contraseña incorrecta".to_string());
+        }
+    } else {
+        return Err("Usuario sin contraseña configurada".to_string());
+    }
+    
+    // Validar formato del nuevo teléfono
+    if !verify_phone(request.new_phone.clone()) {
+        return Err("Formato de teléfono inválido. Debe iniciar con '+' y tener solo números, máximo 12 caracteres".to_string());
+    }
+    
+    // Verificar que el nuevo teléfono sea diferente al actual
+    if let Some(ref current_phone) = user.usuario_telefono {
+        if request.new_phone == *current_phone {
+            return Err("El nuevo teléfono debe ser diferente al actual".to_string());
+        }
+    }
+    
+    // Actualizar el teléfono
+    let old_phone = user.usuario_telefono.clone();
+    let result = sqlx::query(
+        "UPDATE USUARIO SET usuario_telefono = ? WHERE usuario_id = ?"
+    )
+    .bind(&request.new_phone)
+    .bind(usuario_id)
+    .execute(&*pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() > 0 {
+        // Registrar cambio exitoso
+        let _ = log_action(
+            "CHANGE_PHONE_SUCCESS",
+            Some(usuario_id),
+            "USUARIO",
+            Some(usuario_id),
+            old_phone.as_deref(),
+            Some(&request.new_phone)
+        ).await;
+        
+        // Retornar el usuario actualizado
+        get_usuario_by_id(usuario_id).await
+    } else {
+        Err("No se pudo actualizar el teléfono".to_string())
+    }
 }
 
 /// Obtiene los emails de usuarios con roles de admin y técnico

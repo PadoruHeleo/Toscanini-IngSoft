@@ -303,7 +303,7 @@ export function InventarioPiezasView() {
   }
 
   return (
-    <div className="p-6">
+    <div className="px-6 pt-6 space-y-6">
       <ViewTitle onRefresh={handleRefresh} />
 
       <div className="mb-6">
