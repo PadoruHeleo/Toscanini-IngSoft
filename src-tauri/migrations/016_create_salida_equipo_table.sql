@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS SALIDA_EQUIPO (
 );
 
 -- Índices para optimizar consultas
-CREATE INDEX IF NOT EXISTS idx_salida_equipo_orden ON SALIDA_EQUIPO(orden_trabajo_id);
-CREATE INDEX IF NOT EXISTS idx_salida_equipo_fecha ON SALIDA_EQUIPO(fecha_salida);
-CREATE INDEX IF NOT EXISTS idx_salida_equipo_motivo ON SALIDA_EQUIPO(motivo_salida);
-CREATE INDEX IF NOT EXISTS idx_salida_equipo_usuario ON SALIDA_EQUIPO(usuario_id);
+CREATE INDEX idx_salida_equipo_orden ON SALIDA_EQUIPO(orden_trabajo_id);
+CREATE INDEX idx_salida_equipo_fecha ON SALIDA_EQUIPO(fecha_salida);
+CREATE INDEX idx_salida_equipo_motivo ON SALIDA_EQUIPO(motivo_salida);
+CREATE INDEX idx_salida_equipo_usuario ON SALIDA_EQUIPO(usuario_id);
 
