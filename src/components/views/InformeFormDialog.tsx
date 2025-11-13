@@ -989,39 +989,30 @@ export default function InformeFormDialog({
   };
 
   const handlePreviewPdf = async () => {
-    if (!informe && !formData.diagnostico.trim()) {
-      showError("Error", "No hay datos suficientes para generar el PDF");
+    // Solo permitir vista previa si el informe ya existe
+    if (!informe) {
+      showError(
+        "Vista previa no disponible", 
+        "Debe guardar el informe primero para poder generar el PDF"
+      );
       return;
     }
 
     try {
       setLoadingPdf(true);
 
-      // Si estamos editando, usar datos del informe existente
-      if (isEditing && informe) {
-        // Generar PDF para informe existente
-        await invoke<string>("generate_informe_pdf", {
-          informeId: informe.informe_id,
-        });
-      } else {
-        // Para crear nuevo informe, necesitamos validar los datos primero
-        if (!validateForm()) {
-          return;
-        }
+      // Generar PDF para informe existente
+      const pdfBytes = await invoke<number[]>("generate_informe_pdf_command", {
+        informeId: informe.informe_id,
+      });
 
-        // Generar PDF con datos del formulario
-        const pdfData = {
-          diagnostico: formData.diagnostico,
-          recomendaciones: formData.recomendaciones.trim() || undefined,
-          solucion_aplicada: formData.solucion_aplicada.trim() || undefined,
-          tecnico_responsable: formData.tecnico_responsable,
-          piezas: selectedPiezas.length > 0 ? selectedPiezas : undefined,
-        };
-
-        await invoke<string>("generate_informe_preview_pdf", {
-          data: pdfData,
-        });
-      }
+      // Convertir array de números a Uint8Array y crear URL del blob
+      const uint8Array = new Uint8Array(pdfBytes);
+      const blob = new Blob([uint8Array], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      
+      // Abrir en nueva pestaña
+      window.open(url, '_blank');
 
       success(
         "PDF generado",
@@ -1603,27 +1594,30 @@ export default function InformeFormDialog({
               >
                 Cancelar
               </Button>{" "}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handlePreviewPdf}
-                disabled={
-                  loading ||
-                  loadingSendToClient ||
-                  loadingSendExisting ||
-                  loadingPdf
-                }
-                className="bg-orange-600 hover:bg-orange-700 text-white"
-              >
-                {loadingPdf ? (
-                  "Generando..."
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4 mr-1" />
-                    PDF
-                  </>
-                )}
-              </Button>
+              {/* Solo mostrar botón de PDF si el informe ya existe */}
+              {informe && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePreviewPdf}
+                  disabled={
+                    loading ||
+                    loadingSendToClient ||
+                    loadingSendExisting ||
+                    loadingPdf
+                  }
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {loadingPdf ? (
+                    "Generando..."
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4 mr-1" />
+                      Ver PDF
+                    </>
+                  )}
+                </Button>
+              )}
               {isEditing && informe && (
                 <Button
                   type="button"
