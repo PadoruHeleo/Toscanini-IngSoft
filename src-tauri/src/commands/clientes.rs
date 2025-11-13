@@ -448,10 +448,12 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
     if let Some(search_term) = filtros.search {
         if !search_term.trim().is_empty() {
             let search_pattern = format!("%{}%", search_term.trim());
-            query.push_str(" AND cliente_nombre LIKE ?");
-            params.push(search_pattern);
+            query.push_str(" AND (cliente_nombre LIKE ? OR cliente_rut LIKE ? OR cliente_correo LIKE ? OR cliente_telefono LIKE ? OR cliente_direccion LIKE ? OR DATE(created_at) LIKE ?)");
+            for _ in 0..6 {
+                params.push(search_pattern.clone());
+            }
         }
-    }
+    }    
     
     // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
