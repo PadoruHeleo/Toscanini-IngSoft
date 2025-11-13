@@ -11,18 +11,12 @@ import {
 interface Props {
   onChange: (estados: string[]) => void;
   resetKey?: number;
-  initialEstados?: string[]; // ← NUEVO: estados iniciales por defecto
 }
 
-export function FiltrarOrdenesPorEstado({
-  onChange,
-  resetKey,
-  initialEstados = [],
-}: Props) {
+export function FiltrarOrdenesPorEstado({ onChange, resetKey }: Props) {
   const [open, setOpen] = useState(false);
-  const [seleccionados, setSeleccionados] = useState<string[]>(initialEstados);
+  const [seleccionados, setSeleccionados] = useState<string[]>([]);
 
-  // Estados disponibles (en minúsculas como están en la BD)
   const estadosDisponibles = [
     { value: "recibido", label: "Recibido" },
     { value: "cotizacion_enviada", label: "Cotización Enviada" },
@@ -35,20 +29,13 @@ export function FiltrarOrdenesPorEstado({
     { value: "cotizacion_rechazada", label: "Cotización Rechazada" },
   ];
 
-  // Sincronizar con initialEstados cuando cambien
-  useEffect(() => {
-    if (initialEstados.length > 0) {
-      setSeleccionados(initialEstados);
-      onChange(initialEstados);
-    }
-  }, [initialEstados]);
-
-  // Cuando cambie resetKey, volver a estados por defecto
+  // Reset cuando resetKey cambia (igual que otros filtros)
   useEffect(() => {
     if (resetKey !== undefined) {
-      setSeleccionados(initialEstados);
-      onChange(initialEstados);
+      setSeleccionados([]);
+      onChange([]); // notificar al padre que se limpió
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
   const toggleEstado = (estado: string) => {
@@ -70,6 +57,11 @@ export function FiltrarOrdenesPorEstado({
     setOpen(false);
   };
 
+  const limpiarDirecto = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    limpiar();
+  };
+
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
@@ -78,11 +70,9 @@ export function FiltrarOrdenesPorEstado({
           <span className="ml-1 bg-blue-100 text-blue-800 px-1 rounded text-xs flex items-center gap-1">
             {seleccionados.length}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                limpiar();
-              }}
+              onClick={limpiarDirecto}
               className="ml-1 text-red-500 hover:text-red-700 font-bold text-lg leading-none hover:bg-red-200 rounded-full px-1"
+              title="Limpiar filtro"
             >
               ×
             </button>

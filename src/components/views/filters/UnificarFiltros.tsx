@@ -20,22 +20,10 @@ interface OrdenTrabajo {
 }
 
 interface Props {
-  onFiltrar: (ordenes: OrdenTrabajo[]) => void; // 🔹 ahora solo devuelve órdenes
+  onFiltrar: (ordenes: OrdenTrabajo[]) => void;
 }
 
 export function UnificarFiltros({ onFiltrar }: Props) {
-  // Estados por defecto: todos excepto "entregado"
-  const estadosPorDefecto = [
-    "recibido",
-    "cotizacion_enviada",
-    "aprobacion_pendiente",
-    "en_reparacion",
-    "espera_de_retiro",
-    "abandonado",
-    "equipo_no_reparable",
-    "cotizacion_rechazada",
-  ];
-
   const filtrosIniciales = {
     fecha_inicio: null as string | null,
     fecha_fin: null as string | null,
@@ -43,7 +31,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     modelos: [] as string[],
     prioridades: [] as string[],
     clientes: [] as string[],
-    estados: estadosPorDefecto, // ← Inicializar con estados por defecto
+    estados: [] as string[], // neutro = sin selección
   };
 
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -68,7 +56,6 @@ export function UnificarFiltros({ onFiltrar }: Props) {
             : null,
         clientes:
           filtrosActuales.clientes.length > 0 ? filtrosActuales.clientes : null,
-        // ← NUEVO
         estados:
           filtrosActuales.estados.length > 0 ? filtrosActuales.estados : null,
       };
@@ -78,7 +65,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
         { filtros: filtrosParaBackend }
       );
 
-      onFiltrar(ordenes); // 🔹 solo enviamos órdenes
+      onFiltrar(ordenes);
     } catch (err) {
       console.error("❌ Error aplicando filtros:", err);
     }
@@ -86,6 +73,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
 
   useEffect(() => {
     aplicarFiltros(filtros);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros]);
 
   const hayFiltrosActivos =
@@ -95,8 +83,7 @@ export function UnificarFiltros({ onFiltrar }: Props) {
     filtros.modelos.length > 0 ||
     filtros.prioridades.length > 0 ||
     filtros.clientes.length > 0 ||
-    filtros.estados.length !== estadosPorDefecto.length || // Cambiar la lógica
-    !filtros.estados.every((e) => estadosPorDefecto.includes(e)); // Verificar si difiere del default
+    filtros.estados.length > 0;
 
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -135,10 +122,8 @@ export function UnificarFiltros({ onFiltrar }: Props) {
         }}
       />
 
-      {/* ← NUEVO COMPONENTE */}
       <FiltrarOrdenesPorEstado
         resetKey={resetKey}
-        initialEstados={estadosPorDefecto} // ← Pasar estados por defecto
         onChange={(estados) => {
           actualizarFiltro({ estados });
         }}
