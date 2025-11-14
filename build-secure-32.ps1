@@ -2,11 +2,8 @@
 
 # Script para construir la aplicacion Tauri en modo produccion para 32 bits
 # Este script verifica que la configuracion segura funcione correctamente
-# NOTA: Este script es un alias para build-secure-32.ps1
-# Usa build-secure-32.ps1 o build-secure-64.ps1 para mayor claridad
 
 Write-Host "Construyendo aplicacion Tauri para 32 bits..." -ForegroundColor Blue
-Write-Host "NOTA: Considera usar build-secure-32.ps1 para mayor claridad" -ForegroundColor Yellow
 
 # Cambiar al directorio del proyecto
 Set-Location "e:\repos\Toscanini-IngSoft"
@@ -56,6 +53,41 @@ try {
             $envFiles | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
         }
         
+        # Verificar nombres de archivos generados (deben contener x32 para 32 bits)
+        Write-Host "Verificando nombres de archivos generados..." -ForegroundColor Cyan
+        $msiFiles = Get-ChildItem -Path "$bundlePath\msi" -Filter "*.msi" -ErrorAction SilentlyContinue
+        $nsisFiles = Get-ChildItem -Path "$bundlePath\nsis" -Filter "*.exe" -ErrorAction SilentlyContinue
+        
+        $archCorrect = $true
+        
+        foreach ($file in $msiFiles) {
+            if ($file.Name -match "x32") {
+                Write-Host "  [OK] MSI: $($file.Name) - Contiene x32 (correcto para 32 bits)" -ForegroundColor Green
+            } elseif ($file.Name -match "x64") {
+                Write-Host "  [ERROR] MSI: $($file.Name) - Contiene x64 (incorrecto para 32 bits)" -ForegroundColor Red
+                $archCorrect = $false
+            } else {
+                Write-Host "  [ADVERTENCIA] MSI: $($file.Name) - No contiene indicador de arquitectura" -ForegroundColor Yellow
+            }
+        }
+        
+        foreach ($file in $nsisFiles) {
+            if ($file.Name -match "x32") {
+                Write-Host "  [OK] NSIS: $($file.Name) - Contiene x32 (correcto para 32 bits)" -ForegroundColor Green
+            } elseif ($file.Name -match "x64") {
+                Write-Host "  [ERROR] NSIS: $($file.Name) - Contiene x64 (incorrecto para 32 bits)" -ForegroundColor Red
+                $archCorrect = $false
+            } else {
+                Write-Host "  [ADVERTENCIA] NSIS: $($file.Name) - No contiene indicador de arquitectura" -ForegroundColor Yellow
+            }
+        }
+        
+        if (-not $archCorrect) {
+            Write-Host "ADVERTENCIA: Algunos archivos tienen nombres incorrectos para la arquitectura de 32 bits" -ForegroundColor Red
+        } else {
+            Write-Host "Verificacion de nombres: Todos los archivos tienen nombres correctos para 32 bits" -ForegroundColor Green
+        }
+        
         # Mostrar tamano del bundle
         $bundleSize = (Get-ChildItem -Path $bundlePath -Recurse | Measure-Object -Property Length -Sum).Sum
         $bundleSizeMB = [math]::Round($bundleSize / 1MB, 2)
@@ -70,3 +102,4 @@ try {
 }
 
 Write-Host "Script completado" -ForegroundColor Green
+
