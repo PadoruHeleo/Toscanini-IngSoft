@@ -181,7 +181,6 @@ impl OrdenTrabajoPdfGenerator {
             }
         } else {
             current_layer.use_text("Sin descripción adicional", 10.0, Mm(25.0), Mm(y_pos), &font_regular);
-            y_pos -= 6.0;
         }
 
         // Generar PDF
