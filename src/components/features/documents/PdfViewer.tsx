@@ -17,6 +17,7 @@ interface PdfViewerProps {
   title: string;
   cotizacionId?: number;
   informeId?: number;
+  ordenTrabajoId?: number;
   filename?: string;
 }
 
@@ -26,20 +27,36 @@ export function PdfViewer({
   title,
   cotizacionId,
   informeId,
+  ordenTrabajoId,
 }: PdfViewerProps) {
   const [cotizacionPdfData, setCotizacionPdfData] = useState<Uint8Array | null>(
     null
   );
   const [informePdfData, setInformePdfData] = useState<Uint8Array | null>(null);
+  const [ordenTrabajoPdfData, setOrdenTrabajoPdfData] =
+    useState<Uint8Array | null>(null);
   const [cotizacionLoading, setCotizacionLoading] = useState(false);
   const [informeLoading, setInformeLoading] = useState(false);
+  const [ordenTrabajoLoading, setOrdenTrabajoLoading] = useState(false);
   const [cotizacionError, setCotizacionError] = useState<string | null>(null);
   const [informeError, setInformeError] = useState<string | null>(null);
+  const [ordenTrabajoError, setOrdenTrabajoError] = useState<string | null>(
+    null
+  );
   const [cotizacionPdfUrl, setCotizacionPdfUrl] = useState<string | null>(null);
   const [informePdfUrl, setInformePdfUrl] = useState<string | null>(null);
+  const [ordenTrabajoPdfUrl, setOrdenTrabajoPdfUrl] = useState<string | null>(
+    null
+  );
   const [zoom, setZoom] = useState(100);
   const [activeTab, setActiveTab] = useState(
-    cotizacionId ? "cotizacion" : informeId ? "informe" : "cotizacion"
+    ordenTrabajoId
+      ? "orden"
+      : cotizacionId
+      ? "cotizacion"
+      : informeId
+      ? "informe"
+      : "cotizacion"
   );
 
   const { success, error: showError } = useToastContext();
@@ -53,12 +70,18 @@ export function PdfViewer({
       if (informePdfUrl) {
         URL.revokeObjectURL(informePdfUrl);
       }
+      if (ordenTrabajoPdfUrl) {
+        URL.revokeObjectURL(ordenTrabajoPdfUrl);
+      }
     };
-  }, [cotizacionPdfUrl, informePdfUrl]);
+  }, [cotizacionPdfUrl, informePdfUrl, ordenTrabajoPdfUrl]);
 
   // Generar PDFs cuando se abre el modal
   useEffect(() => {
     if (open) {
+      if (ordenTrabajoId) {
+        generateOrdenTrabajoPdf();
+      }
       if (cotizacionId) {
         generateCotizacionPdf();
       }
@@ -66,7 +89,7 @@ export function PdfViewer({
         generateInformePdf();
       }
     }
-  }, [open, cotizacionId, informeId]);
+  }, [open, ordenTrabajoId, cotizacionId, informeId]);
 
   const generateCotizacionPdf = async () => {
     if (!cotizacionId) return;
@@ -153,8 +176,57 @@ export function PdfViewer({
     }
   };
 
-  const handleDownload = async (type: "cotizacion" | "informe") => {
-    const pdfData = type === "cotizacion" ? cotizacionPdfData : informePdfData;
+  const generateOrdenTrabajoPdf = async () => {
+    if (!ordenTrabajoId) return;
+
+    try {
+      setOrdenTrabajoLoading(true);
+      setOrdenTrabajoError(null);
+
+      // Limpiar PDF anterior
+      if (ordenTrabajoPdfUrl) {
+        URL.revokeObjectURL(ordenTrabajoPdfUrl);
+        setOrdenTrabajoPdfUrl(null);
+      }
+
+      const pdfBytes = await invoke<number[]>(
+        "generate_orden_trabajo_pdf_command",
+        {
+          ordenId: ordenTrabajoId,
+        }
+      );
+
+      // Convertir array de números a Uint8Array
+      const uint8Array = new Uint8Array(pdfBytes);
+      setOrdenTrabajoPdfData(uint8Array);
+
+      // Crear URL del blob para mostrar en el visor
+      const blob = new Blob([uint8Array], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      setOrdenTrabajoPdfUrl(url);
+    } catch (error) {
+      console.error("Error generando PDF de orden de trabajo:", error);
+      let errorMessage = "Error desconocido generando PDF de orden de trabajo";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+
+      setOrdenTrabajoError(errorMessage);
+    } finally {
+      setOrdenTrabajoLoading(false);
+    }
+  };
+
+  const handleDownload = async (type: "cotizacion" | "informe" | "orden") => {
+    const pdfData =
+      type === "cotizacion"
+        ? cotizacionPdfData
+        : type === "informe"
+        ? informePdfData
+        : ordenTrabajoPdfData;
     let downloadFilename = "";
 
     if (type === "cotizacion" && cotizacionId) {
@@ -188,6 +260,22 @@ export function PdfViewer({
       } catch (error) {
         console.error("Error obteniendo datos de informe:", error);
         downloadFilename = `IT-${informeId}.pdf`;
+      }
+    } else if (type === "orden" && ordenTrabajoId) {
+      try {
+        // Obtener datos de la orden de trabajo para el nombre del archivo
+        const ordenData = await invoke<any>("get_orden_trabajo_by_id", {
+          ordenId: ordenTrabajoId,
+        });
+
+        if (ordenData && ordenData.orden_codigo) {
+          downloadFilename = `${ordenData.orden_codigo}.pdf`;
+        } else {
+          downloadFilename = `OT-${ordenTrabajoId}.pdf`;
+        }
+      } catch (error) {
+        console.error("Error obteniendo datos de orden de trabajo:", error);
+        downloadFilename = `OT-${ordenTrabajoId}.pdf`;
       }
     } else {
       downloadFilename = `documento_${type}.pdf`;
@@ -249,16 +337,22 @@ export function PdfViewer({
       URL.revokeObjectURL(informePdfUrl);
       setInformePdfUrl(null);
     }
+    if (ordenTrabajoPdfUrl) {
+      URL.revokeObjectURL(ordenTrabajoPdfUrl);
+      setOrdenTrabajoPdfUrl(null);
+    }
     setCotizacionPdfData(null);
     setInformePdfData(null);
+    setOrdenTrabajoPdfData(null);
     setCotizacionError(null);
     setInformeError(null);
+    setOrdenTrabajoError(null);
     setZoom(100);
     onOpenChange(false);
   };
 
   const renderPdfSection = (
-    type: "cotizacion" | "informe",
+    type: "cotizacion" | "informe" | "orden",
     loading: boolean,
     error: string | null,
     pdfUrl: string | null,
@@ -311,7 +405,12 @@ export function PdfViewer({
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Download className="h-4 w-4 mr-2" />
-          Descargar PDF {type === "cotizacion" ? "Cotización" : "Informe"}
+          Descargar PDF{" "}
+          {type === "cotizacion"
+            ? "Cotización"
+            : type === "informe"
+            ? "Informe"
+            : "Orden de Trabajo"}
         </Button>
       </div>
 
@@ -381,14 +480,27 @@ export function PdfViewer({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Pestañas para cotización e informe */}
+        {/* Pestañas para orden de trabajo, cotización e informe */}
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col"
         >
-          {/* Mostrar pestañas siempre - cotización e informe */}
-          <TabsList className="grid w-full grid-cols-2 mb-2">
+          {/* Mostrar pestañas según disponibilidad */}
+          <TabsList
+            className={`grid w-full mb-2 ${
+              ordenTrabajoId ? "grid-cols-3" : "grid-cols-2"
+            }`}
+          >
+            {ordenTrabajoId && (
+              <TabsTrigger
+                value="orden"
+                className="flex items-center gap-2 px-6 py-2"
+              >
+                <FileText className="h-4 w-4" />
+                Orden de Trabajo
+              </TabsTrigger>
+            )}
             <TabsTrigger
               value="cotizacion"
               className="flex items-center gap-2 px-6 py-2"
@@ -404,6 +516,20 @@ export function PdfViewer({
               Informe {!informeId && "(No disponible)"}
             </TabsTrigger>
           </TabsList>
+
+          {/* Pestaña de Orden de Trabajo */}
+          {ordenTrabajoId && (
+            <TabsContent value="orden" className="flex-1 flex flex-col mt-4">
+              {renderPdfSection(
+                "orden",
+                ordenTrabajoLoading,
+                ordenTrabajoError,
+                ordenTrabajoPdfUrl,
+                ordenTrabajoPdfData,
+                generateOrdenTrabajoPdf
+              )}
+            </TabsContent>
+          )}
 
           {/* Pestaña de Cotización */}
           <TabsContent value="cotizacion" className="flex-1 flex flex-col mt-4">

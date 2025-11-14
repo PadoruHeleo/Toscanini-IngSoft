@@ -1,7 +1,7 @@
 // Comandos de Tauri para generar PDFs
 use tauri::command;
 use crate::database::get_db_pool_safe;
-use crate::pdf::{CotizacionPdfData, CotizacionPdfGenerator, InformePdfData, InformePdfGenerator, EmpresaInfo, ClienteInfo, EquipoInfo, PiezaPdf, TerminoPdf};
+use crate::pdf::{CotizacionPdfData, CotizacionPdfGenerator, InformePdfData, InformePdfGenerator, OrdenTrabajoPdfData, OrdenTrabajoPdfGenerator, EmpresaInfo, ClienteInfo, EquipoInfo, PiezaPdf, TerminoPdf};
 use sqlx::Row;
 
 #[command]
@@ -275,5 +275,99 @@ pub async fn generate_informe_pdf_command(
     // Generar PDF
     let generator = InformePdfGenerator::new();
     generator.generate_informe_pdf(pdf_data).await
+}
+
+#[command]
+pub async fn generate_orden_trabajo_pdf_command(
+    orden_id: i32
+) -> Result<Vec<u8>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Obtener datos de la orden de trabajo usando la vista detallada
+    let orden_row = sqlx::query(
+        "SELECT 
+            ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
+            ot.has_garantia, ot.pre_informe, ot.created_at, ot.finished_at,
+            e.numero_serie, e.equipo_marca, e.equipo_modelo, e.equipo_tipo, e.equipo_ubicacion,
+            c.cliente_id, c.cliente_nombre, c.cliente_correo, c.cliente_telefono, c.cliente_direccion,
+            u.usuario_nombre as creador_nombre,
+            cot.cotizacion_codigo,
+            inf.informe_codigo
+         FROM ORDEN_TRABAJO ot
+         LEFT JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
+         LEFT JOIN CLIENTE c ON e.cliente_id = c.cliente_id
+         LEFT JOIN USUARIO u ON ot.created_by = u.usuario_id
+         LEFT JOIN COTIZACION cot ON ot.cotizacion_id = cot.cotizacion_id
+         LEFT JOIN INFORME inf ON ot.informe_id = inf.informe_id
+         WHERE ot.orden_id = ?"
+    )
+    .bind(orden_id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| format!("Error obteniendo orden de trabajo: {}", e))?
+    .ok_or_else(|| format!("Orden de trabajo con ID {} no encontrada", orden_id))?;
+
+    // Acceder a los campos por nombre
+    let orden_codigo: Option<String> = orden_row.try_get("orden_codigo").ok();
+    let orden_desc: Option<String> = orden_row.try_get("orden_desc").ok();
+    let prioridad: Option<String> = orden_row.try_get("prioridad").ok();
+    let estado: Option<String> = orden_row.try_get("estado").ok();
+    let has_garantia: Option<i32> = orden_row.try_get("has_garantia").ok();
+    let pre_informe: Option<String> = orden_row.try_get("pre_informe").ok();
+    let created_at: chrono::DateTime<chrono::Utc> = orden_row.try_get("created_at").ok().unwrap();
+    let finished_at: Option<chrono::DateTime<chrono::Utc>> = orden_row.try_get("finished_at").ok();
+    let creador_nombre: Option<String> = orden_row.try_get("creador_nombre").ok();
+    let cotizacion_codigo: Option<String> = orden_row.try_get("cotizacion_codigo").ok();
+    let informe_codigo: Option<String> = orden_row.try_get("informe_codigo").ok();
+    
+    let cliente_nombre: Option<String> = orden_row.try_get("cliente_nombre").ok();
+    let cliente_correo: Option<String> = orden_row.try_get("cliente_correo").ok();
+    let cliente_telefono: Option<String> = orden_row.try_get("cliente_telefono").ok();
+    let cliente_direccion: Option<String> = orden_row.try_get("cliente_direccion").ok();
+    
+    let equipo_marca: Option<String> = orden_row.try_get("equipo_marca").ok();
+    let equipo_modelo: Option<String> = orden_row.try_get("equipo_modelo").ok();
+    let equipo_tipo: Option<String> = orden_row.try_get("equipo_tipo").ok();
+    let numero_serie: Option<String> = orden_row.try_get("numero_serie").ok();
+    let equipo_ubicacion: Option<String> = orden_row.try_get("equipo_ubicacion").ok();
+
+    // Crear estructura de datos para el PDF
+    let pdf_data = OrdenTrabajoPdfData {
+        orden_codigo: orden_codigo.unwrap_or_else(|| format!("OT-{}", orden_id)),
+        fecha: created_at,
+        fecha_finalizacion: finished_at,
+        empresa: EmpresaInfo {
+            nombre: "Toscanini".to_string(),
+            direccion: Some("Dirección de la empresa".to_string()),
+            telefono: Some("+56 9 1234 5678".to_string()),
+            email: Some("contacto@toscanini.cl".to_string()),
+            website: Some("www.toscanini.cl".to_string()),
+        },
+        cliente: ClienteInfo {
+            nombre: cliente_nombre.unwrap_or_else(|| "Cliente sin nombre".to_string()),
+            email: cliente_correo,
+            telefono: cliente_telefono,
+            direccion: cliente_direccion,
+        },
+        equipo: EquipoInfo {
+            marca: equipo_marca,
+            modelo: equipo_modelo,
+            tipo: equipo_tipo,
+            numero_serie: numero_serie,
+            ubicacion: equipo_ubicacion,
+        },
+        orden_desc: orden_desc,
+        pre_informe: pre_informe.unwrap_or_else(|| "Sin diagnóstico inicial".to_string()),
+        prioridad: prioridad,
+        estado: estado,
+        has_garantia: has_garantia.unwrap_or(0) == 1,
+        creador_nombre: creador_nombre,
+        cotizacion_codigo: cotizacion_codigo,
+        informe_codigo: informe_codigo,
+    };
+
+    // Generar PDF
+    let generator = OrdenTrabajoPdfGenerator::new();
+    generator.generate_orden_trabajo_pdf(pdf_data).await
 }
 
