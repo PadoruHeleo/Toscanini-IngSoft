@@ -184,22 +184,6 @@ impl OrdenTrabajoPdfGenerator {
             y_pos -= 6.0;
         }
 
-        // === PRE-INFORME / DIAGNÓSTICO INICIAL ===
-        y_pos -= 10.0;
-        current_layer.use_text("Diagnóstico Inicial / Pre-Informe", 11.0, Mm(20.0), Mm(y_pos), &font_bold);
-        y_pos -= 6.0;
-        
-        if !data.pre_informe.trim().is_empty() {
-            let pre_informe_lines = wrap_text(&data.pre_informe, 85);
-            for line in pre_informe_lines.iter().take(10) {
-                current_layer.use_text(line, 10.0, Mm(25.0), Mm(y_pos), &font_regular);
-                y_pos -= 6.0;
-            }
-        } else {
-            current_layer.use_text("Sin diagnóstico inicial registrado", 10.0, Mm(25.0), Mm(y_pos), &font_regular);
-            y_pos -= 6.0;
-        }
-
         // Generar PDF
         doc.save_to_bytes()
             .map_err(|e| format!("Error generando PDF: {}", e))
