@@ -174,6 +174,7 @@ export function OrdenesTrabajoView() {
   const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
   const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
   const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
+  const [pdfOrdenTrabajoId, setPdfOrdenTrabajoId] = useState<number | null>(null);
   const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
 
   // Estados para Registro de Salida
@@ -435,6 +436,7 @@ export function OrdenesTrabajoView() {
     }
     setPdfInformeId(orden.informe_id || null);
     setPdfCotizacionId(orden.cotizacion_id || null);
+    setPdfOrdenTrabajoId(orden.orden_id || null);
     setPdfOrdenCodigo(orden.orden_codigo || "Sin código");
     setShowInformePdfViewer(true);
   };
@@ -862,11 +864,12 @@ export function OrdenesTrabajoView() {
         ordenTrabajoId={selectedOrdenForInforme?.orden_id}
       />
       {/* PDF Viewer para Informes */}
-      {(pdfInformeId || pdfCotizacionId) && (
+      {(pdfInformeId || pdfCotizacionId || pdfOrdenTrabajoId) && (
         <PdfViewer
           open={showInformePdfViewer}
           onOpenChange={setShowInformePdfViewer}
           title={`Documentos - Orden ${pdfOrdenCodigo}`}
+          ordenTrabajoId={pdfOrdenTrabajoId || undefined}
           informeId={pdfInformeId || undefined}
           cotizacionId={pdfCotizacionId || undefined}
         />
