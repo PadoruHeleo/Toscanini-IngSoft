@@ -20,6 +20,7 @@ pub struct Informe {
     pub recomendaciones: Option<String>,
     pub solucion_aplicada: Option<String>,
     pub tecnico_responsable: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -92,8 +93,9 @@ pub async fn get_informes() -> Result<Vec<Informe>, String> {
       let informes = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs, 
                 is_borrador, created_by, created_at,
-                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
          FROM INFORME 
+         WHERE deleted_at IS NULL
          ORDER BY created_at DESC"
     )
     .fetch_all(&*pool)
@@ -114,6 +116,7 @@ pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> 
                 i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
+         WHERE i.deleted_at IS NULL
          ORDER BY i.created_at DESC"
     )
     .fetch_all(&*pool)
@@ -131,9 +134,9 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
     let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
                 is_borrador, created_by, created_at,
-                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
          FROM INFORME 
-         WHERE informe_id = ?"
+         WHERE informe_id = ? AND deleted_at IS NULL"
     )
     .bind(informe_id)
     .fetch_optional(&*pool)
@@ -150,9 +153,9 @@ pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Info
       let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
                 is_borrador, created_by, created_at,
-                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
          FROM INFORME 
-         WHERE informe_codigo = ?"
+         WHERE informe_codigo = ? AND deleted_at IS NULL"
     )
     .bind(&informe_codigo)
     .fetch_optional(&*pool)
@@ -172,7 +175,7 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
     
     // Buscar el mayor número correlativo existente para el año actual
     let last_codigo: Option<String> = sqlx::query_scalar(
-        "SELECT informe_codigo FROM INFORME WHERE informe_codigo LIKE ? ORDER BY informe_id DESC LIMIT 1"
+        "SELECT informe_codigo FROM INFORME WHERE informe_codigo LIKE ? AND deleted_at IS NULL ORDER BY informe_id DESC LIMIT 1"
     )
     .bind(format!("INF-{}-%", year))
     .fetch_one(&*pool)
@@ -361,13 +364,29 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
     get_informe_by_id(informe_id).await
 }
 
-/// Eliminar un informe
+/// Eliminar un informe (eliminación lógica solo si fue enviado al cliente)
 #[tauri::command]
 pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    // Obtener el informe antes de eliminarlo para logging
-    let informe_to_delete = get_informe_by_id(informe_id).await?;
+    // Obtener el informe antes de eliminarlo para logging (sin filtrar por deleted_at)
+    let informe_to_delete = sqlx::query_as::<_, Informe>(
+        "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
+                is_borrador, created_by, created_at,
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
+         FROM INFORME 
+         WHERE informe_id = ?"
+    )
+    .bind(informe_id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .ok_or_else(|| "Informe no encontrado".to_string())?;
+    
+    // Si ya está eliminado lógicamente, no hacer nada
+    if informe_to_delete.deleted_at.is_some() {
+        return Err("El informe ya fue eliminado".to_string());
+    }
     
     // Verificar si el informe tiene órdenes de trabajo asociadas
     let has_dependencies = sqlx::query_scalar::<_, i64>(
@@ -378,46 +397,69 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
     
-    if has_dependencies > 0 {
-        return Err("No se puede eliminar el informe porque tiene órdenes de trabajo asociadas".to_string());
-    }
+    // Verificar si fue enviado al cliente (is_borrador == false)
+    let fue_enviado = informe_to_delete.is_borrador == Some(false);
     
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
     
-    // Eliminar primero las relaciones con piezas
-    sqlx::query("DELETE FROM PIEZAS_INFORME WHERE informe_id = ?")
-        .bind(informe_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Luego eliminar el informe
-    let result = sqlx::query("DELETE FROM INFORME WHERE informe_id = ?")
-        .bind(informe_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    let was_deleted = result.rows_affected() > 0;
+    let was_deleted = if fue_enviado && has_dependencies > 0 {
+        // Eliminación lógica: solo si fue enviado al cliente Y tiene órdenes asociadas
+        // Marcar como eliminado y desvincular de órdenes
+        sqlx::query("UPDATE INFORME SET deleted_at = CURRENT_TIMESTAMP WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        // Desvincular de órdenes de trabajo
+        sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        true
+    } else {
+        // Eliminación física: borradores o sin órdenes asociadas
+        // Eliminar primero las relaciones con piezas
+        sqlx::query("DELETE FROM PIEZAS_INFORME WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        // Luego eliminar el informe
+        let result = sqlx::query("DELETE FROM INFORME WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        result.rows_affected() > 0
+    };
     
     // Confirmar transacción
     tx.commit().await.map_err(|e| format!("Database error: {}", e))?;
     
     // Registrar la acción en el log de auditoría
     if was_deleted {
-        if let Some(ref informe) = informe_to_delete {
-            let _ = log_action(
-                "DELETE_INFORME",
-                Some(deleted_by),
-                "INFORME",
-                Some(informe_id),
-                Some(&format!("Informe eliminado: {}", 
-                    informe.informe_codigo.as_deref().unwrap_or("N/A")
-                )),
-                None
-            ).await;
-        }
+        let action_type = if fue_enviado && has_dependencies > 0 {
+            "DELETE_INFORME_LOGICAL"
+        } else {
+            "DELETE_INFORME"
+        };
+        let _ = log_action(
+            action_type,
+            Some(deleted_by),
+            "INFORME",
+            Some(informe_id),
+            Some(&format!("Informe {} eliminado: {}", 
+                if fue_enviado && has_dependencies > 0 { "lógicamente" } else { "físicamente" },
+                informe_to_delete.informe_codigo.as_deref().unwrap_or("N/A")
+            )),
+            None
+        ).await;
     }
     
     Ok(was_deleted)
@@ -436,7 +478,7 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
                 i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
-         WHERE i.informe_codigo LIKE ? 
+         WHERE i.informe_codigo LIKE ? AND i.deleted_at IS NULL
          ORDER BY i.created_at DESC"
     )
     .bind(&search_pattern)
@@ -452,7 +494,7 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
 pub async fn count_informes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM INFORME")
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM INFORME WHERE deleted_at IS NULL")
         .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
@@ -471,6 +513,7 @@ pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec
                 i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
+         WHERE i.deleted_at IS NULL
          ORDER BY i.created_at DESC
          LIMIT ? OFFSET ?"
     )
@@ -655,11 +698,11 @@ pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, St
     let informes = sqlx::query_as::<_, Informe>(
         "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
                 i.is_borrador, i.created_by, i.created_at,
-                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable, i.deleted_at
          FROM INFORME i
          INNER JOIN ORDEN_TRABAJO ot ON i.informe_id = ot.informe_id
          INNER JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
-         WHERE e.cliente_id = ?
+         WHERE e.cliente_id = ? AND i.deleted_at IS NULL
          ORDER BY i.created_at DESC"
     )
     .bind(cliente_id)
