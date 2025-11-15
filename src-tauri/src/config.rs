@@ -95,9 +95,16 @@ impl SecureConfig {
 
     /// Encripta y guarda la configuración
     pub fn save_config(&self, config: &DatabaseConfig) -> Result<(), Box<dyn std::error::Error>> {
-        // Primero intentar guardar en el keyring del sistema
-        if let Err(e) = self.save_to_keyring(config) {
-            println!("Warning: Could not save to keyring: {}", e);
+        // Primero intentar guardar en el keyring del sistema (opcional, no crítico)
+        match self.save_to_keyring(config) {
+            Ok(_) => println!("Configuration saved to keyring"),
+            Err(e) => {
+                // Solo loggear si no es un error esperado (keyring no disponible)
+                if !e.to_string().contains("panicked") && !e.to_string().contains("incompatible") {
+                    println!("Warning: Could not save to keyring: {}", e);
+                }
+                println!("Falling back to file-based storage");
+            }
         }
 
         // Serializar la configuración
@@ -130,9 +137,15 @@ impl SecureConfig {
 
     /// Carga y desencripta la configuración
     pub fn load_config(&self) -> Result<DatabaseConfig, Box<dyn std::error::Error>> {
-        // Primero intentar cargar desde el keyring
-        if let Ok(config) = self.load_from_keyring() {
-            return Ok(config);
+        // Primero intentar cargar desde el keyring (con manejo robusto de errores)
+        match self.load_from_keyring() {
+            Ok(config) => return Ok(config),
+            Err(e) => {
+                // Solo loggear si no es un error esperado (keyring no disponible)
+                if !e.to_string().contains("panicked") && !e.to_string().contains("incompatible") {
+                    println!("Keyring not available, trying file-based config: {}", e);
+                }
+            }
         }
 
         // Si no está en el keyring, intentar cargar desde el archivo encriptado
@@ -167,27 +180,69 @@ impl SecureConfig {
     }
 
     /// Guarda la configuración en el keyring del sistema
+    /// Retorna Ok(()) si tiene éxito, pero no falla si keyring no está disponible
     fn save_to_keyring(&self, config: &DatabaseConfig) -> Result<(), Box<dyn std::error::Error>> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME)?;
-        let config_json = serde_json::to_string(config)?;
-        entry.set_password(&config_json)?;
-        Ok(())
+        // Usar catch_unwind para evitar panics en sistemas de 32 bits o Windows antiguos
+        let result = std::panic::catch_unwind(|| {
+            match Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                Ok(entry) => {
+                    match serde_json::to_string(config) {
+                        Ok(config_json) => {
+                            match entry.set_password(&config_json) {
+                                Ok(_) => Ok(()),
+                                Err(e) => Err(format!("Failed to set password in keyring: {}", e))
+                            }
+                        },
+                        Err(e) => Err(format!("Failed to serialize config: {}", e))
+                    }
+                },
+                Err(e) => Err(format!("Failed to create keyring entry: {}", e))
+            }
+        });
+        
+        match result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e.into()),
+            Err(_) => Err("Keyring operation panicked (possibly incompatible system)".into())
+        }
     }
 
     /// Carga la configuración desde el keyring del sistema
+    /// Retorna error si no está disponible, pero no falla la aplicación
     fn load_from_keyring(&self) -> Result<DatabaseConfig, Box<dyn std::error::Error>> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME)?;
-        let config_json = entry.get_password()?;
-        let config: DatabaseConfig = serde_json::from_str(&config_json)?;
-        Ok(config)
+        // Usar catch_unwind para evitar panics en sistemas de 32 bits o Windows antiguos
+        let result = std::panic::catch_unwind(|| {
+            match Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                Ok(entry) => {
+                    match entry.get_password() {
+                        Ok(config_json) => {
+                            match serde_json::from_str::<DatabaseConfig>(&config_json) {
+                                Ok(config) => Ok(config),
+                                Err(e) => Err(format!("Failed to deserialize config: {}", e))
+                            }
+                        },
+                        Err(e) => Err(format!("Failed to get password from keyring: {}", e))
+                    }
+                },
+                Err(e) => Err(format!("Failed to create keyring entry: {}", e))
+            }
+        });
+        
+        match result {
+            Ok(Ok(config)) => Ok(config),
+            Ok(Err(e)) => Err(e.into()),
+            Err(_) => Err("Keyring operation panicked (possibly incompatible system)".into())
+        }
     }
 
     /// Elimina la configuración (tanto del archivo como del keyring)
     pub fn delete_config(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // Eliminar del keyring
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
-            let _ = entry.delete_password(); // Ignorar errores si no existe
-        }
+        // Eliminar del keyring (con manejo de errores robusto)
+        let _ = std::panic::catch_unwind(|| {
+            if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                let _ = entry.delete_password(); // Ignorar errores si no existe
+            }
+        });
 
         // Eliminar archivo
         if self.config_path.exists() {
@@ -199,11 +254,17 @@ impl SecureConfig {
 
     /// Verifica si existe una configuración guardada
     pub fn config_exists(&self) -> bool {
-        // Verificar en keyring primero
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
-            if entry.get_password().is_ok() {
-                return true;
+        // Verificar en keyring primero (con manejo de errores robusto)
+        let keyring_exists = std::panic::catch_unwind(|| {
+            if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                entry.get_password().is_ok()
+            } else {
+                false
             }
+        }).unwrap_or(false);
+        
+        if keyring_exists {
+            return true;
         }
 
         // Verificar archivo encriptado

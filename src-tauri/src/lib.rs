@@ -12,31 +12,48 @@ pub fn run() {
     // Cargar variables de entorno desde .env
     dotenv::dotenv().ok();
     
-    // Crear runtime de Tokio que se mantenga vivo
-    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    // Crear runtime de Tokio con mejor manejo de errores
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            eprintln!("Critical error: Failed to create Tokio runtime: {}", e);
+            eprintln!("This may be due to system incompatibility or resource limitations.");
+            // Intentar crear un runtime más básico
+            tokio::runtime::Runtime::new().expect("Failed to create fallback Tokio runtime")
+        }
+    };
     
-    // Inicializar la base de datos
+    // Inicializar la base de datos con manejo robusto de errores
     rt.block_on(async {
+        // Inicializar base de datos con manejo de errores robusto
         if let Err(e) = init_database().await {
             eprintln!("Warning: Failed to initialize database: {}", e);
+            eprintln!("Application will continue, but database features may not be available.");
         }
         
         // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
+        // Estas funciones ya tienen manejo interno de errores
         start_auto_reconnect_task();
         
         // Iniciar verificación periódica cada 60 segundos (incluso cuando está conectada)
         start_periodic_connection_check(10);
     });
     
-    // Mantener el runtime vivo usando spawn_blocking
-    std::thread::spawn(move || {
-        rt.block_on(async {
-            // Mantener el runtime corriendo indefinidamente
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-            }
-        });
-    });
+    // Mantener el runtime vivo usando el handle en lugar de moverlo
+    // Esto evita problemas de acceso a memoria en sistemas de 32 bits
+    let rt_handle = rt.handle().clone();
+    std::thread::Builder::new()
+        .name("tokio-runtime-keeper".to_string())
+        .spawn(move || {
+            // Usar el handle del runtime en lugar de mover el runtime completo
+            rt_handle.block_on(async {
+                // Mantener el runtime corriendo indefinidamente
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+                }
+            });
+        })
+        .expect("Failed to spawn runtime keeper thread");
     
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())        

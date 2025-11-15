@@ -24,6 +24,43 @@ try {
         Write-Host "Target i686-pc-windows-msvc ya esta instalado" -ForegroundColor Green
     }
     
+    # Verificar configuracion de WebView2
+    Write-Host "Verificando configuracion de WebView2..." -ForegroundColor Cyan
+    $tauriConfig = Get-Content "src-tauri\tauri.conf.json" | ConvertFrom-Json
+    $webviewMode = $tauriConfig.bundle.windows.webviewInstallMode.type
+    
+    if ($webviewMode -eq "fixedRuntime") {
+        $webviewPath = $tauriConfig.bundle.windows.webviewInstallMode.path
+        Write-Host "WebView2 configurado como fixedRuntime" -ForegroundColor Green
+        Write-Host "Ruta configurada: $webviewPath" -ForegroundColor Cyan
+        
+        # Verificar que la ruta existe y es para x86 (32 bits)
+        $fullPath = Join-Path "src-tauri" $webviewPath
+        if (Test-Path $fullPath) {
+            if ($webviewPath -match "x86") {
+                Write-Host "  [OK] Runtime de WebView2 encontrado en: $fullPath (x86 - correcto para 32 bits)" -ForegroundColor Green
+            } elseif ($webviewPath -match "x64") {
+                Write-Host "  [ERROR] La ruta apunta a x64 pero estas compilando para 32 bits!" -ForegroundColor Red
+                Write-Host "  Cambia la ruta a una version x86 del runtime" -ForegroundColor Red
+            } else {
+                Write-Host "  [ADVERTENCIA] No se puede determinar la arquitectura del runtime" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  [ERROR] No se encontro el runtime de WebView2 en: $fullPath" -ForegroundColor Red
+            Write-Host "  Necesitas descargar y extraer el WebView2 Fixed Version Runtime para x86" -ForegroundColor Yellow
+            Write-Host "  Descarga desde: https://developer.microsoft.com/en-us/microsoft-edge/webview2/" -ForegroundColor Yellow
+        }
+    } elseif ($webviewMode -eq "offlineInstaller") {
+        Write-Host "WebView2 configurado como offlineInstaller (incluye instalador completo sin conexion)" -ForegroundColor Green
+        Write-Host "NOTA: El bundle sera mas grande (~100-150 MB adicionales) pero incluira el instalador completo de WebView2" -ForegroundColor Yellow
+    } elseif ($webviewMode -eq "embedBootstrapper") {
+        Write-Host "WebView2 configurado como embedBootstrapper (recomendado para 32 bits y Windows 7)" -ForegroundColor Green
+        Write-Host "NOTA: El bundle sera mas grande (~100-150 MB adicionales) pero incluira el instalador de WebView2" -ForegroundColor Yellow
+    } else {
+        Write-Host "WebView2 configurado como: $webviewMode" -ForegroundColor Cyan
+        Write-Host "NOTA: Verifica que esta configuracion sea adecuada para sistemas de 32 bits" -ForegroundColor Yellow
+    }
+    
     # Configurar target de 32 bits usando variable de entorno
     # Esto funciona porque Tauri respeta las variables de entorno de Cargo
     $env:CARGO_BUILD_TARGET = "i686-pc-windows-msvc"
@@ -51,6 +88,35 @@ try {
         } else {
             Write-Host "ADVERTENCIA: Se encontraron archivos .env en el bundle:" -ForegroundColor Red
             $envFiles | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
+        }
+        
+        # Corregir nombres de archivos: Tauri genera nombres con x64 aunque compile para 32 bits
+        Write-Host "Corrigiendo nombres de archivos de x64 a x32..." -ForegroundColor Cyan
+        $msiFiles = Get-ChildItem -Path "$bundlePath\msi" -Filter "*.msi" -ErrorAction SilentlyContinue
+        $nsisFiles = Get-ChildItem -Path "$bundlePath\nsis" -Filter "*.exe" -ErrorAction SilentlyContinue
+        
+        $filesRenamed = 0
+        
+        foreach ($file in $msiFiles) {
+            if ($file.Name -match "x64") {
+                $newName = $file.Name -replace "x64", "x32"
+                Rename-Item -Path $file.FullName -NewName $newName -Force
+                Write-Host "  [CORREGIDO] MSI: $($file.Name) -> $newName" -ForegroundColor Yellow
+                $filesRenamed++
+            }
+        }
+        
+        foreach ($file in $nsisFiles) {
+            if ($file.Name -match "x64") {
+                $newName = $file.Name -replace "x64", "x32"
+                Rename-Item -Path $file.FullName -NewName $newName -Force
+                Write-Host "  [CORREGIDO] NSIS: $($file.Name) -> $newName" -ForegroundColor Yellow
+                $filesRenamed++
+            }
+        }
+        
+        if ($filesRenamed -gt 0) {
+            Write-Host "Se renombraron $filesRenamed archivo(s) para reflejar la arquitectura correcta (x32)" -ForegroundColor Green
         }
         
         # Verificar nombres de archivos generados (deben contener x32 para 32 bits)
