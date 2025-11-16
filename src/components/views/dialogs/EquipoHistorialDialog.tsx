@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 import {
   Dialog,
   DialogContent,

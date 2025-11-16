@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 interface DatabaseStatus {

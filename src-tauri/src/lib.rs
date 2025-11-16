@@ -110,9 +110,11 @@ pub fn run() {
     let builder = tauri::Builder::default();
     log::info!("Paso 5.2: Builder creado exitosamente");
     
-    log::info!("Paso 5.3: Inicializando plugin opener...");
-    let builder = builder.plugin(tauri_plugin_opener::init());
-    log::info!("Paso 5.4: Plugin opener inicializado");
+    // Plugin opener - comentado temporalmente para Tauri 1.x
+    // En Tauri 1.x, el plugin opener puede requerir configuración diferente
+    // log::info!("Paso 5.3: Inicializando plugin opener...");
+    // let builder = builder.plugin(tauri_plugin_opener::init());
+    // log::info!("Paso 5.4: Plugin opener inicializado");
     
     log::info!("Paso 5.5: Configurando handlers de comandos...");
     let builder = builder.invoke_handler(tauri::generate_handler![

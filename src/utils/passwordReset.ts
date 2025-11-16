@@ -1,6 +1,6 @@
 // Ejemplo de uso de las funciones de recuperación de contraseña desde JavaScript/TypeScript
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 
 // Tipos para TypeScript
 interface RequestPasswordResetRequest {

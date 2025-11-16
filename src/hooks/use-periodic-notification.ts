@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useToastContext } from '@/contexts/ToastContext';
 import { useView } from '@/contexts/ViewContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 
 interface OrdenTrabajoDetallada {
     // Campos básicos de la orden

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 import { Button } from "@/components/ui/button";
 import { FiltrarLogsPorEntidad } from "./FiltrarLogsPorEntidad";
 import { FiltrarLogsPorAccion } from "./FiltrarLogsPorAccion";

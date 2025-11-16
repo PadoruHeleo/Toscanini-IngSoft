@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 import { useAuth } from "@/contexts/AuthContext";
 import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";

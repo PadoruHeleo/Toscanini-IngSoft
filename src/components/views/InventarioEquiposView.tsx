@@ -36,7 +36,7 @@ import {
   Trash2,
   Package,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/tauri";
 import { ViewTitle } from "@/components/layout/ViewTitle";
 import { useInventarioEquipoPermissions } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/common/AccessDenied";
