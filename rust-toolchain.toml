@@ -2,7 +2,7 @@
 # Usamos una versión más reciente de Rust para tener acceso al nuevo resolver
 # que considera rust-version al seleccionar dependencias
 # El MSRV mínimo está documentado en Cargo.toml como rust-version = "1.77.2"
-channel = "1.85"
+channel = "1.84"
 components = ["rustfmt", "clippy"]
 targets = ["i686-pc-windows-msvc", "x86_64-pc-windows-msvc"]
 

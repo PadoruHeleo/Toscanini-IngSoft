@@ -4,68 +4,33 @@ pub mod utils;
 pub mod email;
 pub mod config;
 pub mod pdf;
-pub mod logger;
 
 use database::{init_database, start_auto_reconnect_task, start_periodic_connection_check};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Inicializar el sistema de logging PRIMERO (antes de cualquier otra operación)
-    // Esto capturará todos los errores que ocurran después
-    if let Err(e) = logger::init_logger() {
-        // Si falla la inicialización del logger, intentar escribir a archivo de emergencia
-        logger::write_to_log_file(&format!("ERROR CRÍTICO: Fallo al inicializar el sistema de logging: {}", e));
-        eprintln!("Error al inicializar el sistema de logging: {}", e);
-    }
-    
-    // Configurar el handler de panics para capturar errores críticos
-    logger::setup_panic_hook();
-    
-    // Configurar handler de excepciones de Windows (SEH) para capturar errores como 0xc0000005
-    #[cfg(windows)]
-    {
-        logger::setup_windows_exception_handler();
-        log::info!("Handler de excepciones de Windows (SEH) configurado");
-    }
-    
-    // Registrar información crítica ANTES de cualquier otra operación
-    log::info!("=== Iniciando aplicación Toscanini ===");
-    log::info!("Paso 1: Sistema de logging inicializado correctamente");
-    
     // Cargar variables de entorno desde .env
-    log::info!("Paso 2: Cargando variables de entorno...");
     dotenv::dotenv().ok();
-    log::info!("Paso 2 completado: Variables de entorno cargadas");
     
-    // Crear runtime de Tokio con mejor manejo de errores
-    log::info!("Paso 3: Creando runtime de Tokio...");
-    let rt = match tokio::runtime::Runtime::new() {
-        Ok(runtime) => {
-            log::info!("Runtime de Tokio creado exitosamente");
-            runtime
-        },
-        Err(e) => {
-            log::error!("Error crítico: Fallo al crear el runtime de Tokio: {}", e);
-            log::error!("Esto puede deberse a incompatibilidad del sistema o limitaciones de recursos.");
-            // Intentar crear un runtime más básico
-            tokio::runtime::Runtime::new().unwrap_or_else(|e2| {
-                log::error!("Error fatal: Fallo al crear el runtime de respaldo: {}", e2);
-                logger::write_to_log_file(&format!("FATAL: No se pudo crear ningún runtime de Tokio. Error original: {}, Error de respaldo: {}", e, e2));
-                panic!("Failed to create fallback Tokio runtime: {}", e2);
-            })
-        }
-    };
+    // Crear runtime de Tokio compatible con Windows 7
+    // Usamos new_current_thread() que es más compatible con sistemas antiguos
+    use tokio::runtime::Builder;
+    
+    let rt = Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap_or_else(|_| {
+            // Fallback más compatible con Windows 7
+            Builder::new_current_thread()
+                .build()
+                .expect("Failed to create Tokio runtime")
+        });
     
     // Inicializar la base de datos con manejo robusto de errores
-    log::info!("Paso 4: Inicializando base de datos...");
     rt.block_on(async {
-        log::info!("Inicializando conexión a la base de datos...");
         // Inicializar base de datos con manejo de errores robusto
-        if let Err(e) = init_database().await {
-            log::warn!("Advertencia: Fallo al inicializar la base de datos: {}", e);
-            log::warn!("La aplicación continuará, pero las funciones de base de datos pueden no estar disponibles.");
-        } else {
-            log::info!("Base de datos inicializada correctamente");
+        if let Err(_e) = init_database().await {
+            // La aplicación continuará, pero las funciones de base de datos pueden no estar disponibles.
         }
         
         // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
@@ -78,43 +43,29 @@ pub fn run() {
     
     // Mantener el runtime vivo usando el handle en lugar de moverlo
     // Esto evita problemas de acceso a memoria en sistemas de 32 bits
-    log::info!("Paso 4.1: Creando hilo de mantenimiento del runtime...");
     let rt_handle = rt.handle().clone();
-    log::info!("Paso 4.2: Handle del runtime clonado exitosamente");
     
     match std::thread::Builder::new()
         .name("tokio-runtime-keeper".to_string())
         .spawn(move || {
-            log::info!("Hilo de mantenimiento del runtime iniciado");
             // Usar el handle del runtime en lugar de mover el runtime completo
             rt_handle.block_on(async {
-                log::info!("Runtime keeper: Entrando en loop de mantenimiento");
                 // Mantener el runtime corriendo indefinidamente
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
                 }
             });
         }) {
-        Ok(_) => {
-            log::info!("Paso 4.3: Hilo de mantenimiento del runtime creado exitosamente");
-        },
+        Ok(_) => {},
         Err(e) => {
-            log::error!("Error crítico: Fallo al crear el hilo de mantenimiento del runtime: {}", e);
-            logger::write_to_log_file(&format!("FATAL: No se pudo crear el hilo de mantenimiento del runtime: {}", e));
             panic!("Failed to spawn runtime keeper thread: {}", e);
         }
     }
     
-    log::info!("Paso 5: Inicializando aplicación Tauri...");
-    log::info!("Paso 5.1: Creando Builder de Tauri...");
     let builder = tauri::Builder::default();
-    log::info!("Paso 5.2: Builder creado exitosamente");
     
-    log::info!("Paso 5.3: Inicializando plugin opener...");
     let builder = builder.plugin(tauri_plugin_opener::init());
-    log::info!("Paso 5.4: Plugin opener inicializado");
     
-    log::info!("Paso 5.5: Configurando handlers de comandos...");
     let builder = builder.invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
             commands::users::get_usuario_by_id,
@@ -289,7 +240,6 @@ pub fn run() {
             commands::config::test_database_connection,
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
-            commands::logger::get_log_file_path,
             email::send_orden_trabajo_cliente,
             email::send_cotizacion_email,
             email::send_informe_email,
@@ -298,19 +248,11 @@ pub fn run() {
             pdf::commands::generate_orden_trabajo_pdf_command,
             commands::cotizacion::update_cotizacion_piezas,
         ]);
-    log::info!("Paso 5.6: Handlers de comandos configurados");
     
-    log::info!("Paso 5.7: Generando contexto de Tauri...");
     let context = tauri::generate_context!();
-    log::info!("Paso 5.8: Contexto generado exitosamente");
     
-    log::info!("Paso 5.9: Ejecutando aplicación Tauri...");
     builder.run(context)
         .unwrap_or_else(|e| {
-            log::error!("Error fatal al ejecutar la aplicación Tauri: {}", e);
-            logger::write_to_log_file(&format!("FATAL: Error al ejecutar la aplicación Tauri: {}", e));
             panic!("error while running tauri application: {}", e);
         });
-    
-    log::info!("=== Aplicación Toscanini finalizada ===");
 }

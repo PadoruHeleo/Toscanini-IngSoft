@@ -43,24 +43,18 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
     // Intentar cargar configuración segura primero
     let database_url = match load_database_config() {
         Ok(config) => {
-            log::info!("Configuración segura de base de datos cargada");
             config.to_connection_string()
         }
-        Err(e) => {
-            log::warn!("No se pudo cargar la configuración segura ({}), intentando fallback con .env", e);
+        Err(_e) => {
             // Fallback a la carga tradicional de .env
             load_env_file();
             
             std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| {
-                    log::warn!("DATABASE_URL no encontrado. Usando configuración por defecto.");
                     "mysql://root:@localhost:3306/toscanini_db".to_string()
                 })
         }
     };
-    
-    log::info!("Intentando conectar a la base de datos con URL: {}", 
-        database_url.split('@').next().unwrap_or("***").to_string() + "@***");
     
     // Inicializar DB_POOL si no existe
     if DB_POOL.get().is_none() {
@@ -156,35 +150,25 @@ pub async fn check_database_connection() -> bool {
 }
 
 pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
-    log::info!("Intentando reintentar conexión a la base de datos...");
-    
     // Intentar cargar configuración segura primero
     let database_url = match load_database_config() {
         Ok(config) => {
-            log::info!("Usando configuración segura de base de datos para reintento");
             config.to_connection_string()
         }
-        Err(e) => {
-            log::warn!("No se pudo cargar la configuración segura para reintento ({}), intentando fallback con .env", e);
+        Err(_e) => {
             load_env_file();
             
             std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| {
-                    log::warn!("DATABASE_URL no encontrado. Usando configuración por defecto.");
                     "mysql://root:@localhost:3306/toscanini_db".to_string()
                 })
         }
     };
     
-    log::info!("Reintentando conexión a la base de datos con URL: {}", 
-        database_url.split('@').next().unwrap_or("***").to_string() + "@***");
-    
     match sqlx::MySqlPool::connect(&database_url).await {
         Ok(pool) => {
             // Intentar ejecutar migraciones si es necesario
-            if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
-                let error_msg = format!("Migration failed during retry: {}", e);
-                log::warn!("{}", error_msg);
+            if let Err(_e) = sqlx::migrate!("./migrations").run(&pool).await {
                 // No fallar por migraciones en retry, puede que ya estén aplicadas
             }
             
@@ -196,7 +180,6 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
                         if let Ok(mut pool_guard) = pool_arc.lock() {
                             *pool_guard = Some(Arc::new(pool));
                             update_database_status(true, None);
-                            log::info!("Reintento de conexión a la base de datos exitoso! Pool reemplazado.");
                             return Ok(());
                         }
                     }
@@ -213,7 +196,6 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
         }
         Err(e) => {
             let error_msg = format!("Retry failed: {}", e);
-            log::error!("Error: {}", error_msg);
             update_database_status(false, Some(error_msg));
             Err(e)
         }
@@ -243,21 +225,16 @@ fn load_env_file() {
 
     for path in possible_paths {
         if !path.is_empty() && Path::new(path).exists() {
-            log::debug!("Cargando .env desde: {}", path);
-            if let Err(e) = dotenv::from_path(path) {
-                log::warn!("No se pudo cargar .env desde {}: {}", path, e);
+            if let Err(_e) = dotenv::from_path(path) {
+                // Continuar buscando en otros paths
             } else {
-                log::info!("Archivo .env cargado exitosamente desde: {}", path);
                 return;
             }
         }
     }
 
     // Si no se encuentra ningún archivo .env, intentar la carga por defecto
-    match dotenv::dotenv() {
-        Ok(_) => log::info!("Archivo .env cargado desde la ubicación por defecto"),
-        Err(_) => log::warn!("No se encontró archivo .env. Usando variables de entorno o valores por defecto."),
-    }
+    let _ = dotenv::dotenv();
 }
 
 // Nueva función mejorada que verifica periódicamente
@@ -271,12 +248,8 @@ pub fn start_auto_reconnect_task() {
         loop {
             // Verificar periódicamente incluso si está conectada
             if last_check.elapsed() >= check_interval {
-                let is_connected = check_database_connection().await;
+                let _is_connected = check_database_connection().await;
                 last_check = std::time::Instant::now();
-                
-                if !is_connected {
-                    log::warn!("Conexión perdida detectada - iniciando reconexión...");
-                }
             }
             
             sleep(retry_interval).await;
@@ -286,17 +259,13 @@ pub fn start_auto_reconnect_task() {
             
             // Solo intentar reconectar si no está conectado
             if !status.is_connected {
-                log::info!("Auto-reconnect: Intentando reconectar a la base de datos...");
-                
                 match retry_database_connection().await {
                     Ok(_) => {
-                        log::info!("Auto-reconnect: Reconexión exitosa!");
                         retry_interval = Duration::from_secs(30);
                         consecutive_failures = 0;
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         consecutive_failures += 1;
-                        log::warn!("Auto-reconnect: Fallo en el intento {}: {}", consecutive_failures, e);
                         
                         retry_interval = Duration::from_secs(
                             (30 * (1 << consecutive_failures.min(4))).min(300)
@@ -322,13 +291,9 @@ pub fn start_periodic_connection_check(interval_seconds: u64) {
             
             let is_connected = check_database_connection().await;
             
-            if is_connected {
-            } else {
-                log::warn!("✗ Conexión fallida - intentando reconectar...");
+            if !is_connected {
                 // Intentar reconectar automáticamente
-                if let Err(e) = retry_database_connection().await {
-                    log::error!("Error al intentar reconectar: {}", e);
-                }
+                let _ = retry_database_connection().await;
             }
         }
     });

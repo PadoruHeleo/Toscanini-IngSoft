@@ -8,6 +8,5 @@ pub mod informe;
 pub mod terminos_condiciones;
 pub mod database;
 pub mod config;
-pub mod logger;
 
 
