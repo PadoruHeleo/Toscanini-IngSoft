@@ -19,6 +19,7 @@ pub struct Cotizacion {
     pub informe: String,
     pub created_by: Option<i32>,
     pub created_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -113,8 +114,9 @@ pub async fn get_cotizaciones() -> Result<Vec<Cotizacion>, String> {
     
     let cotizaciones = sqlx::query_as::<_, Cotizacion>(
         "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion, \
-                costo_total, is_aprobada, is_borrador, informe, created_by, created_at \
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at, deleted_at \
          FROM COTIZACION \
+         WHERE deleted_at IS NULL \
          ORDER BY created_at DESC"
     )
     .fetch_all(&*pool)
@@ -135,6 +137,7 @@ pub async fn get_cotizaciones_detalladas() -> Result<Vec<CotizacionDetallada>, S
                 u.usuario_nombre as created_by_nombre
          FROM COTIZACION c
          LEFT JOIN USUARIO u ON c.created_by = u.usuario_id
+         WHERE c.deleted_at IS NULL
          ORDER BY c.created_at DESC"
     )
     .fetch_all(&*pool)
@@ -151,9 +154,9 @@ pub async fn get_cotizacion_by_id(cotizacion_id: i32) -> Result<Option<Cotizacio
     
     let cotizacion = sqlx::query_as::<_, Cotizacion>(
         "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,\
-                costo_total, is_aprobada, is_borrador, informe, created_by, created_at \
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at, deleted_at \
          FROM COTIZACION \
-         WHERE cotizacion_id = ?"
+         WHERE cotizacion_id = ? AND deleted_at IS NULL"
     )
     .bind(cotizacion_id)
     .fetch_optional(&*pool)
@@ -170,9 +173,9 @@ pub async fn get_cotizacion_by_codigo(cotizacion_codigo: String) -> Result<Optio
     
     let cotizacion = sqlx::query_as::<_, Cotizacion>(
         "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,\
-                costo_total, is_aprobada, is_borrador, informe, created_by, created_at \
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at, deleted_at \
          FROM COTIZACION \
-         WHERE cotizacion_codigo = ?"
+         WHERE cotizacion_codigo = ? AND deleted_at IS NULL"
     )
     .bind(&cotizacion_codigo)
     .fetch_optional(&*pool)
@@ -190,7 +193,7 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     let year = chrono::Utc::now().year();
     // Buscar el mayor número correlativo existente para el año actual
     let last_codigo: Option<String> = sqlx::query_scalar(
-        "SELECT cotizacion_codigo FROM COTIZACION WHERE cotizacion_codigo LIKE ? ORDER BY cotizacion_id DESC LIMIT 1"
+        "SELECT cotizacion_codigo FROM COTIZACION WHERE cotizacion_codigo LIKE ? AND deleted_at IS NULL ORDER BY cotizacion_id DESC LIMIT 1"
     )
     .bind(format!("COT-{}-%", year))
     .fetch_one(&*pool)
@@ -400,13 +403,28 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
     get_cotizacion_by_id(cotizacion_id).await
 }
 
-/// Eliminar una cotización
+/// Eliminar una cotización (eliminación lógica solo si fue enviada al cliente)
 #[tauri::command]
 pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    // Obtener la cotización antes de eliminarla para logging
-    let cotizacion_to_delete = get_cotizacion_by_id(cotizacion_id).await?;
+    // Obtener la cotización antes de eliminarla para logging (sin filtrar por deleted_at)
+    let cotizacion_to_delete = sqlx::query_as::<_, Cotizacion>(
+        "SELECT cotizacion_id, cotizacion_codigo, costo_revision, costo_reparacion,\
+                costo_total, is_aprobada, is_borrador, informe, created_by, created_at, deleted_at \
+         FROM COTIZACION \
+         WHERE cotizacion_id = ?"
+    )
+    .bind(cotizacion_id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .ok_or_else(|| "Cotización no encontrada".to_string())?;
+    
+    // Si ya está eliminada lógicamente, no hacer nada
+    if cotizacion_to_delete.deleted_at.is_some() {
+        return Err("La cotización ya fue eliminada".to_string());
+    }
     
     // Verificar si la cotización tiene órdenes de trabajo asociadas
     let has_dependencies = sqlx::query_scalar::<_, i64>(
@@ -417,46 +435,69 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
     
-    if has_dependencies > 0 {
-        return Err("No se puede eliminar la cotización porque tiene órdenes de trabajo asociadas".to_string());
-    }
+    // Verificar si fue enviada al cliente (is_borrador == false)
+    let fue_enviada = cotizacion_to_delete.is_borrador == Some(false);
     
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
     
-    // Eliminar primero las relaciones con piezas
-    sqlx::query("DELETE FROM PIEZAS_COTIZACION WHERE cotizacion_id = ?")
-        .bind(cotizacion_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Luego eliminar la cotización
-    let result = sqlx::query("DELETE FROM COTIZACION WHERE cotizacion_id = ?")
-        .bind(cotizacion_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    let was_deleted = result.rows_affected() > 0;
+    let was_deleted = if fue_enviada && has_dependencies > 0 {
+        // Eliminación lógica: solo si fue enviada al cliente Y tiene órdenes asociadas
+        // Marcar como eliminado y desvincular de órdenes
+        sqlx::query("UPDATE COTIZACION SET deleted_at = CURRENT_TIMESTAMP WHERE cotizacion_id = ?")
+            .bind(cotizacion_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        // Desvincular de órdenes de trabajo
+        sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
+            .bind(cotizacion_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        true
+    } else {
+        // Eliminación física: borradores o sin órdenes asociadas
+        // Eliminar primero las relaciones con piezas
+        sqlx::query("DELETE FROM PIEZAS_COTIZACION WHERE cotizacion_id = ?")
+            .bind(cotizacion_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        // Luego eliminar la cotización
+        let result = sqlx::query("DELETE FROM COTIZACION WHERE cotizacion_id = ?")
+            .bind(cotizacion_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        result.rows_affected() > 0
+    };
     
     // Confirmar transacción
     tx.commit().await.map_err(|e| format!("Database error: {}", e))?;
     
     // Registrar la acción en el log de auditoría
     if was_deleted {
-        if let Some(ref cotizacion) = cotizacion_to_delete {
-            let _ = log_action(
-                "DELETE_COTIZACION",
-                Some(deleted_by),
-                "COTIZACION",
-                Some(cotizacion_id),
-                Some(&format!("Cotización eliminada: {}", 
-                    cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A")
-                )),
-                None
-            ).await;
-        }
+        let action_type = if fue_enviada && has_dependencies > 0 {
+            "DELETE_COTIZACION_LOGICAL"
+        } else {
+            "DELETE_COTIZACION"
+        };
+        let _ = log_action(
+            action_type,
+            Some(deleted_by),
+            "COTIZACION",
+            Some(cotizacion_id),
+            Some(&format!("Cotización {} eliminada: {}", 
+                if fue_enviada && has_dependencies > 0 { "lógicamente" } else { "físicamente" },
+                cotizacion_to_delete.cotizacion_codigo.as_deref().unwrap_or("N/A")
+            )),
+            None
+        ).await;
     }
     
     Ok(was_deleted)
@@ -631,7 +672,7 @@ pub async fn search_cotizaciones(search_term: String) -> Result<Vec<CotizacionDe
                 u.usuario_nombre as created_by_nombre\
          FROM COTIZACION c\
          LEFT JOIN USUARIO u ON c.created_by = u.usuario_id\
-         WHERE c.cotizacion_codigo LIKE ? \n         ORDER BY c.created_at DESC"
+         WHERE c.cotizacion_codigo LIKE ? AND c.deleted_at IS NULL \n         ORDER BY c.created_at DESC"
     )
     .bind(&search_pattern)
     .fetch_all(&*pool)
@@ -646,7 +687,7 @@ pub async fn search_cotizaciones(search_term: String) -> Result<Vec<CotizacionDe
 pub async fn count_cotizaciones() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM COTIZACION")
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM COTIZACION WHERE deleted_at IS NULL")
         .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
@@ -665,6 +706,7 @@ pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result
                 u.usuario_nombre as created_by_nombre\
          FROM COTIZACION c\
          LEFT JOIN USUARIO u ON c.created_by = u.usuario_id\
+         WHERE c.deleted_at IS NULL\
          ORDER BY c.created_at DESC\n         LIMIT ? OFFSET ?"
     )
     .bind(limit)
@@ -710,11 +752,11 @@ pub async fn get_cotizaciones_by_cliente(cliente_id: i32) -> Result<Vec<Cotizaci
     let pool = get_db_pool_safe()?;
     let cotizaciones = sqlx::query_as::<_, Cotizacion>(
         "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion, \
-                c.costo_total, c.is_aprobada, c.is_borrador, c.informe, c.created_by, c.created_at \
+                c.costo_total, c.is_aprobada, c.is_borrador, c.informe, c.created_by, c.created_at, c.deleted_at \
          FROM COTIZACION c \
          INNER JOIN ORDEN_TRABAJO ot ON c.cotizacion_id = ot.cotizacion_id \
          INNER JOIN EQUIPO e ON ot.equipo_id = e.equipo_id \
-         WHERE e.cliente_id = ? \
+         WHERE e.cliente_id = ? AND c.deleted_at IS NULL \
          GROUP BY c.cotizacion_id \
          ORDER BY c.created_at DESC"
     )
