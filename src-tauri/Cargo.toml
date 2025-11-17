@@ -5,6 +5,14 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 default-run = "tauri-app"
+rust-version = "1.77.2"
+
+[workspace]
+# Resolver version-aware de Cargo 1.84+ que considera rust-version
+resolver = "2"
+
+[resolver]
+incompatible-rust-versions = "fallback"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,10 +24,11 @@ name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.0.1", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri-plugin-notification = { version = "2.0.0", features = [ "windows7-compat" ] }
+tauri = { version = "2.0.1", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -29,7 +38,7 @@ dotenv = "0.15"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.8"
 bcrypt = "0.15"
-resend-rs = "0.15.0"
+resend-rs = "0.12.1"
 uuid = { version = "1.0", features = ["v4"] }
 rand = "0.8"
 aes-gcm = "0.10"
@@ -39,6 +48,14 @@ sha2 = "0.10"
 dirs = "5.0"
 printpdf = "0.7"
 reqwest = { version = "0.11", features = ["json"] }
+icu_normalizer = "=1.5.0"
+icu_collections = "=1.5.0"
+icu_normalizer_data = "=1.5.0"
+icu_properties_data = "=1.5.1"
+icu_properties = "=1.5.1"
+icu_provider = "=1.5.0"
+idna_adapter = "=1.2.0"
+litemap = "=0.7.4"
 
 [[bin]]
 name = "tauri-app"
