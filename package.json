@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build": "npm run build && tauri build && npm run post-build-env",
+    "post-build-env": "powershell -ExecutionPolicy Bypass -File ./scripts/post-build-env.ps1"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -9,7 +9,13 @@ use database::{init_database, start_auto_reconnect_task, start_periodic_connecti
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Cargar variables de entorno desde .env
+    // En modo release, cargar primero el .env embebido
+    #[cfg(not(debug_assertions))]
+    {
+        config::parse_embedded_env();
+    }
+    
+    // Cargar variables de entorno desde .env (tiene prioridad en debug, fallback en release)
     dotenv::dotenv().ok();
     
     // Crear runtime de Tokio que se mantenga vivo

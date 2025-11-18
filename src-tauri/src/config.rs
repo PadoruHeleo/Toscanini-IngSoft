@@ -16,6 +16,11 @@ const CONFIG_FILE: &str = "config.enc";
 const KEYRING_SERVICE: &str = "toscanini_db_config";
 const KEYRING_USERNAME: &str = "database";
 
+// Embebido el contenido del .env en tiempo de compilación (solo en release)
+// El archivo .env debe estar en src-tauri/.env
+#[cfg(not(debug_assertions))]
+const EMBEDDED_ENV: &str = include_str!("../.env");
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatabaseConfig {
     pub host: String,
@@ -238,6 +243,46 @@ pub fn load_database_config() -> Result<DatabaseConfig, Box<dyn std::error::Erro
     }
 
     secure_config.load_config()
+}
+
+/// Parsea el contenido embebido del .env y establece las variables de entorno
+/// Solo se ejecuta en modo release
+/// Esta función carga TODAS las variables de entorno del .env embebido, incluyendo:
+/// - Variables de base de datos (DATABASE_URL, DB_HOST, DB_PORT, etc.)
+/// - Variables SMTP (SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, etc.)
+/// - Variables de API (RESEND_API_KEY, etc.)
+/// - Variables de aplicación (APP_ENVIRONMENT, DEV_EMAIL_RECIPIENT, etc.)
+#[cfg(not(debug_assertions))]
+pub fn parse_embedded_env() {
+    let mut loaded_count = 0;
+    let mut skipped_count = 0;
+    
+    for line in EMBEDDED_ENV.lines() {
+        let line = line.trim();
+        // Ignorar líneas vacías y comentarios
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        
+        // Parsear formato KEY=VALUE
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+            
+            // Remover comillas si existen
+            let value = value.trim_matches('"').trim_matches('\'');
+            
+            // Solo establecer si no existe ya (permitir override por variables de entorno del sistema)
+            if std::env::var(key).is_err() {
+                std::env::set_var(key, value);
+                loaded_count += 1;
+            } else {
+                skipped_count += 1;
+            }
+        }
+    }
+    
+    println!("Loaded {} environment variables from embedded .env ({} skipped, already set)", loaded_count, skipped_count);
 }
 
 /// Carga configuración desde variables de entorno o usa valores por defecto
