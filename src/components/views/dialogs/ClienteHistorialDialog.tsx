@@ -179,7 +179,7 @@ export function ClienteHistorialDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent style={{ minWidth: "1000px", maxHeight: "80vh" }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Historial de Cliente</DialogTitle>
             <DialogDescription>

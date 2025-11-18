@@ -323,7 +323,7 @@ export function HomeView() {
 
   if (loading) {
     return (
-      <div className="px-6 pt-6 flex items-center justify-center min-h-screen">
+      <div className="px-4 pt-4 flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
           <p className="text-gray-600">Cargando dashboard...</p>
@@ -333,7 +333,7 @@ export function HomeView() {
   }
 
   return (
-    <div className="px-6 pt-6 space-y-6">
+    <div className="px-4 pt-4 space-y-4">
       {/* Header con información contextual */}
       <div className="flex items-center justify-between">
         <div>
@@ -350,9 +350,9 @@ export function HomeView() {
       <Separator />
 
       {/* Sección superior: Distribuciones (izquierda) y Actividad Reciente (derecha) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Columna izquierda: Distribuciones */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Distribución por estado */}
           <Card>
             <CardHeader>

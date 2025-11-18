@@ -135,7 +135,7 @@ export function LogsAuditoriaView() {
 
   if (loading) {
     return (
-      <div className="px-6 pt-6">
+      <div className="px-4 pt-4">
         <ViewTitle onRefresh={loadLogs} />
         <div className="text-center py-8">Cargando logs de auditoría...</div>
       </div>
@@ -143,7 +143,7 @@ export function LogsAuditoriaView() {
   }
 
   return (
-    <div className="px-6 pt-6 space-y-6">
+    <div className="px-4 pt-4 space-y-4">
       <div className="flex justify-between items-center">
         <ViewTitle onRefresh={loadLogs} />
       </div>
@@ -171,7 +171,7 @@ export function LogsAuditoriaView() {
       </div>
 
       {/* Tabla de logs */}
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-250px)] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow>

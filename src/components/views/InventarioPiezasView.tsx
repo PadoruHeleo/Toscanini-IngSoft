@@ -303,7 +303,7 @@ export function InventarioPiezasView() {
   }
 
   return (
-    <div className="px-6 pt-6 space-y-6">
+    <div className="px-4 pt-4 space-y-4">
       <ViewTitle onRefresh={handleRefresh} />
 
       <div className="mb-6">
@@ -383,7 +383,7 @@ export function InventarioPiezasView() {
         </div>
       </div>
 
-      <div className="rounded-md border bg-white">
+      <div className="rounded-md border bg-white max-h-[calc(100vh-250px)] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow>

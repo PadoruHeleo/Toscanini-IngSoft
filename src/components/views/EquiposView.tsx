@@ -146,14 +146,14 @@ export function EquiposView() {
 
   if (loading) {
     return (
-      <div className="px-6 pt-6">
+      <div className="px-4 pt-4">
         <ViewTitle />
         <div className="text-center py-8">Cargando equipos...</div>
       </div>
     );
   }
   return (
-    <div className="px-6 pt-6 space-y-6">
+    <div className="px-4 pt-4 space-y-4">
       <div className="flex justify-between items-center">
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Equipo</Button>
@@ -188,7 +188,7 @@ export function EquiposView() {
         />
       </div>
       {/* Tabla de equipos */}
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-250px)] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow>

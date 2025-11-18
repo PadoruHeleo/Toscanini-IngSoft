@@ -41,6 +41,7 @@ bcrypt = "0.15"
 mail-send = "0.4"
 mail-builder = "0.3"
 uuid = { version = "1.0", features = ["v4"] }
+home = "0.5.9"
 rand = "0.8"
 aes-gcm = "0.10"
 keyring = "2.3"

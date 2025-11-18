@@ -111,7 +111,7 @@ export function EquipoHistorialDialog({
     <>
       {/* Dialog principal */}
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent style={{ minWidth: "800px" }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Historial de Equipo</DialogTitle>
             <DialogDescription>

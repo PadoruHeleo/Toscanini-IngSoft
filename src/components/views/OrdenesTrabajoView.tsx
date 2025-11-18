@@ -512,7 +512,7 @@ export function OrdenesTrabajoView() {
 
   if (loading) {
     return (
-      <div className="px-6 pt-6">
+      <div className="px-4 pt-4">
         <ViewTitle />
         <div className="text-center py-8">Cargando órdenes de trabajo...</div>
       </div>
@@ -520,7 +520,7 @@ export function OrdenesTrabajoView() {
   }
 
   return (
-    <div className="px-6 pt-6 space-y-6">
+    <div className="px-4 pt-4 space-y-4">
       <div className="flex justify-between items-center">
         <ViewTitle onRefresh={loadOrdenes} />
         <Button onClick={() => setShowAddForm(true)}>
@@ -550,7 +550,7 @@ export function OrdenesTrabajoView() {
           onFiltrar={(ordenesFiltradas) => setOrdenes(ordenesFiltradas)}
         />
       </div>
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-250px)] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow>

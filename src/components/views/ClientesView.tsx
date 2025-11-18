@@ -170,7 +170,7 @@ export function ClientesView() {
 
   if (loading) {
     return (
-      <div className="px-6 pt-6">
+      <div className="px-4 pt-4">
         <ViewTitle />
         <div className="text-center py-8">Cargando clientes...</div>
       </div>
@@ -178,7 +178,7 @@ export function ClientesView() {
   }
 
   return (
-    <div className="px-6 pt-6 space-y-6">
+    <div className="px-4 pt-4 space-y-4">
       <div className="flex justify-between items-center">
         <ViewTitle />
         {canCreateCliente && (
@@ -214,7 +214,7 @@ export function ClientesView() {
         </div>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-250px)] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow>
