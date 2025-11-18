@@ -12,6 +12,14 @@ import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Search,
   Plus,
   Eye,
@@ -174,7 +182,9 @@ export function OrdenesTrabajoView() {
   const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
   const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
   const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
-  const [pdfOrdenTrabajoId, setPdfOrdenTrabajoId] = useState<number | null>(null);
+  const [pdfOrdenTrabajoId, setPdfOrdenTrabajoId] = useState<number | null>(
+    null
+  );
   const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
 
   // Estados para Registro de Salida
@@ -184,6 +194,11 @@ export function OrdenesTrabajoView() {
     useState<any>(null);
   const [selectedOrdenForSalida, setSelectedOrdenForSalida] =
     useState<OrdenTrabajo | null>(null);
+
+  // Estados para Modal de Eliminación
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [ordenToDelete, setOrdenToDelete] = useState<OrdenTrabajo | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadOrdenes = async () => {
     try {
@@ -303,25 +318,43 @@ export function OrdenesTrabajoView() {
     );
   };
 
-  const handleDeleteOrden = async (orden: OrdenTrabajo) => {
-    if (!user) return;
+  const handleDeleteOrden = (orden: OrdenTrabajo) => {
+    // Validar que la orden no tenga cotización o informe asociados
+    if (orden.cotizacion_id || orden.informe_id) {
+      const documentos = [];
+      if (orden.cotizacion_id) documentos.push("cotización");
+      if (orden.informe_id) documentos.push("informe");
 
-    const confirmDelete = window.confirm(
-      `¿Está seguro que desea eliminar la orden de trabajo "${orden.orden_codigo}"?\n\nEsta acción no se puede deshacer.`
-    );
+      const documentosTexto = documentos.join(" y ");
 
-    if (!confirmDelete) return;
+      showError(
+        "No se puede eliminar",
+        `Esta orden de trabajo no se puede eliminar porque tiene ${documentosTexto} asociado${
+          documentos.length > 1 ? "s" : ""
+        }. Debe eliminar primero el/los documento(s) asociado(s).`
+      );
+      return;
+    }
+
+    setOrdenToDelete(orden);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteOrden = async () => {
+    if (!user || !ordenToDelete) return;
+
+    setIsDeleting(true);
 
     try {
       const result = await invoke<boolean>("delete_orden_trabajo", {
-        ordenId: orden.orden_id,
+        ordenId: ordenToDelete.orden_id,
         deletedBy: user.usuario_id,
       });
 
       if (result) {
         success(
           "Orden eliminada",
-          `La orden ${orden.orden_codigo} ha sido eliminada exitosamente.`
+          `La orden ${ordenToDelete.orden_codigo} ha sido eliminada exitosamente.`
         );
         loadOrdenes();
         setRefreshFilters((prev) => prev + 1);
@@ -334,6 +367,10 @@ export function OrdenesTrabajoView() {
         "Error al eliminar orden",
         typeof error === "string" ? error : "Ha ocurrido un error inesperado."
       );
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+      setOrdenToDelete(null);
     }
   };
   const handleVerCotizacion = async (orden: OrdenTrabajo) => {
@@ -882,6 +919,59 @@ export function OrdenesTrabajoView() {
         ordenTrabajo={selectedOrdenForSalida}
         onSalidaRegistrada={handleSalidaRegistrada}
       />
+      {/* Modal de Confirmación para Eliminar Orden */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-rose-500" />
+              Eliminar Orden de Trabajo
+            </DialogTitle>
+            <DialogDescription className="text-left space-y-2">
+              <p>
+                ¿Está seguro que desea eliminar la orden de trabajo{" "}
+                <span className="font-semibold text-gray-900">
+                  "{ordenToDelete?.orden_codigo}"
+                </span>
+                ?
+              </p>
+              <p className="text-sm text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
+                Esta acción no se puede deshacer y eliminará permanentemente
+                todos los datos asociados a esta orden.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-3 sm:gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={isDeleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmDeleteOrden}
+              disabled={isDeleting}
+              className="gap-2 bg-rose-500 hover:bg-rose-600"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar Orden
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
