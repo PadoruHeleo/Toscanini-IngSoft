@@ -3,6 +3,44 @@
 version = 3
 
 [[package]]
+name = "Toscanini"
+version = "0.1.1"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "bcrypt",
+ "chrono",
+ "chrono-tz",
+ "dirs 5.0.1",
+ "dotenv",
+ "home",
+ "icu_collections",
+ "icu_normalizer",
+ "icu_normalizer_data",
+ "icu_properties",
+ "icu_properties_data",
+ "icu_provider",
+ "idna_adapter",
+ "keyring",
+ "litemap",
+ "mail-builder",
+ "mail-send",
+ "printpdf",
+ "rand 0.8.5",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5485,44 +5523,6 @@ dependencies = [
  "webview2-com",
  "window-vibrancy",
  "windows",
-]
-
-[[package]]
-name = "tauri-app"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "base64 0.22.1",
- "bcrypt",
- "chrono",
- "chrono-tz",
- "dirs 5.0.1",
- "dotenv",
- "home",
- "icu_collections",
- "icu_normalizer",
- "icu_normalizer_data",
- "icu_properties",
- "icu_properties_data",
- "icu_provider",
- "idna_adapter",
- "keyring",
- "litemap",
- "mail-builder",
- "mail-send",
- "printpdf",
- "rand 0.8.5",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "tauri",
- "tauri-build",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tokio",
- "uuid",
 ]
 
 [[package]]

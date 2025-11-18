@@ -310,7 +310,15 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
       data-slot="sidebar-inset"
       className={cn(
         "bg-background relative flex w-full flex-1 flex-col",
-        "md:peer-data-[variant=inset]:m-1.5 md:peer-data-[variant=inset]:ml-[calc(var(--sidebar-width)+0.5rem)] md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-1.5",
+        // Aplicar margen izquierdo base cuando el sidebar está visible (no móvil)
+        // Esto previene que el contenido se oculte debajo del sidebar fijo
+        "md:ml-[calc(var(--sidebar-width)+0.5rem)]",
+        // Ajustar cuando el sidebar está colapsado (modo icon)
+        "md:peer-data-[state=collapsed]:peer-data-[collapsible=icon]:ml-[calc(var(--sidebar-width-icon)+0.5rem)]",
+        // Estilos adicionales para variant inset (redondeado y sombra)
+        "md:peer-data-[variant=inset]:m-1.5 md:peer-data-[variant=inset]:ml-[calc(var(--sidebar-width)+0.5rem)] md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm",
+        // Cuando está colapsado en modo icon con variant inset
+        "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:peer-data-[collapsible=icon]:ml-[calc(var(--sidebar-width-icon)+0.5rem)]",
         className
       )}
       {...props}

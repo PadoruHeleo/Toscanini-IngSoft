@@ -1,7 +1,7 @@
 [package]
-name = "tauri-app"
-version = "0.1.0"
-description = "A Tauri App"
+name = "Toscanini"
+version = "0.1.1"
+description = ""
 authors = ["you"]
 edition = "2021"
 default-run = "tauri-app"

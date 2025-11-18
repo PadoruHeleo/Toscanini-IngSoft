@@ -101,7 +101,7 @@ export default function App() {
               {/* Componente de notificaciones periodicas, insertado aqui, evaluar cambiar su posicion */}
               <AppSidebar variant="inset" />{" "}
               <SidebarInset>
-                <div className="flex flex-1 flex-col">
+                <div className="flex flex-1 flex-col ml-5">
                   <DatabaseConnectionBanner />
                   <div className="@container/main flex flex-1 flex-col gap-2">
                     <ViewRenderer />
