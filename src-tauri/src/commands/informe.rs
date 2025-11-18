@@ -336,28 +336,79 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
     
     // Registrar la acción en el log de auditoría
     if let Some(ref informe) = current_informe {
-        let prev_data = format!("{}|{}|{}|{}", 
-            informe.informe_codigo.as_deref().unwrap_or(""), 
-            informe.informe_acciones.as_deref().unwrap_or(""),
-            informe.informe_obs.as_deref().unwrap_or(""),
-            informe.is_borrador.map_or("".to_string(), |p| p.to_string())
-        );
-        let new_data = format!("{}|{}|{}|{}", 
-            request.informe_codigo.as_deref().unwrap_or(informe.informe_codigo.as_deref().unwrap_or("")),
-            request.informe_acciones.as_deref().unwrap_or(informe.informe_acciones.as_deref().unwrap_or("")),
-            request.informe_obs.as_deref().unwrap_or(informe.informe_obs.as_deref().unwrap_or("")),
-            request.is_borrador
-                .or(informe.is_borrador)
-                .map_or("".to_string(), |p| p.to_string())
-        );
+        let mut cambios = Vec::new();
+        
+        // Comparar cada campo y agregar a la lista de cambios si fue modificado
+        if let Some(ref new_codigo) = request.informe_codigo {
+            if informe.informe_codigo.as_deref() != Some(new_codigo.as_str()) {
+                cambios.push(format!("Código: '{}' → '{}'", 
+                    informe.informe_codigo.as_deref().unwrap_or("(vacío)"),
+                    new_codigo
+                ));
+            }
+        }
+        
+        if let Some(ref new_acciones) = request.informe_acciones {
+            if informe.informe_acciones.as_deref() != Some(new_acciones.as_str()) {
+                cambios.push(format!("Acciones: modificado"));
+            }
+        }
+        
+        if let Some(ref new_obs) = request.informe_obs {
+            if informe.informe_obs.as_deref() != Some(new_obs.as_str()) {
+                cambios.push(format!("Observaciones: modificado"));
+            }
+        }
+        
+        if let Some(new_borrador) = request.is_borrador {
+            if informe.is_borrador != Some(new_borrador) {
+                cambios.push(format!("Borrador: {} → {}", 
+                    informe.is_borrador.map_or("false".to_string(), |b| b.to_string()),
+                    new_borrador
+                ));
+            }
+        }
+        
+        if let Some(ref new_diagnostico) = request.diagnostico {
+            if informe.diagnostico.as_deref() != Some(new_diagnostico.as_str()) {
+                cambios.push(format!("Diagnóstico: modificado"));
+            }
+        }
+        
+        if let Some(ref new_recomendaciones) = request.recomendaciones {
+            if informe.recomendaciones.as_deref() != Some(new_recomendaciones.as_str()) {
+                cambios.push(format!("Recomendaciones: modificado"));
+            }
+        }
+        
+        if let Some(ref new_solucion) = request.solucion_aplicada {
+            if informe.solucion_aplicada.as_deref() != Some(new_solucion.as_str()) {
+                cambios.push(format!("Solución aplicada: modificado"));
+            }
+        }
+        
+        if let Some(ref new_tecnico) = request.tecnico_responsable {
+            if informe.tecnico_responsable.as_deref() != Some(new_tecnico.as_str()) {
+                cambios.push(format!("Técnico responsable: '{}' → '{}'", 
+                    informe.tecnico_responsable.as_deref().unwrap_or("(vacío)"),
+                    new_tecnico
+                ));
+            }
+        }
+        
+        let descripcion = if cambios.is_empty() {
+            "Sin cambios detectados".to_string()
+        } else {
+            format!("Campos modificados: {}", cambios.join(", "))
+        };
         
         let _ = log_action(
             "UPDATE_INFORME",
             Some(updated_by),
             "INFORME",
             Some(informe_id),
-            Some(&prev_data),
-            Some(&new_data)
+            None,
+            Some(&descripcion)
         ).await;
     }
     

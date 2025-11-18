@@ -297,7 +297,9 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
 pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequest, updated_by: i32) -> Result<Option<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
+    // Obtener la cotización actual antes de actualizar para logging
     let current_cotizacion = get_cotizacion_by_id(cotizacion_id).await?;
+    
     if let Some(ref cotizacion) = current_cotizacion {
         // Si estaba en borrador y ahora se rechaza
         if cotizacion.is_borrador == Some(true) && request.is_aprobada == Some(false) {
@@ -321,9 +323,6 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
             ).await;
         }
     }
-    
-    // Obtener la cotización actual para logging
-    let current_cotizacion = get_cotizacion_by_id(cotizacion_id).await?;
     
     // Verificar que el código no está en uso por otra cotización (si se está actualizando)
     if let Some(ref new_codigo) = request.cotizacion_codigo {
@@ -363,40 +362,82 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
     
     // Registrar la acción en el log de auditoría
     if let Some(ref cotizacion) = current_cotizacion {
-        let prev_data = format!("{}|{}|{}|{}|{}|{}", 
-            cotizacion.cotizacion_codigo.as_deref().unwrap_or(""), 
-            cotizacion.costo_revision.map_or("".to_string(), |p| p.to_string()),
-            cotizacion.costo_reparacion.map_or("".to_string(), |p| p.to_string()),
-            cotizacion.costo_total.map_or("".to_string(), |p| p.to_string()),
-            cotizacion.is_aprobada.map_or("".to_string(), |p| p.to_string()),
-            cotizacion.is_borrador.map_or("".to_string(), |p| p.to_string())
-        );
-        let new_data = format!("{}|{}|{}|{}|{}|{}", 
-            request.cotizacion_codigo.as_deref().unwrap_or(cotizacion.cotizacion_codigo.as_deref().unwrap_or("")),
-            request.costo_revision
-                .or(cotizacion.costo_revision)
-                .map_or("".to_string(), |p| p.to_string()),
-            request.costo_reparacion
-                .or(cotizacion.costo_reparacion)
-                .map_or("".to_string(), |p| p.to_string()),
-            request.costo_total
-                .or(cotizacion.costo_total)
-                .map_or("".to_string(), |p| p.to_string()),
-            request.is_aprobada
-                .or(cotizacion.is_aprobada)
-                .map_or("".to_string(), |p| p.to_string()),
-            request.is_borrador
-                .or(cotizacion.is_borrador)
-                .map_or("".to_string(), |p| p.to_string())
-        );
+        let mut cambios = Vec::new();
+        
+        // Comparar cada campo y agregar a la lista de cambios si fue modificado
+        if let Some(ref new_codigo) = request.cotizacion_codigo {
+            if cotizacion.cotizacion_codigo.as_deref() != Some(new_codigo.as_str()) {
+                cambios.push(format!("Código: '{}' → '{}'", 
+                    cotizacion.cotizacion_codigo.as_deref().unwrap_or("(vacío)"),
+                    new_codigo
+                ));
+            }
+        }
+        
+        if let Some(new_costo_revision) = request.costo_revision {
+            if cotizacion.costo_revision != Some(new_costo_revision) {
+                cambios.push(format!("Costo revisión: ${} → ${}", 
+                    cotizacion.costo_revision.map_or(0, |c| c),
+                    new_costo_revision
+                ));
+            }
+        }
+        
+        if let Some(new_costo_reparacion) = request.costo_reparacion {
+            if cotizacion.costo_reparacion != Some(new_costo_reparacion) {
+                cambios.push(format!("Costo reparación: ${} → ${}", 
+                    cotizacion.costo_reparacion.map_or(0, |c| c),
+                    new_costo_reparacion
+                ));
+            }
+        }
+        
+        if let Some(new_costo_total) = request.costo_total {
+            if cotizacion.costo_total != Some(new_costo_total) {
+                cambios.push(format!("Costo total: ${} → ${}", 
+                    cotizacion.costo_total.map_or(0, |c| c),
+                    new_costo_total
+                ));
+            }
+        }
+        
+        if let Some(new_aprobada) = request.is_aprobada {
+            if cotizacion.is_aprobada != Some(new_aprobada) {
+                cambios.push(format!("Aprobada: {} → {}", 
+                    cotizacion.is_aprobada.map_or("false".to_string(), |a| a.to_string()),
+                    new_aprobada
+                ));
+            }
+        }
+        
+        if let Some(new_borrador) = request.is_borrador {
+            if cotizacion.is_borrador != Some(new_borrador) {
+                cambios.push(format!("Borrador: {} → {}", 
+                    cotizacion.is_borrador.map_or("false".to_string(), |b| b.to_string()),
+                    new_borrador
+                ));
+            }
+        }
+        
+        if let Some(ref new_informe) = request.informe {
+            if cotizacion.informe != *new_informe {
+                cambios.push(format!("Informe: modificado"));
+            }
+        }
+        
+        let descripcion = if cambios.is_empty() {
+            "Sin cambios detectados".to_string()
+        } else {
+            format!("Campos modificados: {}", cambios.join(", "))
+        };
         
         let _ = log_action(
             "UPDATE_COTIZACION",
             Some(updated_by),
             "COTIZACION",
             Some(cotizacion_id),
-            Some(&prev_data),
-            Some(&new_data)
+            None,
+            Some(&descripcion)
         ).await;
     }
     
