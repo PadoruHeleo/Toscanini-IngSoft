@@ -5,11 +5,22 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, FileText, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 import { useToastContext } from "@/contexts/ToastContext";
+
+// Función segura para convertir Uint8Array a Base64 evitando desbordamiento de pila
+function uint8ArrayToBase64(uint8Array: Uint8Array): string {
+  let binary = "";
+  const len = uint8Array.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(uint8Array[i]);
+  }
+  return window.btoa(binary);
+}
 
 interface PdfViewerProps {
   open: boolean;
@@ -48,6 +59,12 @@ export function PdfViewer({
   const [ordenTrabajoPdfUrl, setOrdenTrabajoPdfUrl] = useState<string | null>(
     null
   );
+  const [cotizacionPdfReady, setCotizacionPdfReady] = useState(false);
+  const [informePdfReady, setInformePdfReady] = useState(false);
+  const [ordenTrabajoPdfReady, setOrdenTrabajoPdfReady] = useState(false);
+  const [cotizacionLoadError, setCotizacionLoadError] = useState(false);
+  const [informeLoadError, setInformeLoadError] = useState(false);
+  const [ordenTrabajoLoadError, setOrdenTrabajoLoadError] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [activeTab, setActiveTab] = useState(
     ordenTrabajoId
@@ -62,17 +79,12 @@ export function PdfViewer({
   const { success, error: showError } = useToastContext();
 
   // Limpiar URLs cuando el componente se desmonta o cambia
+  // Nota: Con Base64 ya no necesitamos revocar URLs, pero mantenemos el useEffect
+  // para limpiar estados si es necesario en el futuro
   useEffect(() => {
     return () => {
-      if (cotizacionPdfUrl) {
-        URL.revokeObjectURL(cotizacionPdfUrl);
-      }
-      if (informePdfUrl) {
-        URL.revokeObjectURL(informePdfUrl);
-      }
-      if (ordenTrabajoPdfUrl) {
-        URL.revokeObjectURL(ordenTrabajoPdfUrl);
-      }
+      // Con Base64 (data URIs) no hay necesidad de revocar URLs
+      // Las data URIs se limpian automáticamente cuando el componente se desmonta
     };
   }, [cotizacionPdfUrl, informePdfUrl, ordenTrabajoPdfUrl]);
 
@@ -99,10 +111,8 @@ export function PdfViewer({
       setCotizacionError(null);
 
       // Limpiar PDF anterior
-      if (cotizacionPdfUrl) {
-        URL.revokeObjectURL(cotizacionPdfUrl);
-        setCotizacionPdfUrl(null);
-      }
+      setCotizacionPdfUrl(null);
+      setCotizacionPdfReady(false);
 
       const pdfBytes = await invoke<number[]>(
         "generate_cotizacion_pdf_command",
@@ -111,14 +121,31 @@ export function PdfViewer({
         }
       );
 
+      // Validar que se recibieron bytes
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error("El PDF generado está vacío");
+      }
+
       // Convertir array de números a Uint8Array
       const uint8Array = new Uint8Array(pdfBytes);
       setCotizacionPdfData(uint8Array);
 
-      // Crear URL del blob para mostrar en el visor
-      const blob = new Blob([uint8Array], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+      // Verificar que sea un PDF válido leyendo los primeros bytes
+      const firstBytes = uint8Array.slice(0, 4);
+      const pdfHeader = new TextDecoder().decode(firstBytes);
+      if (!pdfHeader.startsWith("%PDF")) {
+        throw new Error("El archivo generado no es un PDF válido");
+      }
+
+      // Convertir a Base64 en lugar de usar Blob URL
+      const base64String = uint8ArrayToBase64(uint8Array);
+      const url = `data:application/pdf;base64,${base64String}`;
       setCotizacionPdfUrl(url);
+      setCotizacionLoadError(false);
+
+      // Delay para asegurar que React haya actualizado el DOM antes de mostrar el iframe
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setCotizacionPdfReady(true);
     } catch (error) {
       console.error("Error generando PDF de cotización:", error);
       let errorMessage = "Error desconocido generando PDF de cotización";
@@ -130,6 +157,8 @@ export function PdfViewer({
       }
 
       setCotizacionError(errorMessage);
+      setCotizacionPdfReady(false);
+      setCotizacionLoadError(false);
     } finally {
       setCotizacionLoading(false);
     }
@@ -143,23 +172,38 @@ export function PdfViewer({
       setInformeError(null);
 
       // Limpiar PDF anterior
-      if (informePdfUrl) {
-        URL.revokeObjectURL(informePdfUrl);
-        setInformePdfUrl(null);
-      }
+      setInformePdfUrl(null);
+      setInformePdfReady(false);
 
       const pdfBytes = await invoke<number[]>("generate_informe_pdf_command", {
         informeId: informeId,
       });
 
+      // Validar que se recibieron bytes
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error("El PDF generado está vacío");
+      }
+
       // Convertir array de números a Uint8Array
       const uint8Array = new Uint8Array(pdfBytes);
       setInformePdfData(uint8Array);
 
-      // Crear URL del blob para mostrar en el visor
-      const blob = new Blob([uint8Array], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+      // Verificar que sea un PDF válido leyendo los primeros bytes
+      const firstBytes = uint8Array.slice(0, 4);
+      const pdfHeader = new TextDecoder().decode(firstBytes);
+      if (!pdfHeader.startsWith("%PDF")) {
+        throw new Error("El archivo generado no es un PDF válido");
+      }
+
+      // Convertir a Base64 en lugar de usar Blob URL
+      const base64String = uint8ArrayToBase64(uint8Array);
+      const url = `data:application/pdf;base64,${base64String}`;
       setInformePdfUrl(url);
+      setInformeLoadError(false);
+
+      // Delay para asegurar que React haya actualizado el DOM antes de mostrar el iframe
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setInformePdfReady(true);
     } catch (error) {
       console.error("Error generando PDF de informe:", error);
       let errorMessage = "Error desconocido generando PDF de informe";
@@ -171,6 +215,8 @@ export function PdfViewer({
       }
 
       setInformeError(errorMessage);
+      setInformePdfReady(false);
+      setInformeLoadError(false);
     } finally {
       setInformeLoading(false);
     }
@@ -184,10 +230,8 @@ export function PdfViewer({
       setOrdenTrabajoError(null);
 
       // Limpiar PDF anterior
-      if (ordenTrabajoPdfUrl) {
-        URL.revokeObjectURL(ordenTrabajoPdfUrl);
-        setOrdenTrabajoPdfUrl(null);
-      }
+      setOrdenTrabajoPdfUrl(null);
+      setOrdenTrabajoPdfReady(false);
 
       const pdfBytes = await invoke<number[]>(
         "generate_orden_trabajo_pdf_command",
@@ -196,14 +240,31 @@ export function PdfViewer({
         }
       );
 
+      // Validar que se recibieron bytes
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error("El PDF generado está vacío");
+      }
+
       // Convertir array de números a Uint8Array
       const uint8Array = new Uint8Array(pdfBytes);
       setOrdenTrabajoPdfData(uint8Array);
 
-      // Crear URL del blob para mostrar en el visor
-      const blob = new Blob([uint8Array], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+      // Verificar que sea un PDF válido leyendo los primeros bytes
+      const firstBytes = uint8Array.slice(0, 4);
+      const pdfHeader = new TextDecoder().decode(firstBytes);
+      if (!pdfHeader.startsWith("%PDF")) {
+        throw new Error("El archivo generado no es un PDF válido");
+      }
+
+      // Convertir a Base64 en lugar de usar Blob URL
+      const base64String = uint8ArrayToBase64(uint8Array);
+      const url = `data:application/pdf;base64,${base64String}`;
       setOrdenTrabajoPdfUrl(url);
+      setOrdenTrabajoLoadError(false);
+
+      // Delay para asegurar que React haya actualizado el DOM antes de mostrar el iframe
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setOrdenTrabajoPdfReady(true);
     } catch (error) {
       console.error("Error generando PDF de orden de trabajo:", error);
       let errorMessage = "Error desconocido generando PDF de orden de trabajo";
@@ -215,6 +276,8 @@ export function PdfViewer({
       }
 
       setOrdenTrabajoError(errorMessage);
+      setOrdenTrabajoPdfReady(false);
+      setOrdenTrabajoLoadError(false);
     } finally {
       setOrdenTrabajoLoading(false);
     }
@@ -329,24 +392,22 @@ export function PdfViewer({
 
   const handleClose = () => {
     // Limpiar datos al cerrar
-    if (cotizacionPdfUrl) {
-      URL.revokeObjectURL(cotizacionPdfUrl);
-      setCotizacionPdfUrl(null);
-    }
-    if (informePdfUrl) {
-      URL.revokeObjectURL(informePdfUrl);
-      setInformePdfUrl(null);
-    }
-    if (ordenTrabajoPdfUrl) {
-      URL.revokeObjectURL(ordenTrabajoPdfUrl);
-      setOrdenTrabajoPdfUrl(null);
-    }
+    // Con Base64 (data URIs) no hay necesidad de revocar URLs
+    setCotizacionPdfUrl(null);
+    setInformePdfUrl(null);
+    setOrdenTrabajoPdfUrl(null);
     setCotizacionPdfData(null);
     setInformePdfData(null);
     setOrdenTrabajoPdfData(null);
     setCotizacionError(null);
     setInformeError(null);
     setOrdenTrabajoError(null);
+    setCotizacionPdfReady(false);
+    setInformePdfReady(false);
+    setOrdenTrabajoPdfReady(false);
+    setCotizacionLoadError(false);
+    setInformeLoadError(false);
+    setOrdenTrabajoLoadError(false);
     setZoom(100);
     onOpenChange(false);
   };
@@ -357,6 +418,9 @@ export function PdfViewer({
     error: string | null,
     pdfUrl: string | null,
     pdfData: Uint8Array | null,
+    pdfReady: boolean,
+    loadError: boolean,
+    setLoadError: (error: boolean) => void,
     onRetry: () => void
   ) => (
     <div className="flex-1 flex flex-col">
@@ -444,17 +508,75 @@ export function PdfViewer({
           </div>
         )}
 
-        {pdfUrl && !loading && !error && (
+        {pdfUrl && !loading && !error && !pdfReady && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Preparando PDF...</p>
+            </div>
+          </div>
+        )}
+
+        {loadError && !loading && !error && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center max-w-md">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                <div className="text-yellow-600 mb-4">
+                  <FileText className="h-12 w-12 mx-auto opacity-50" />
+                </div>
+                <h3 className="text-lg font-medium text-yellow-800 mb-2">
+                  Error al cargar PDF
+                </h3>
+                <p className="text-yellow-600 text-sm mb-4">
+                  Es posible que se haya movido, modificado o eliminado.
+                </p>
+                <Button
+                  onClick={() => {
+                    setLoadError(false);
+                    onRetry();
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  Reintentar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pdfUrl && !loading && !error && !loadError && pdfReady && (
           <div className="h-full w-full">
-            <embed
-              src={pdfUrl}
-              type="application/pdf"
+            <iframe
+              key={pdfUrl} // Key única para forzar recreación cuando cambia la URL
+              src={`${pdfUrl}#toolbar=0`}
               width="100%"
               height="100%"
               style={{
                 transform: `scale(${zoom / 100})`,
                 transformOrigin: "top left",
                 minHeight: "600px",
+                border: "none",
+              }}
+              title={`PDF de ${type}`}
+              onError={() => {
+                console.error(`Error cargando PDF de ${type} en iframe`);
+                setLoadError(true);
+              }}
+              onLoad={(e) => {
+                // Verificar que el iframe cargó correctamente después de un pequeño delay
+                setTimeout(() => {
+                  const iframe = e.target as HTMLIFrameElement;
+                  try {
+                    // Intentar acceder al contenido del iframe para verificar que cargó
+                    if (iframe.contentDocument || iframe.contentWindow) {
+                      setLoadError(false);
+                    }
+                  } catch (err) {
+                    // Error de CORS es normal con blob URLs, el PDF debería estar cargando
+                    console.log(`PDF de ${type} cargando...`);
+                  }
+                }, 500);
               }}
             />
           </div>
@@ -478,6 +600,9 @@ export function PdfViewer({
             <FileText className="h-5 w-5" />
             {title}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Visor de documentos PDF para {title}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Pestañas para orden de trabajo, cotización e informe */}
@@ -526,6 +651,9 @@ export function PdfViewer({
                 ordenTrabajoError,
                 ordenTrabajoPdfUrl,
                 ordenTrabajoPdfData,
+                ordenTrabajoPdfReady,
+                ordenTrabajoLoadError,
+                setOrdenTrabajoLoadError,
                 generateOrdenTrabajoPdf
               )}
             </TabsContent>
@@ -540,6 +668,9 @@ export function PdfViewer({
                 cotizacionError,
                 cotizacionPdfUrl,
                 cotizacionPdfData,
+                cotizacionPdfReady,
+                cotizacionLoadError,
+                setCotizacionLoadError,
                 generateCotizacionPdf
               )
             ) : (
@@ -571,6 +702,9 @@ export function PdfViewer({
                 informeError,
                 informePdfUrl,
                 informePdfData,
+                informePdfReady,
+                informeLoadError,
+                setInformeLoadError,
                 generateInformePdf
               )
             ) : (
