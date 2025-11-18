@@ -217,6 +217,7 @@ pub fn run() {
             email::send_orden_trabajo_cliente,
             email::send_cotizacion_email,
             email::send_informe_email,
+            email::test_email_send,
             pdf::commands::generate_cotizacion_pdf_command,
             pdf::commands::generate_informe_pdf_command,
             pdf::commands::generate_orden_trabajo_pdf_command,

@@ -1,42 +1,138 @@
-use resend_rs::{Resend, types::CreateEmailBaseOptions};
+use mail_builder::MessageBuilder;
+use mail_send::{SmtpClientBuilder, Credentials};
 use std::env;
 use chrono_tz::America::Santiago;
 
 pub struct EmailService {
-    resend: Resend,
+    smtp_host: String,
+    smtp_port: u16,
+    smtp_username: String,
+    smtp_password: String,
+    smtp_from: String,
 }
 
 impl EmailService {
     pub fn new() -> Result<Self, String> {
-        println!("🔧 Inicializando EmailService...");
+        println!("🔧 Inicializando EmailService con SMTP...");
         
-        let api_key = env::var("RESEND_API_KEY")
+        // Intentar SMTP_SERVER primero, luego SMTP_HOST como fallback
+        let smtp_host = env::var("SMTP_SERVER")
+            .or_else(|_| env::var("SMTP_HOST"))
             .map_err(|_| {
-                eprintln!("❌ Variable de entorno RESEND_API_KEY no encontrada");
+                eprintln!("❌ Variable de entorno SMTP_SERVER o SMTP_HOST no encontrada");
                 eprintln!("🔍 Variables de entorno disponibles:");
                 for (key, _) in env::vars() {
-                    if key.contains("RESEND") || key.contains("EMAIL") || key.contains("API") {
+                    if key.contains("SMTP") || key.contains("EMAIL") {
                         eprintln!("   - {}", key);
                     }
                 }
-                "RESEND_API_KEY environment variable not found".to_string()
+                "SMTP_SERVER o SMTP_HOST environment variable not found".to_string()
             })?;
         
-        println!("✅ RESEND_API_KEY cargada correctamente (longitud: {})", api_key.len());
+        let smtp_port = env::var("SMTP_PORT")
+            .unwrap_or_else(|_| "587".to_string())
+            .parse::<u16>()
+            .map_err(|_| "SMTP_PORT debe ser un número válido".to_string())?;
         
-        let resend = Resend::new(&api_key);
+        let smtp_username = env::var("SMTP_USERNAME")
+            .map_err(|_| "SMTP_USERNAME environment variable not found".to_string())?;
         
-        println!("✅ EmailService inicializado exitosamente");
-        Ok(EmailService { resend })
+        let smtp_password = env::var("SMTP_PASSWORD")
+            .map_err(|_| "SMTP_PASSWORD environment variable not found".to_string())?;
+        
+        let smtp_from = env::var("SMTP_FROM_EMAIL")
+            .unwrap_or_else(|_| smtp_username.clone());
+        
+        println!("✅ Configuración SMTP cargada correctamente");
+        println!("   Host: {}", smtp_host);
+        println!("   Port: {}", smtp_port);
+        println!("   From: {}", smtp_from);
+        
+        Ok(EmailService {
+            smtp_host,
+            smtp_port,
+            smtp_username,
+            smtp_password,
+            smtp_from,
+        })
+    }
+
+    async fn send_email_internal(
+        &self,
+        to: &str,
+        subject: &str,
+        html_body: &str,
+        attachments: Option<Vec<(String, Vec<u8>, &str)>>,
+    ) -> Result<(), String> {
+        println!("📧 [send_email_internal] Iniciando envío a: {}", to);
+        
+        // Construir el cliente SMTP
+        println!("📧 [send_email_internal] Creando credenciales SMTP...");
+        let creds = Credentials::new(
+            self.smtp_username.clone(),
+            self.smtp_password.clone(),
+        );
+        
+        println!("📧 [send_email_internal] Conectando a SMTP {}:{}...", self.smtp_host, self.smtp_port);
+        
+        // El puerto 465 requiere SSL/TLS implícito, el puerto 587 usa STARTTLS
+        let use_implicit_tls = self.smtp_port == 465;
+        println!("📧 [send_email_internal] Usando SSL/TLS implícito: {} (puerto {})", use_implicit_tls, self.smtp_port);
+        
+        let mut smtp = SmtpClientBuilder::new(self.smtp_host.clone(), self.smtp_port)
+            .implicit_tls(use_implicit_tls)
+            .credentials(creds)
+            .connect()
+            .await
+            .map_err(|e| {
+                let error_msg = format!("Error conectando cliente SMTP a {}:{} - {}", self.smtp_host, self.smtp_port, e);
+                println!("❌ [send_email_internal] {}", error_msg);
+                error_msg
+            })?;
+        
+        println!("✅ [send_email_internal] Conexión SMTP establecida");
+
+        // Construir el mensaje
+        println!("📧 [send_email_internal] Construyendo mensaje...");
+        let mut message_builder = MessageBuilder::new()
+            .from((
+                self.smtp_from.split('@').next().unwrap_or("noreply"),
+                self.smtp_from.as_str(),
+            ))
+            .to((
+                to.split('@').next().unwrap_or("recipient"),
+                to,
+            ))
+            .subject(subject)
+            .html_body(html_body);
+
+        // Agregar adjuntos si existen
+        if let Some(attachments) = attachments {
+            println!("📧 [send_email_internal] Agregando {} adjuntos...", attachments.len());
+            for (filename, content, content_type) in attachments {
+                message_builder = message_builder.attachment(content_type, filename, content);
+            }
+        }
+
+        // Enviar el email directamente con MessageBuilder
+        println!("📧 [send_email_internal] Enviando mensaje...");
+        smtp.send(message_builder)
+            .await
+            .map_err(|e| {
+                let error_msg = format!("Error enviando email: {}", e);
+                println!("❌ [send_email_internal] {}", error_msg);
+                error_msg
+            })?;
+
+        println!("✅ [send_email_internal] Email enviado exitosamente a: {}", to);
+        Ok(())
     }
 
     pub async fn send_password_reset_email(&self, to_email: &str, reset_code: &str, user_name: &str) -> Result<(), String> {
-        use std::env;
-        
         // Verificar el entorno de ejecución
         let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
         
-        let (from, to) = if app_environment == "development" {
+        let to = if app_environment == "development" {
             // En desarrollo: usar email de desarrollo
             let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
             
@@ -44,17 +140,11 @@ impl EmailService {
             println!("📧 Enviando a email de desarrollo: {}", dev_email);
             println!("📧 En producción se enviaría a: {}", to_email);
             
-            (
-                "noreply@beniteztech.com".to_string(),
-                vec![dev_email]
-            )
+            dev_email
         } else {
             // En producción: usar el email real del usuario
             println!("📧 MODO PRODUCCIÓN: Enviando código de recuperación a {}", to_email);
-            (
-                "noreply@beniteztech.com".to_string(),
-                vec![to_email.to_string()]
-            )
+            to_email.to_string()
         };
         
         let subject = "Recuperación de Contraseña - Toscanini";
@@ -86,25 +176,16 @@ impl EmailService {
             reset_code = reset_code
         );
 
-        let email = CreateEmailBaseOptions::new(&from, to.clone(), subject)
-            .with_html(&html_content);
+        self.send_email_internal(&to, subject, &html_content, None).await?;
 
-        match self.resend.emails.send(email).await {
-            Ok(response) => {
-                println!("✅ Email de recuperación enviado exitosamente: {:?}", response);
-                if app_environment == "development" {
-                    println!("🔑 Código de recuperación generado: {} (solo visible en desarrollo)", reset_code);
-                }
-                Ok(())
-            }
-            Err(e) => {
-                eprintln!("❌ Error detallado enviando email de recuperación: {:?}", e);
-                eprintln!("📧 Destinatario: {:?}", to);
-                eprintln!("🔑 API Key configurada: {}", env::var("RESEND_API_KEY").is_ok());
-                Err(format!("Error sending password reset email: {}", e))
-            }
+        println!("✅ Email de recuperación enviado exitosamente");
+        if app_environment == "development" {
+            println!("🔑 Código de recuperación generado: {} (solo visible en desarrollo)", reset_code);
         }
+        
+        Ok(())
     }
+
     pub async fn send_informe_email(
         &self, 
         to_email: &str, 
@@ -113,8 +194,6 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         piezas: &[crate::commands::informe::PiezaInforme]
     ) -> Result<(), String> {
-        let from = "noreply@beniteztech.com";
-        let to = vec![to_email.to_string()];
         let subject = format!("Informe Técnico {} - Toscanini", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"));
 
@@ -252,11 +331,8 @@ impl EmailService {
             }
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
-            .with_html(&html_content);
-
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error sending email: {}", e))?;        Ok(())
+        self.send_email_internal(to_email, &subject, &html_content, None).await?;
+        Ok(())
     }
 
     pub async fn send_orden_trabajo_notification(
@@ -265,12 +341,10 @@ impl EmailService {
         equipo: &crate::commands::equipos::Equipo,
         cliente_nombre: &str
     ) -> Result<String, String> {
-        use std::env;
-        
         // Verificar el entorno de ejecución
         let app_environment = env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
         
-        let (from, to, log_message) = if app_environment == "development" {
+        let (to_list, log_message) = if app_environment == "development" {
             // En desarrollo: usar email de desarrollo o simular envío
             let dev_email = env::var("DEV_EMAIL_RECIPIENT").unwrap_or_else(|_| "benitez.basti0@gmail.com".to_string());
             
@@ -282,7 +356,6 @@ impl EmailService {
             println!("📋 Emails que recibirían en producción: {:?}", db_emails);
             
             (
-                "noreply@beniteztech.com".to_string(),
                 vec![dev_email.clone()],
                 format!("Notificación de orden {} enviada a {} (desarrollo)", 
                     orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), dev_email)
@@ -296,7 +369,6 @@ impl EmailService {
             }
             
             (
-                "noreply@beniteztech.com".to_string(),
                 notification_emails.clone(),
                 format!("Notificación de orden {} enviada a {} administradores y técnicos", 
                     orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), 
@@ -411,28 +483,20 @@ impl EmailService {
             email.starts_with("recepcion@")
         };
         
-        if app_environment == "development" && to.iter().any(|email| is_test_email(email)) {
-            println!("📧 SIMULANDO envío de email a: {:?}", to);
+        if app_environment == "development" && to_list.iter().any(|email| is_test_email(email)) {
+            println!("📧 SIMULANDO envío de email a: {:?}", to_list);
             println!("📄 Asunto: {}", subject);
             println!("✅ Email simulado correctamente (no se envió realmente)");
             return Ok(log_message);
         }
         
-        // Enviar email real (en producción o desarrollo con email válido)
-        let email = CreateEmailBaseOptions::new(&from, to.clone(), &subject)
-            .with_html(&html_content);
-
-        match self.resend.emails.send(email).await {
-            Ok(response) => {
-                println!("📧 Email enviado exitosamente a: {:?}", to);
-                println!("📋 Respuesta: {:?}", response);
-                Ok(log_message)
-            }
-            Err(e) => {
-                eprintln!("❌ Error enviando email: {:?}", e);
-                Err(format!("Error sending email: {}", e))
-            }
+        // Enviar email real a cada destinatario
+        for recipient in &to_list {
+            self.send_email_internal(recipient, &subject, &html_content, None).await?;
+            println!("📧 Email enviado exitosamente a: {}", recipient);
         }
+        
+        Ok(log_message)
     }
 
     pub async fn send_orden_trabajo_cliente(
@@ -442,8 +506,6 @@ impl EmailService {
         orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
         equipo: &crate::commands::equipos::Equipo,
     ) -> Result<(), String> {
-        let from = "noreply@beniteztech.com";
-        let to = vec![cliente_email.to_string()];
         let subject = format!(
             "Orden de Trabajo Creada - Toscanini (Código: {})",
             orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")
@@ -517,12 +579,7 @@ impl EmailService {
             orden_trabajo.pre_informe.as_deref().unwrap_or("Sin pre-informe registrado")
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
-            .with_html(&html_content);
-
-        self.resend.emails.send(email).await
-            .map_err(|e| format!("Error enviando email al cliente: {}", e))?;
-
+        self.send_email_internal(cliente_email, &subject, &html_content, None).await?;
         Ok(())
     }
 
@@ -532,8 +589,6 @@ impl EmailService {
         user_name: &str,
         temp_password: &str,
     ) -> Result<(), String> {
-        let from = "noreply@beniteztech.com";
-        let to = vec![to_email.to_string()];
         let subject = "Acceso a Toscanini - Credenciales Temporales";
 
         let html_content = format!(
@@ -563,22 +618,12 @@ impl EmailService {
             temp_password = temp_password
         );
 
-        let email = CreateEmailBaseOptions::new(from, to, subject)
-            .with_html(&html_content);
-
-        match self.resend.emails.send(email).await {
-            Ok(response) => {
-                println!("Email enviado exitosamente: {:?}", response);
-                Ok(())
-            }
-            Err(e) => {
-                eprintln!("Error detallado enviando email: {:?}", e);
-                Err(format!("Error sending email: {}", e))
-            }
-        }
+        self.send_email_internal(to_email, subject, &html_content, None).await?;
+        println!("Email enviado exitosamente");
+        Ok(())
     }
 
-    /// Enviar email de cotización con PDF adjunto usando API REST de Resend
+    /// Enviar email de cotización con PDF adjunto usando SMTP
     pub async fn send_cotizacion_email_with_pdf(
         &self,
         cliente_email: &str,
@@ -588,22 +633,11 @@ impl EmailService {
         equipo: &crate::commands::equipos::Equipo,
         pdf_bytes: &[u8],
     ) -> Result<(), String> {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        use reqwest::Client;
-        use serde_json::json;
-        use std::env;
-
-        let api_key = env::var("RESEND_API_KEY")
-            .map_err(|_| "RESEND_API_KEY no encontrada".to_string())?;
-
         // Nombre del archivo PDF
         let pdf_filename = format!(
             "Cotizacion_{}.pdf",
             cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A")
         );
-
-        // Codificar PDF en base64
-        let pdf_base64 = STANDARD.encode(pdf_bytes);
 
         // Calcular totales para mostrar en el email
         let costo_revision = cotizacion.costo_revision.unwrap_or(0);
@@ -676,41 +710,22 @@ impl EmailService {
             costo_total
         );
 
-        // Preparar el payload para Resend API
-        let payload = json!({
-            "from": "noreply@beniteztech.com",
-            "to": [cliente_email],
-            "subject": format!(
+        let attachments = vec![
+            (pdf_filename, pdf_bytes.to_vec(), "application/pdf")
+        ];
+
+        self.send_email_internal(
+            cliente_email,
+            &format!(
                 "Cotización de Reparación - Toscanini (Código: {})",
                 cotizacion.cotizacion_codigo.as_deref().unwrap_or("N/A")
             ),
-            "html": html_content,
-            "attachments": [{
-                "filename": pdf_filename,
-                "content": pdf_base64,
-                "content_type": "application/pdf"
-            }]
-        });
+            &html_content,
+            Some(attachments),
+        ).await?;
 
-        let client = Client::new();
-        let response = client
-            .post("https://api.resend.com/emails")
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format!("Error enviando request a Resend API: {}", e))?;
-
-        let status = response.status();
-        if status.is_success() {
-            println!("📧 Email de cotización con PDF enviado exitosamente a: {}", cliente_email);
-            Ok(())
-        } else {
-            let error_text = response.text().await.unwrap_or_else(|_| "Error desconocido".to_string());
-            eprintln!("❌ Error de API Resend: {}", error_text);
-            Err(format!("Error enviando email: Status {} - {}", status, error_text))
-        }
+        println!("📧 Email de cotización con PDF enviado exitosamente a: {}", cliente_email);
+        Ok(())
     }
 
     /// Enviar email al cliente informando que su equipo está listo para retiro con el informe PDF adjunto
@@ -723,22 +738,11 @@ impl EmailService {
         equipo: &crate::commands::equipos::Equipo,
         pdf_bytes: &[u8],
     ) -> Result<(), String> {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        use reqwest::Client;
-        use serde_json::json;
-        use std::env;
-
-        let api_key = env::var("RESEND_API_KEY")
-            .map_err(|_| "RESEND_API_KEY no encontrada".to_string())?;
-
         // Nombre del archivo PDF
         let pdf_filename = format!(
             "Informe_{}.pdf",
             informe.informe_codigo.as_deref().unwrap_or("N/A")
         );
-
-        // Codificar PDF en base64
-        let pdf_base64 = STANDARD.encode(pdf_bytes);
 
         // Contenido HTML conciso (el PDF tiene toda la información detallada)
         let html_content = format!(
@@ -815,41 +819,93 @@ impl EmailService {
             informe.tecnico_responsable.as_deref().unwrap_or("No especificado")
         );
 
-        // Preparar el payload para Resend API
-        let payload = json!({
-            "from": "noreply@beniteztech.com",
-            "to": [cliente_email],
-            "subject": format!("✅ Tu equipo está listo para retiro - {}", orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")),
-            "html": html_content,
-            "attachments": [
-                {
-                    "filename": pdf_filename,
-                    "content": pdf_base64
-                }
-            ]
-        });
+        let attachments = vec![
+            (pdf_filename, pdf_bytes.to_vec(), "application/pdf")
+        ];
 
-        // Enviar el email usando reqwest directamente (ya que resend_rs no soporta attachments fácilmente)
-        let client = Client::new();
-        let response = client
-            .post("https://api.resend.com/emails")
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format!("Error enviando request a Resend API: {}", e))?;
+        self.send_email_internal(
+            cliente_email,
+            &format!("✅ Tu equipo está listo para retiro - {}", orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A")),
+            &html_content,
+            Some(attachments),
+        ).await?;
 
-        let status = response.status();
-        if status.is_success() {
-            println!("📧 Email de informe con PDF enviado exitosamente a: {}", cliente_email);
-            Ok(())
-        } else {
-            let error_text = response.text().await.unwrap_or_else(|_| "Error desconocido".to_string());
-            eprintln!("❌ Error de API Resend: {}", error_text);
-            Err(format!("Error enviando email: Status {} - {}", status, error_text))
-        }
+        println!("📧 Email de informe con PDF enviado exitosamente a: {}", cliente_email);
+        Ok(())
     }
+}
+
+/// Comando de Tauri para probar el envío de correo electrónico
+/// Permite enviar un correo de prueba para verificar la configuración SMTP
+#[tauri::command]
+pub async fn test_email_send(to_email: String) -> Result<String, String> {
+    println!("🧪 [test_email_send] Iniciando prueba de envío de correo a: {}", to_email);
+    
+    // Crear el servicio de email
+    println!("🧪 [test_email_send] Inicializando EmailService...");
+    let email_service = EmailService::new()
+        .map_err(|e| {
+            let error_msg = format!("Error al inicializar servicio de email: {}", e);
+            println!("❌ [test_email_send] {}", error_msg);
+            error_msg
+        })?;
+    
+    println!("✅ [test_email_send] EmailService inicializado correctamente");
+    
+    // Crear contenido HTML de prueba
+    println!("🧪 [test_email_send] Creando contenido HTML...");
+    let html_content = format!(
+        r#"
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin: 0;">🧪 Correo de Prueba</h1>
+                <p style="color: #666; margin: 5px 0;">Sistema Toscanini</p>
+            </div>
+            
+            <div style="background-color: #e8f4f8; padding: 20px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #007bff;">
+                <h2 style="color: #007bff; margin-top: 0;">✅ Configuración SMTP Correcta</h2>
+                <p>Este es un correo de prueba para verificar que la configuración SMTP está funcionando correctamente.</p>
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                <h3 style="margin-top: 0; color: #333;">Información de la Prueba</h3>
+                <p><strong>Destinatario:</strong> {}</p>
+                <p><strong>Fecha:</strong> {}</p>
+                <p><strong>Estado:</strong> <span style="color: #28a745;">✓ Enviado exitosamente</span></p>
+            </div>
+            
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <p style="margin: 0; color: #856404;">
+                    <strong>ℹ️ Nota:</strong> Si recibiste este correo, significa que la configuración SMTP está funcionando correctamente.
+                </p>
+            </div>
+            
+            <hr style="margin: 30px 0; border: 1px solid #eee;">
+            <p style="color: #666; font-size: 12px; text-align: center;">
+                Este es un correo automático de prueba del sistema Toscanini.
+            </p>
+        </div>
+        "#,
+        to_email,
+        chrono::Utc::now().format("%d/%m/%Y %H:%M:%S UTC")
+    );
+    
+    println!("🧪 [test_email_send] Llamando a send_email_internal...");
+    // Enviar el correo de prueba
+    email_service.send_email_internal(
+        &to_email,
+        "🧪 Correo de Prueba - Sistema Toscanini",
+        &html_content,
+        None,
+    ).await.map_err(|e| {
+        let error_msg = format!("Error enviando correo de prueba: {}", e);
+        println!("❌ [test_email_send] {}", error_msg);
+        error_msg
+    })?;
+    
+    println!("✅ [test_email_send] Correo de prueba enviado exitosamente a: {}", to_email);
+    
+    Ok(format!("Correo de prueba enviado exitosamente a {}", to_email))
 }
 
 /// Comando de Tauri para enviar email de orden de trabajo al cliente
