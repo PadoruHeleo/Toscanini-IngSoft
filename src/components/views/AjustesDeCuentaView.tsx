@@ -15,8 +15,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
-  IconCheck,
-  IconX,
   IconEye,
   IconEyeOff,
   IconMail,
