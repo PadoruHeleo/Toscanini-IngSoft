@@ -42,3 +42,9 @@ Cargo.lock
 # Tauri generated files
 /src-tauri/gen/
 /src-tauri/WixTools/
+
+# SSL Certificates (sensitive files)
+*.pem
+certs/
+ssl/
+ssl-certificates-setup.md

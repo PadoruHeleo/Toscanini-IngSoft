@@ -23,6 +23,12 @@ pub struct DatabaseConfig {
     pub username: String,
     pub password: String,
     pub database: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssl_ca: Option<String>,      // Ruta al certificado CA del servidor
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssl_cert: Option<String>,   // Ruta al certificado del cliente
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssl_key: Option<String>,    // Ruta a la clave privada del cliente
 }
 
 impl Default for DatabaseConfig {
@@ -33,6 +39,9 @@ impl Default for DatabaseConfig {
             username: "root".to_string(),
             password: "".to_string(),
             database: "toscanini_db".to_string(),
+            ssl_ca: None,
+            ssl_cert: None,
+            ssl_key: None,
         }
     }
 }
@@ -42,6 +51,14 @@ impl DatabaseConfig {
         format!(
             "mysql://{}:{}@{}:{}/{}",
             self.username, self.password, self.host, self.port, self.database
+        )
+    }
+    
+    /// Construye una URL sin especificar la base de datos (útil para crear la BD)
+    pub fn to_connection_string_without_db(&self) -> String {
+        format!(
+            "mysql://{}:{}@{}:{}",
+            self.username, self.password, self.host, self.port
         )
     }
 }
@@ -242,11 +259,14 @@ fn load_from_env_or_default() -> DatabaseConfig {
         username: std::env::var("DB_USERNAME").unwrap_or_else(|_| "root".to_string()),
         password: std::env::var("DB_PASSWORD").unwrap_or_else(|_| "".to_string()),
         database: std::env::var("DB_DATABASE").unwrap_or_else(|_| "toscanini_db".to_string()),
+        ssl_ca: std::env::var("DB_SSL_CA").ok(),
+        ssl_cert: std::env::var("DB_SSL_CERT").ok(),
+        ssl_key: std::env::var("DB_SSL_KEY").ok(),
     }
 }
 
 /// Parsea una URL de conexión MySQL
-fn parse_database_url(url: &str) -> Result<DatabaseConfig, Box<dyn std::error::Error>> {
+pub fn parse_database_url(url: &str) -> Result<DatabaseConfig, Box<dyn std::error::Error>> {
     // Formato esperado: mysql://username:password@host:port/database
     if !url.starts_with("mysql://") {
         return Err("Invalid MySQL URL format".into());
@@ -295,5 +315,8 @@ fn parse_database_url(url: &str) -> Result<DatabaseConfig, Box<dyn std::error::E
         username,
         password,
         database,
+        ssl_ca: None,
+        ssl_cert: None,
+        ssl_key: None,
     })
 }

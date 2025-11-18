@@ -1,7 +1,7 @@
-use sqlx::{MySql, Pool};
+use sqlx::{MySql, Pool, mysql::{MySqlConnectOptions, MySqlPool}};
 use std::sync::{OnceLock, Arc, Mutex};
 use std::path::Path;
-use crate::config::load_database_config;
+use crate::config::{load_database_config, DatabaseConfig, parse_database_url};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -39,28 +39,92 @@ impl Default for DatabaseStatus {
     }
 }
 
+/// Construye opciones de conexión MySQL con soporte SSL si está configurado
+async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: bool) -> Result<MySqlConnectOptions, sqlx::Error> {
+    let mut options = MySqlConnectOptions::new()
+        .host(&config.host)
+        .port(config.port)
+        .username(&config.username)
+        .password(&config.password);
+    
+    if include_database {
+        options = options.database(&config.database);
+    }
+    
+    // Configurar SSL si los certificados están disponibles
+    if config.ssl_ca.is_some() || config.ssl_cert.is_some() || config.ssl_key.is_some() {
+        use sqlx::mysql::MySqlSslMode;
+        options = options.ssl_mode(MySqlSslMode::Required);
+        
+        // Verificar que los certificados existen antes de intentar conectarse
+        if let Some(ssl_ca_path) = &config.ssl_ca {
+            if !Path::new(ssl_ca_path).exists() {
+                return Err(sqlx::Error::Configuration(
+                    format!("SSL CA certificate file not found: {}", ssl_ca_path).into()
+                ));
+            }
+        }
+        
+        if let Some(ssl_cert_path) = &config.ssl_cert {
+            if !Path::new(ssl_cert_path).exists() {
+                return Err(sqlx::Error::Configuration(
+                    format!("SSL client certificate file not found: {}", ssl_cert_path).into()
+                ));
+            }
+        }
+        
+        if let Some(ssl_key_path) = &config.ssl_key {
+            if !Path::new(ssl_key_path).exists() {
+                return Err(sqlx::Error::Configuration(
+                    format!("SSL client key file not found: {}", ssl_key_path).into()
+                ));
+            }
+        }
+        
+        println!("SSL enabled for database connection");
+    }
+    
+    Ok(options)
+}
+
+/// Conecta a MySQL usando las opciones configuradas (con soporte SSL)
+async fn connect_mysql_pool(config: &DatabaseConfig, include_database: bool) -> Result<Pool<MySql>, sqlx::Error> {
+    let options = build_mysql_connect_options(config, include_database).await?;
+    MySqlPool::connect_with(options).await
+}
+
 pub async fn init_database() -> Result<(), sqlx::Error> {
     // Intentar cargar configuración segura primero
-    let database_url = match load_database_config() {
+    let config = match load_database_config() {
         Ok(config) => {
             println!("Loaded secure database configuration");
-            config.to_connection_string()
+            config
         }
         Err(e) => {
             println!("Warning: Could not load secure config ({}), trying .env fallback", e);
             // Fallback a la carga tradicional de .env
             load_env_file();
             
-            std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| {
-                    println!("Warning: DATABASE_URL not found. Using default configuration.");
-                    "mysql://root:@localhost:3306/toscanini_db".to_string()
-                })
+            // Intentar parsear desde DATABASE_URL o usar valores por defecto
+            if let Ok(database_url) = std::env::var("DATABASE_URL") {
+                match parse_database_url(&database_url) {
+                    Ok(cfg) => cfg,
+                    Err(_) => {
+                        println!("Warning: Could not parse DATABASE_URL. Using default configuration.");
+                        DatabaseConfig::default()
+                    }
+                }
+            } else {
+                println!("Warning: DATABASE_URL not found. Using default configuration.");
+                DatabaseConfig::default()
+            }
         }
     };
     
-    println!("Attempting to connect to database with URL: {}", 
-        database_url.split('@').next().unwrap_or("***").to_string() + "@***");
+    let database_name = config.database.clone();
+    
+    println!("Attempting to connect to database server: {}@{}:{}", 
+        config.username, config.host, config.port);
     
     // Inicializar DB_POOL si no existe
     if DB_POOL.get().is_none() {
@@ -71,7 +135,9 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
     if DB_CONNECTION_STATUS.get().is_none() {
         let _ = DB_CONNECTION_STATUS.set(Arc::new(Mutex::new(DatabaseStatus::default())));
     }
-      match sqlx::MySqlPool::connect(&database_url).await {
+    
+    // Primero intentar conectarse con la base de datos especificada
+    match connect_mysql_pool(&config, true).await {
         Ok(pool) => {
             // Ejecutar migraciones si es necesario
             if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
@@ -91,8 +157,67 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
             Ok(())
         }
         Err(e) => {
-            update_database_status(false, Some(e.to_string()));
-            Err(e)
+            // Si el error es que la base de datos no existe, intentar crearla
+            if e.to_string().contains("Unknown database") || e.to_string().contains("1049") {
+                println!("Database '{}' does not exist. Attempting to create it...", database_name);
+                
+                // Conectarse sin especificar la base de datos
+                match connect_mysql_pool(&config, false).await {
+                    Ok(admin_pool) => {
+                        // Crear la base de datos
+                        let create_db_query = format!("CREATE DATABASE IF NOT EXISTS `{}`", database_name);
+                        match sqlx::query(&create_db_query).execute(&admin_pool).await {
+                            Ok(_) => {
+                                println!("Database '{}' created successfully", database_name);
+                                // Cerrar la conexión administrativa
+                                admin_pool.close().await;
+                                
+                                // Ahora intentar conectarse a la base de datos recién creada
+                                match connect_mysql_pool(&config, true).await {
+                                    Ok(pool) => {
+                                        // Ejecutar migraciones
+                                        if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
+                                            let error_msg = format!("Migration failed: {}", e);
+                                            update_database_status(false, Some(error_msg.clone()));
+                                            return Err(sqlx::Error::Configuration(error_msg.into()));
+                                        }
+                                        
+                                        // Guardar el pool
+                                        if let Some(pool_arc) = DB_POOL.get() {
+                                            if let Ok(mut pool_guard) = pool_arc.lock() {
+                                                *pool_guard = Some(Arc::new(pool));
+                                            }
+                                        }
+                                        
+                                        update_database_status(true, None);
+                                        Ok(())
+                                    }
+                                    Err(e2) => {
+                                        let error_msg = format!("Failed to connect to newly created database: {}", e2);
+                                        update_database_status(false, Some(error_msg.clone()));
+                                        Err(e2)
+                                    }
+                                }
+                            }
+                            Err(create_err) => {
+                                let error_msg = format!("Failed to create database '{}': {}", database_name, create_err);
+                                println!("Error: {}", error_msg);
+                                update_database_status(false, Some(error_msg.clone()));
+                                Err(create_err)
+                            }
+                        }
+                    }
+                    Err(admin_err) => {
+                        let error_msg = format!("Failed to connect to database server (cannot create database): {}", admin_err);
+                        println!("Error: {}", error_msg);
+                        update_database_status(false, Some(error_msg.clone()));
+                        Err(admin_err)
+                    }
+                }
+            } else {
+                update_database_status(false, Some(e.to_string()));
+                Err(e)
+            }
         }
     }
 }
@@ -159,27 +284,37 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
     println!("Attempting to retry database connection...");
     
     // Intentar cargar configuración segura primero
-    let database_url = match load_database_config() {
+    let config = match load_database_config() {
         Ok(config) => {
             println!("Using secure database configuration for retry");
-            config.to_connection_string()
+            config
         }
         Err(e) => {
             println!("Warning: Could not load secure config for retry ({}), trying .env fallback", e);
             load_env_file();
             
-            std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| {
-                    println!("Warning: DATABASE_URL not found. Using default configuration.");
-                    "mysql://root:@localhost:3306/toscanini_db".to_string()
-                })
+            // Intentar parsear desde DATABASE_URL o usar valores por defecto
+            if let Ok(database_url) = std::env::var("DATABASE_URL") {
+                match parse_database_url(&database_url) {
+                    Ok(cfg) => cfg,
+                    Err(_) => {
+                        println!("Warning: Could not parse DATABASE_URL. Using default configuration.");
+                        DatabaseConfig::default()
+                    }
+                }
+            } else {
+                println!("Warning: DATABASE_URL not found. Using default configuration.");
+                DatabaseConfig::default()
+            }
         }
     };
     
-    println!("Retrying connection to database with URL: {}", 
-        database_url.split('@').next().unwrap_or("***").to_string() + "@***");
+    let database_name = config.database.clone();
     
-    match sqlx::MySqlPool::connect(&database_url).await {
+    println!("Retrying connection to database server: {}@{}:{}", 
+        config.username, config.host, config.port);
+    
+    match connect_mysql_pool(&config, true).await {
         Ok(pool) => {
             // Intentar ejecutar migraciones si es necesario
             if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
@@ -212,10 +347,80 @@ pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
             }
         }
         Err(e) => {
-            let error_msg = format!("Retry failed: {}", e);
-            println!("Error: {}", error_msg);
-            update_database_status(false, Some(error_msg));
-            Err(e)
+            // Si el error es que la base de datos no existe, intentar crearla
+            if e.to_string().contains("Unknown database") || e.to_string().contains("1049") {
+                println!("Database '{}' does not exist during retry. Attempting to create it...", database_name);
+                
+                // Conectarse sin especificar la base de datos
+                match connect_mysql_pool(&config, false).await {
+                    Ok(admin_pool) => {
+                        // Crear la base de datos
+                        let create_db_query = format!("CREATE DATABASE IF NOT EXISTS `{}`", database_name);
+                        match sqlx::query(&create_db_query).execute(&admin_pool).await {
+                            Ok(_) => {
+                                println!("Database '{}' created successfully during retry", database_name);
+                                // Cerrar la conexión administrativa
+                                admin_pool.close().await;
+                                
+                                // Ahora intentar conectarse a la base de datos recién creada
+                                match connect_mysql_pool(&config, true).await {
+                                    Ok(pool) => {
+                                        // Ejecutar migraciones
+                                        if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
+                                            let error_msg = format!("Migration failed during retry: {}", e);
+                                            println!("Warning: {}", error_msg);
+                                        }
+                                        
+                                        // Verificar que la conexión funciona
+                                        match sqlx::query("SELECT 1").execute(&pool).await {
+                                            Ok(_) => {
+                                                // Guardar el pool
+                                                if let Some(pool_arc) = DB_POOL.get() {
+                                                    if let Ok(mut pool_guard) = pool_arc.lock() {
+                                                        *pool_guard = Some(Arc::new(pool));
+                                                        update_database_status(true, None);
+                                                        println!("Database connection retry successful after creating database!");
+                                                        return Ok(());
+                                                    }
+                                                }
+                                                update_database_status(true, None);
+                                                Err(sqlx::Error::Configuration("Failed to store database pool".into()))
+                                            }
+                                            Err(e2) => {
+                                                let error_msg = format!("Connection test failed after creating database: {}", e2);
+                                                update_database_status(false, Some(error_msg.clone()));
+                                                Err(e2)
+                                            }
+                                        }
+                                    }
+                                    Err(e2) => {
+                                        let error_msg = format!("Failed to connect to newly created database during retry: {}", e2);
+                                        update_database_status(false, Some(error_msg.clone()));
+                                        Err(e2)
+                                    }
+                                }
+                            }
+                            Err(create_err) => {
+                                let error_msg = format!("Failed to create database '{}' during retry: {}", database_name, create_err);
+                                println!("Error: {}", error_msg);
+                                update_database_status(false, Some(error_msg.clone()));
+                                Err(create_err)
+                            }
+                        }
+                    }
+                    Err(admin_err) => {
+                        let error_msg = format!("Retry failed: {}", admin_err);
+                        println!("Error: {}", error_msg);
+                        update_database_status(false, Some(error_msg));
+                        Err(admin_err)
+                    }
+                }
+            } else {
+                let error_msg = format!("Retry failed: {}", e);
+                println!("Error: {}", error_msg);
+                update_database_status(false, Some(error_msg));
+                Err(e)
+            }
         }
     }
 }
