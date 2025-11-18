@@ -118,9 +118,6 @@ export default function CotizacionFormDialog({
     useState(false);
   const [showRechazarConfirmDialog, setShowRechazarConfirmDialog] =
     useState(false);
-  const [showNoReparableConfirmDialog, setShowNoReparableConfirmDialog] =
-    useState(false);
-  const [comentarioNoReparable, setComentarioNoReparable] = useState("");
   const [showAbandonoConfirmDialog, setShowAbandonoConfirmDialog] =
     useState(false);
   const [abandonoComentario, setAbandonoComentario] = useState("");
@@ -992,46 +989,6 @@ export default function CotizacionFormDialog({
     } catch (error) {
       console.error(error);
       showError("Error", "Ocurrió un error al rechazar la cotización.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNoReparable = async () => {
-    if (!cotizacion?.cotizacion_id || !user || !ordenTrabajoId) {
-      showError("Error", "No se puede declarar como no reparable.");
-      return;
-    }
-
-    if (!comentarioNoReparable.trim()) {
-      showError(
-        "Error",
-        "Debe ingresar un comentario para justificar el estado."
-      );
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // Cambiar estado de la orden a "no_reparable"
-      await invoke("cambiar_estado_orden_trabajo", {
-        ordenId: ordenTrabajoId,
-        nuevoEstado: "equipo_no_reparable",
-        updatedBy: user.usuario_id,
-        comentario: comentarioNoReparable, // Enviar comentario
-      });
-
-      success(
-        "Equipo declarado No Reparable",
-        "La orden ha sido actualizada correctamente."
-      );
-
-      onCotizacionAdded();
-      onOpenChange(false);
-    } catch (error) {
-      console.error(error);
-      showError("Error", "Ocurrió un error al declarar como no reparable.");
     } finally {
       setLoading(false);
     }
