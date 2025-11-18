@@ -1,5 +1,4 @@
 import {
-  IconDotsVertical,
   IconLogout,
   IconNotification,
   IconUserCircle,

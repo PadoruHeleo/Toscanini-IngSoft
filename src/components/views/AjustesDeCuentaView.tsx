@@ -50,10 +50,8 @@ export function AjustesDeCuentaView() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Estados para cambio de contraseña
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -198,7 +196,7 @@ export function AjustesDeCuentaView() {
     clearMessages();
 
     // Validaciones
-    if (!currentPassword) {
+    if (!password) {
       setErrorMessage("Debes ingresar tu contraseña actual");
       return;
     }
@@ -213,7 +211,7 @@ export function AjustesDeCuentaView() {
       return;
     }
 
-    if (currentPassword === newPassword) {
+    if (password === newPassword) {
       setErrorMessage("La nueva contraseña debe ser diferente a la actual");
       return;
     }
@@ -222,7 +220,7 @@ export function AjustesDeCuentaView() {
 
     try {
       const request: ChangePasswordRequest = {
-        current_password: currentPassword,
+        current_password: password,
         new_password: newPassword,
       };
 
@@ -233,7 +231,7 @@ export function AjustesDeCuentaView() {
 
       if (result) {
         setSuccessMessage("Contraseña cambiada exitosamente");
-        setCurrentPassword("");
+        setPassword("");
         setNewPassword("");
         setConfirmPassword("");
       }
@@ -342,7 +340,6 @@ export function AjustesDeCuentaView() {
             {/* Mensajes de éxito/error */}
             {successMessage && (
               <Alert className="border-green-200 bg-green-50 py-2">
-                <IconCheck className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-sm text-green-800">
                   {successMessage}
                 </AlertDescription>
@@ -351,7 +348,6 @@ export function AjustesDeCuentaView() {
 
             {errorMessage && (
               <Alert className="border-red-200 bg-red-50 py-2">
-                <IconX className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-sm text-red-800">
                   {errorMessage}
                 </AlertDescription>
@@ -498,50 +494,6 @@ export function AjustesDeCuentaView() {
               <form onSubmit={handleChangePassword} className="space-y-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label htmlFor="current-password" className="text-sm">
-                      Contraseña actual
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="current-password"
-                        type={showCurrentPassword ? "text" : "password"}
-                        value={currentPassword}
-                        onChange={(e) => {
-                          setCurrentPassword(e.target.value);
-                          clearMessages();
-                        }}
-                        required
-                        disabled={
-                          isChangingEmail ||
-                          isChangingPhone ||
-                          isChangingPassword
-                        }
-                        placeholder="Contraseña actual"
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() =>
-                          setShowCurrentPassword(!showCurrentPassword)
-                        }
-                        disabled={
-                          isChangingEmail ||
-                          isChangingPhone ||
-                          isChangingPassword
-                        }
-                      >
-                        {showCurrentPassword ? (
-                          <IconEyeOff className="h-4 w-4" />
-                        ) : (
-                          <IconEye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
                     <Label htmlFor="new-password" className="text-sm">
                       Nueva contraseña
                     </Label>
@@ -584,7 +536,7 @@ export function AjustesDeCuentaView() {
                       </Button>
                     </div>
                   </div>
-                  <div className="space-y-1 md:col-span-2">
+                  <div className="space-y-1">
                     <Label htmlFor="confirm-password" className="text-sm">
                       Confirmar nueva contraseña
                     </Label>
@@ -635,7 +587,7 @@ export function AjustesDeCuentaView() {
                     isChangingEmail ||
                     isChangingPhone ||
                     isChangingPassword ||
-                    !currentPassword ||
+                    !password ||
                     !newPassword ||
                     !confirmPassword
                   }
