@@ -116,14 +116,18 @@ export function EquiposView() {
     }
 
     const colorMap: { [key: string]: string } = {
-      recibido: "bg-blue-100 text-blue-800",
-      cotizacion_enviada: "bg-yellow-100 text-yellow-800",
-      aprobacion_pendiente: "bg-orange-100 text-orange-800",
-      en_reparacion: "bg-purple-100 text-purple-800",
-      espera_de_retiro: "bg-green-100 text-green-800",
-      entregado: "bg-gray-100 text-gray-800",
-      abandonado: "bg-red-100 text-red-800",
-      equipo_no_reparable: "bg-red-100 text-red-800",
+      recibido: "bg-blue-100 text-blue-800 border border-blue-300",
+      cotizacion_enviada:
+        "bg-purple-100 text-purple-800 border border-purple-300",
+      aprobacion_pendiente:
+        "bg-amber-100 text-amber-800 border border-amber-300",
+      en_reparacion: "bg-indigo-100 text-indigo-800 border border-indigo-300",
+      espera_de_retiro:
+        "bg-orange-100 text-orange-800 border border-orange-300",
+      entregado: "bg-green-100 text-green-800 border border-green-300",
+      abandonado: "bg-gray-100 text-gray-800 border border-gray-300",
+      equipo_no_reparable: "bg-rose-100 text-rose-800 border border-rose-300",
+      cotizacion_rechazada: "bg-rose-100 text-rose-800 border border-rose-300",
     };
 
     const estadoTexto: { [key: string]: string } = {
@@ -131,10 +135,11 @@ export function EquiposView() {
       cotizacion_enviada: "Cotización Enviada",
       aprobacion_pendiente: "Aprobación Pendiente",
       en_reparacion: "En Reparación",
-      espera_de_retiro: "Esperando Retiro",
+      espera_de_retiro: "Espera de Retiro",
       entregado: "Entregado",
       abandonado: "Abandonado",
-      equipo_no_reparable: "No Reparable",
+      equipo_no_reparable: "Equipo No Reparable",
+      cotizacion_rechazada: "Cotización Rechazada",
     };
 
     return (
@@ -250,15 +255,15 @@ export function EquiposView() {
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setHistorialEquipo(equipo)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Ver historial del equipo"
-                        >
-                          <History className="h-3 w-3" />
-                        </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistorialEquipo(equipo)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Ver historial del equipo"
+                      >
+                        <History className="h-3 w-3" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -284,11 +289,11 @@ export function EquiposView() {
         equipo={editingEquipo || undefined}
         isEditing={editingEquipo !== null}
       />
-        <EquipoHistorialDialog
-          open={historialEquipo !== null}
-          onOpenChange={(open) => !open && setHistorialEquipo(null)}
-          equipo={historialEquipo}
-        />
+      <EquipoHistorialDialog
+        open={historialEquipo !== null}
+        onOpenChange={(open) => !open && setHistorialEquipo(null)}
+        equipo={historialEquipo}
+      />
     </div>
   );
 }
