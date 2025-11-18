@@ -126,6 +126,8 @@ export default function CotizacionFormDialog({
   const [abandonoComentario, setAbandonoComentario] = useState("");
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [puedeAbandonar, setPuedeAbandonar] = useState(false);
+  const [showSendToClientConfirmDialog, setShowSendToClientConfirmDialog] =
+    useState(false);
   const [activeTab, setActiveTab] = useState("informacion");
   const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
   const [loadingTerminos, setLoadingTerminos] = useState(false);
@@ -839,7 +841,15 @@ export default function CotizacionFormDialog({
     return parts.length > 0 ? parts.join(" ") : `Pieza ${pieza.pieza_id}`;
   };
 
-  const handleSendToClient = async () => {
+  const handleSendToClient = () => {
+    if (!cotizacion?.cotizacion_id || !user) {
+      showError("Error", "No se puede enviar la cotización al cliente.");
+      return;
+    }
+    setShowSendToClientConfirmDialog(true);
+  };
+
+  const handleConfirmSendToClient = async () => {
     if (!cotizacion?.cotizacion_id || !user) {
       showError("Error", "No se puede enviar la cotización al cliente.");
       return;
@@ -847,6 +857,7 @@ export default function CotizacionFormDialog({
 
     try {
       setLoading(true);
+      setShowSendToClientConfirmDialog(false);
 
       // Enviar el email con PDF y actualizar estados automáticamente
       await invoke<string>("send_cotizacion_email", {
@@ -2102,6 +2113,56 @@ export default function CotizacionFormDialog({
               className="bg-orange-600 hover:bg-orange-700"
             >
               {loading ? "Procesando..." : "Confirmar Abandono"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para enviar al cliente */}
+      <Dialog
+        open={showSendToClientConfirmDialog}
+        onOpenChange={setShowSendToClientConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar envío al cliente</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea enviar esta cotización al cliente? Se
+              enviará un correo electrónico con el PDF adjunto y la cotización
+              será marcada como enviada.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            {cotizacion?.cotizacion_codigo && (
+              <div>
+                <strong>Código:</strong> {cotizacion.cotizacion_codigo}
+              </div>
+            )}
+            {cotizacion?.costo_total && (
+              <div>
+                <strong>Costo Total:</strong> $
+                {cotizacion.costo_total.toLocaleString()}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSendToClientConfirmDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmSendToClient}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {loading ? "Enviando..." : "Confirmar envío"}
             </Button>
           </DialogFooter>
         </DialogContent>

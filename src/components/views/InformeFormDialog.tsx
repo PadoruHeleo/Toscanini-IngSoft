@@ -116,6 +116,11 @@ export default function InformeFormDialog({
   const [showEliminarInformeDialog, setShowEliminarInformeDialog] =
     useState(false);
   const [motivoEliminacion, setMotivoEliminacion] = useState("");
+  const [showSendToClientConfirmDialog, setShowSendToClientConfirmDialog] =
+    useState(false);
+  const [pendingSendAction, setPendingSendAction] = useState<
+    "create" | "existing" | null
+  >(null);
   const [activeTab, setActiveTab] = useState("informacion");
   const [terminosCondiciones, setTerminosCondiciones] = useState<any[]>([]);
   const [loadingTerminos, setLoadingTerminos] = useState(false);
@@ -802,6 +807,25 @@ export default function InformeFormDialog({
       return;
     }
 
+    setPendingSendAction("create");
+    setShowSendToClientConfirmDialog(true);
+  };
+
+  const handleConfirmSendToClient = async () => {
+    if (!user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+
+    const action = pendingSendAction;
+    setShowSendToClientConfirmDialog(false);
+    setPendingSendAction(null);
+
+    if (action === "existing") {
+      await executeSendExistingToClient();
+      return;
+    }
+
     try {
       setLoadingSendToClient(true); // Crear el informe primero (solo para creación nueva)
       if (!isEditing) {
@@ -903,7 +927,16 @@ export default function InformeFormDialog({
       setLoadingSendToClient(false);
     }
   };
-  const handleSendExistingToClient = async () => {
+  const handleSendExistingToClient = () => {
+    if (!user || !informe || !isEditing) {
+      showError("Error", "No se puede enviar el informe");
+      return;
+    }
+    setPendingSendAction("existing");
+    setShowSendToClientConfirmDialog(true);
+  };
+
+  const executeSendExistingToClient = async () => {
     if (!user || !informe || !isEditing) {
       showError("Error", "No se puede enviar el informe");
       return;
@@ -1766,6 +1799,63 @@ export default function InformeFormDialog({
                 : isEditing
                 ? "Confirmar Actualización"
                 : "Confirmar Creación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para enviar al cliente */}
+      <Dialog
+        open={showSendToClientConfirmDialog}
+        onOpenChange={setShowSendToClientConfirmDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar envío al cliente</DialogTitle>
+            <DialogDescription>
+              {pendingSendAction === "create"
+                ? "¿Está seguro que desea crear y enviar este informe al cliente? Se enviará un correo electrónico con el PDF adjunto."
+                : "¿Está seguro que desea enviar este informe al cliente? Se enviará un correo electrónico con el PDF adjunto."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            {informe?.informe_codigo && (
+              <div>
+                <strong>Código:</strong> {informe.informe_codigo}
+              </div>
+            )}
+            {formData.diagnostico && (
+              <div>
+                <strong>Diagnóstico:</strong>{" "}
+                {formData.diagnostico.length > 50
+                  ? formData.diagnostico.substring(0, 50) + "..."
+                  : formData.diagnostico}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowSendToClientConfirmDialog(false);
+                setPendingSendAction(null);
+              }}
+              disabled={loadingSendToClient || loadingSendExisting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmSendToClient}
+              disabled={loadingSendToClient || loadingSendExisting}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {loadingSendToClient || loadingSendExisting
+                ? "Enviando..."
+                : "Confirmar envío"}
             </Button>
           </DialogFooter>
         </DialogContent>
