@@ -1785,20 +1785,6 @@ export default function CotizacionFormDialog({
                 )}
 
               {isEditing &&
-                estadoOrden &&
-                estadoOrden.toLowerCase().trim() === "recibido" && (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => setShowNoReparableConfirmDialog(true)}
-                    disabled={loading}
-                    className="bg-gray-800 hover:bg-gray-900"
-                  >
-                    {loading ? "Procesando..." : "No Reparable"}
-                  </Button>
-                )}
-
-              {isEditing &&
                 estadoOrden.toLowerCase() !== "recibido" &&
                 estadoOrden.toLowerCase() !== "abandonado" &&
                 puedeAbandonar && ( // Solo si han pasado más de 168 horas
@@ -2018,57 +2004,6 @@ export default function CotizacionFormDialog({
         </Dialog>
       )}
 
-      {/* Modal de confirmación de No Reparable */}
-      <Dialog
-        open={showNoReparableConfirmDialog}
-        onOpenChange={setShowNoReparableConfirmDialog}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar No Reparable</DialogTitle>
-            <DialogDescription>
-              ¿Está seguro que desea declarar este equipo como{" "}
-              <b>No Reparable</b>?
-              <br />
-              Debe justificar su decisión en el campo de comentario.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <Label htmlFor="comentario">Comentario *</Label>
-            <Textarea
-              id="comentario"
-              value={comentarioNoReparable}
-              onChange={(e) => setComentarioNoReparable(e.target.value)}
-              placeholder="Explique por qué el equipo no es reparable..."
-              rows={4}
-              required
-            />
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowNoReparableConfirmDialog(false)}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={async () => {
-                setShowNoReparableConfirmDialog(false);
-                await handleNoReparable();
-              }}
-              disabled={loading}
-              className="bg-gray-800 hover:bg-gray-900"
-            >
-              {loading ? "Procesando..." : "Confirmar No Reparable"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Dialog
         open={showAbandonoConfirmDialog}
         onOpenChange={setShowAbandonoConfirmDialog}
