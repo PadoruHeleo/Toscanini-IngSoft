@@ -1058,7 +1058,7 @@ export default function InformeFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        style={{ maxWidth: "50vw", width: "50vw", minWidth: "400px" }}
+        style={{ maxWidth: "85vw", width: "85vw", minWidth: "600px" }}
         className="max-h-[90vh] overflow-y-auto"
       >
         <DialogHeader>
