@@ -742,9 +742,15 @@ export default function CotizacionFormDialog({
         // Aplicar términos y condiciones seleccionados
         if (selectedTerminos.length > 0) {
           try {
+            const terminoRequests = selectedTerminos.map((id) => ({
+              termino_id: id,
+              aplicado: true,
+            }));
+
             await invoke("apply_terminos_to_cotizacion", {
               cotizacionId: cotizacionId,
-              terminoIds: selectedTerminos,
+              terminos: terminoRequests,
+              appliedBy: user.usuario_id,
             });
           } catch (error) {
             console.error("Error aplicando términos y condiciones:", error);
