@@ -59,7 +59,6 @@ export function NavUser() {
                 </span>
                 <SessionInfo />
               </div>
-              <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
