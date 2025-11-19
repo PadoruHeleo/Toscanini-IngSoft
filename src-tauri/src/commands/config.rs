@@ -94,3 +94,36 @@ pub async fn delete_database_config() -> Result<String, String> {
 pub async fn get_default_database_config() -> Result<DatabaseConfig, String> {
     Ok(DatabaseConfig::default())
 }
+
+/// Genera una configuración específica para GCP con bastion host
+#[tauri::command]
+pub async fn get_gcp_database_config() -> Result<DatabaseConfig, String> {
+    Ok(DatabaseConfig::with_gcp_bastion())
+}
+
+/// Verifica si el túnel SSH está activo
+#[tauri::command]
+pub async fn check_ssh_tunnel_status() -> Result<bool, String> {
+    Ok(crate::ssh_tunnel::is_ssh_tunnel_active())
+}
+
+/// Inicia el túnel SSH manualmente
+#[tauri::command]
+pub async fn start_ssh_tunnel(config: DatabaseConfig) -> Result<String, String> {
+    if let Some(bastion_config) = &config.bastion {
+        crate::ssh_tunnel::ensure_ssh_tunnel(bastion_config)
+            .await
+            .map_err(|e| format!("Failed to start SSH tunnel: {}", e))?;
+        Ok("SSH tunnel started successfully".to_string())
+    } else {
+        Err("No bastion configuration found".to_string())
+    }
+}
+
+/// Detiene el túnel SSH
+#[tauri::command]
+pub async fn stop_ssh_tunnel() -> Result<String, String> {
+    crate::ssh_tunnel::stop_ssh_tunnel()
+        .map_err(|e| format!("Failed to stop SSH tunnel: {}", e))?;
+    Ok("SSH tunnel stopped successfully".to_string())
+}

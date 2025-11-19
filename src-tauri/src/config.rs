@@ -34,6 +34,17 @@ pub struct DatabaseConfig {
     pub ssl_cert: Option<String>,   // Ruta al certificado del cliente
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssl_key: Option<String>,    // Ruta a la clave privada del cliente
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bastion: Option<BastionConfig>, // Configuración del bastion host
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BastionConfig {
+    pub host: String,           // IP del bastion host (ej: 34.0.58.130)
+    pub port: u16,              // Puerto SSH del bastion (normalmente 22)
+    pub username: String,       // Usuario SSH para el bastion (ej: benitez.basti0)
+    pub private_key_path: Option<String>, // Ruta a la clave privada SSH
+    pub local_port: u16,        // Puerto local para el túnel SSH (ej: 3307)
 }
 
 impl Default for DatabaseConfig {
@@ -47,24 +58,65 @@ impl Default for DatabaseConfig {
             ssl_ca: None,
             ssl_cert: None,
             ssl_key: None,
+            bastion: None,
         }
     }
 }
 
 impl DatabaseConfig {
     pub fn to_connection_string(&self) -> String {
+        let (host, port) = if let Some(bastion) = &self.bastion {
+            // Si hay configuración de bastion, usar localhost y el puerto local del túnel
+            ("127.0.0.1".to_string(), bastion.local_port)
+        } else {
+            (self.host.clone(), self.port)
+        };
+        
         format!(
             "mysql://{}:{}@{}:{}/{}",
-            self.username, self.password, self.host, self.port, self.database
+            self.username, self.password, host, port, self.database
         )
     }
     
     /// Construye una URL sin especificar la base de datos (útil para crear la BD)
     pub fn to_connection_string_without_db(&self) -> String {
+        let (host, port) = if let Some(bastion) = &self.bastion {
+            // Si hay configuración de bastion, usar localhost y el puerto local del túnel
+            ("127.0.0.1".to_string(), bastion.local_port)
+        } else {
+            (self.host.clone(), self.port)
+        };
+        
         format!(
             "mysql://{}:{}@{}:{}",
-            self.username, self.password, self.host, self.port
+            self.username, self.password, host, port
         )
+    }
+    
+    /// Verifica si necesita túnel SSH
+    pub fn needs_ssh_tunnel(&self) -> bool {
+        self.bastion.is_some()
+    }
+    
+    /// Obtiene la configuración con valores para tu caso específico de GCP
+    pub fn with_gcp_bastion() -> Self {
+        Self {
+            host: "34.176.222.113".to_string(), // Tu IP de base de datos desde el .env
+            port: 3306,
+            username: "root".to_string(),
+            password: "b211974079B.!".to_string(), // Tu password desde el .env
+            database: "toscaninidb".to_string(),
+            ssl_ca: Some("./certs/server-ca.pem".to_string()),
+            ssl_cert: Some("./certs/client-cert.pem".to_string()),
+            ssl_key: Some("./certs/client-key.pem".to_string()),
+            bastion: Some(BastionConfig {
+                host: "34.0.58.130".to_string(),    // IP del bastion que proporcionaste
+                port: 22,                           // Puerto SSH estándar
+                username: "benitez.basti0".to_string(), // Usuario que proporcionaste
+                private_key_path: Some("./certs/clave_gcp".to_string()), // Tu clave SSH
+                local_port: 3307,                  // Puerto local para el túnel
+            }),
+        }
     }
 }
 
@@ -285,6 +337,30 @@ pub fn parse_embedded_env() {
     println!("Loaded {} environment variables from embedded .env ({} skipped, already set)", loaded_count, skipped_count);
 }
 
+/// Carga configuración del bastion desde variables de entorno
+fn load_bastion_from_env() -> Option<BastionConfig> {
+    if let (Ok(host), Ok(username)) = (
+        std::env::var("BASTION_HOST"),
+        std::env::var("BASTION_USERNAME")
+    ) {
+        Some(BastionConfig {
+            host,
+            port: std::env::var("BASTION_PORT")
+                .unwrap_or_else(|_| "22".to_string())
+                .parse()
+                .unwrap_or(22),
+            username,
+            private_key_path: std::env::var("BASTION_PRIVATE_KEY_PATH").ok(),
+            local_port: std::env::var("BASTION_LOCAL_PORT")
+                .unwrap_or_else(|_| "3307".to_string())
+                .parse()
+                .unwrap_or(3307),
+        })
+    } else {
+        None
+    }
+}
+
 /// Carga configuración desde variables de entorno o usa valores por defecto
 fn load_from_env_or_default() -> DatabaseConfig {
     if let Ok(database_url) = std::env::var("DATABASE_URL") {
@@ -307,6 +383,7 @@ fn load_from_env_or_default() -> DatabaseConfig {
         ssl_ca: std::env::var("DB_SSL_CA").ok(),
         ssl_cert: std::env::var("DB_SSL_CERT").ok(),
         ssl_key: std::env::var("DB_SSL_KEY").ok(),
+        bastion: load_bastion_from_env(),
     }
 }
 
@@ -363,5 +440,6 @@ pub fn parse_database_url(url: &str) -> Result<DatabaseConfig, Box<dyn std::erro
         ssl_ca: None,
         ssl_cert: None,
         ssl_key: None,
+        bastion: None,
     })
 }

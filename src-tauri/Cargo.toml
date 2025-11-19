@@ -50,6 +50,8 @@ sha2 = "0.10"
 dirs = "5.0"
 printpdf = "0.7"
 reqwest = { version = "0.11", features = ["json"] }
+ssh2 = "0.9"
+tokio-process = "0.2"
 icu_normalizer = "=1.5.0"
 icu_collections = "=1.5.0"
 icu_normalizer_data = "=1.5.0"

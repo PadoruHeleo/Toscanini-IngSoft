@@ -87,8 +87,18 @@ async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: 
     Ok(options)
 }
 
-/// Conecta a MySQL usando las opciones configuradas (con soporte SSL)
+/// Conecta a MySQL usando las opciones configuradas (con soporte SSL y túnel SSH)
 async fn connect_mysql_pool(config: &DatabaseConfig, include_database: bool) -> Result<Pool<MySql>, sqlx::Error> {
+    // Si necesita túnel SSH, asegurarse de que esté activo
+    if let Some(bastion_config) = &config.bastion {
+        println!("Configuración de bastion detectada, estableciendo túnel SSH...");
+        if let Err(e) = crate::ssh_tunnel::ensure_ssh_tunnel(bastion_config).await {
+            return Err(sqlx::Error::Configuration(
+                format!("Failed to establish SSH tunnel: {}", e).into()
+            ));
+        }
+    }
+    
     let options = build_mysql_connect_options(config, include_database).await?;
     MySqlPool::connect_with(options).await
 }

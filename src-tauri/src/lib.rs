@@ -4,6 +4,7 @@ pub mod utils;
 pub mod email;
 pub mod config;
 pub mod pdf;
+pub mod ssh_tunnel;
 
 use database::{init_database, start_auto_reconnect_task, start_periodic_connection_check};
 
@@ -220,6 +221,10 @@ pub fn run() {
             commands::config::test_database_connection,
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
+            commands::config::get_gcp_database_config,
+            commands::config::check_ssh_tunnel_status,
+            commands::config::start_ssh_tunnel,
+            commands::config::stop_ssh_tunnel,
             email::send_orden_trabajo_cliente,
             email::send_cotizacion_email,
             email::send_informe_email,
