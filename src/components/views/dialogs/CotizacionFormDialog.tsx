@@ -113,6 +113,7 @@ export default function CotizacionFormDialog({
   const [selectedPiezaId, setSelectedPiezaId] = useState<string>("");
   const [cantidad, setCantidad] = useState<string>("1");
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  const [showConfirmDeleteDialog, setShowConfirmDeleteDialog] = useState(false);
   const [estadoOrden, setEstadoOrden] = useState<string>("");
   const [showAprobarConfirmDialog, setShowAprobarConfirmDialog] =
     useState(false);
@@ -961,6 +962,41 @@ export default function CotizacionFormDialog({
     }
   };
 
+  const handleEliminarCotizacion = async () => {
+    if (!cotizacion?.cotizacion_id || !user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await invoke<boolean>("delete_cotizacion", {
+        cotizacionId: cotizacion.cotizacion_id,
+        deletedBy: user.usuario_id,
+      });
+
+      if (result) {
+        success(
+          "Cotización eliminada",
+          `La cotización ${cotizacion.cotizacion_codigo} ha sido eliminada exitosamente.`
+        );
+        onCotizacionAdded(); // Refresca la lista
+        onOpenChange(false); // Cierra el diálogo
+      } else {
+        showError("Error", "No se pudo eliminar la cotización.");
+      }
+    } catch (error) {
+      console.error("Error eliminando cotización:", error);
+      showError(
+        "Error al eliminar cotización",
+        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+      );
+    } finally {
+      setLoading(false);
+      setShowConfirmDeleteDialog(false);
+    }
+  };
+
   const handleRechazarCotizacionBorrador = async (motivo?: string) => {
     if (!cotizacion?.cotizacion_id || !user) {
       showError("Error de autenticación", "Usuario no autenticado");
@@ -1710,6 +1746,18 @@ export default function CotizacionFormDialog({
                 </Button>
               )}
 
+              {isEditing && cotizacion && !cotizacion?.is_borrador && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowConfirmDeleteDialog(true)}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Eliminar Cotización
+                </Button>
+              )}
+
               {isEditing &&
                 estadoOrden &&
                 estadoOrden
@@ -1882,7 +1930,7 @@ export default function CotizacionFormDialog({
             <DialogDescription>
               ¿Está seguro que desea <b>rechazar</b> esta cotización?
               <br />
-              El estado de la orden cambiará a <b>Aprobación Pendiente</b>.
+              El estado de la orden cambiará a <b>Cotización Rechazada</b>.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -2055,6 +2103,45 @@ export default function CotizacionFormDialog({
               className="bg-blue-600 hover:bg-blue-700"
             >
               {loading ? "Enviando..." : "Confirmar envío"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para eliminar cotización */}
+      <Dialog
+        open={showConfirmDeleteDialog}
+        onOpenChange={setShowConfirmDeleteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro de que desea eliminar la cotización{" "}
+              <strong>{cotizacion?.cotizacion_codigo}</strong>?
+              <br />
+              <br />
+              Esta acción realizará eliminación lógica y desvinculará la
+              cotización de la orden de trabajo. El registro se conservará para
+              auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmDeleteDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleEliminarCotizacion}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {loading ? "Eliminando..." : "Confirmar Eliminación"}
             </Button>
           </DialogFooter>
         </DialogContent>

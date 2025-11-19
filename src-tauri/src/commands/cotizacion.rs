@@ -482,8 +482,8 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
     
-    let was_deleted = if fue_enviada && has_dependencies > 0 {
-        // Eliminación lógica: solo si fue enviada al cliente Y tiene órdenes asociadas
+    let was_deleted = if fue_enviada {
+        // Eliminación lógica: cualquier cotización que fue enviada al cliente
         // Marcar como eliminado y desvincular de órdenes
         sqlx::query("UPDATE COTIZACION SET deleted_at = CURRENT_TIMESTAMP WHERE cotizacion_id = ?")
             .bind(cotizacion_id)
@@ -491,12 +491,14 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
             .await
             .map_err(|e| format!("Database error: {}", e))?;
         
-        // Desvincular de órdenes de trabajo
-        sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
-            .bind(cotizacion_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| format!("Database error: {}", e))?;
+        // Desvincular de órdenes de trabajo si existen
+        if has_dependencies > 0 {
+            sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
+                .bind(cotizacion_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("Database error: {}", e))?;
+        }
         
         true
     } else {
@@ -523,7 +525,7 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
     
     // Registrar la acción en el log de auditoría
     if was_deleted {
-        let action_type = if fue_enviada && has_dependencies > 0 {
+        let action_type = if fue_enviada {
             "DELETE_COTIZACION_LOGICAL"
         } else {
             "DELETE_COTIZACION"
@@ -534,7 +536,7 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
             "COTIZACION",
             Some(cotizacion_id),
             Some(&format!("Cotización {} eliminada: {}", 
-                if fue_enviada && has_dependencies > 0 { "lógicamente" } else { "físicamente" },
+                if fue_enviada { "lógicamente" } else { "físicamente" },
                 cotizacion_to_delete.cotizacion_codigo.as_deref().unwrap_or("N/A")
             )),
             None
