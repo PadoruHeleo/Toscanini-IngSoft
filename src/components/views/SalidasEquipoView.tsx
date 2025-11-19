@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,13 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,8 +30,6 @@ import {
   User,
   Package,
   Eye,
-  Filter,
-  Download,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ViewTitle } from "@/components/layout/ViewTitle";
@@ -62,14 +52,6 @@ interface SalidaEquipo {
   usuario_nombre?: string;
 }
 
-interface FiltrosSalida {
-  fechaDesde: string;
-  fechaHasta: string;
-  motivo: string;
-  cliente: string;
-  orden: string;
-}
-
 const motivosMap = {
   entregado_cliente: "Entregado al Cliente",
   retirado_sin_reparacion: "Retirado sin Reparación",
@@ -86,20 +68,11 @@ const motivoBadgeColors = {
 
 export function SalidasEquipoView() {
   const [salidas, setSalidas] = useState<SalidaEquipo[]>([]);
-  const [filteredSalidas, setFilteredSalidas] = useState<SalidaEquipo[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSalida, setSelectedSalida] = useState<SalidaEquipo | null>(
     null
   );
   const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [filtros, setFiltros] = useState<FiltrosSalida>({
-    fechaDesde: "",
-    fechaHasta: "",
-    motivo: "",
-    cliente: "",
-    orden: "",
-  });
-  const [showFilters, setShowFilters] = useState(false);
 
   const { isAdmin } = usePermissions();
   const { error } = useToastContext();
@@ -114,7 +87,6 @@ export function SalidasEquipoView() {
     try {
       const result = await invoke<SalidaEquipo[]>("get_salidas_equipo");
       setSalidas(result);
-      setFilteredSalidas(result);
     } catch (err) {
       console.error("Error cargando salidas:", err);
       error("Error al cargar las salidas de equipos");
@@ -127,54 +99,9 @@ export function SalidasEquipoView() {
     loadSalidas();
   }, []);
 
-  // Aplicar filtros
-  useEffect(() => {
-    let filtered = [...salidas];
-
-    if (filtros.fechaDesde) {
-      filtered = filtered.filter(
-        (s) => !s.fecha_salida || s.fecha_salida >= filtros.fechaDesde
-      );
-    }
-
-    if (filtros.fechaHasta) {
-      filtered = filtered.filter(
-        (s) => !s.fecha_salida || s.fecha_salida <= filtros.fechaHasta
-      );
-    }
-
-    if (filtros.motivo) {
-      filtered = filtered.filter((s) => s.motivo_salida === filtros.motivo);
-    }
-
-    if (filtros.cliente) {
-      filtered = filtered.filter((s) =>
-        s.cliente_nombre?.toLowerCase().includes(filtros.cliente.toLowerCase())
-      );
-    }
-
-    if (filtros.orden) {
-      filtered = filtered.filter((s) =>
-        s.orden_codigo?.toLowerCase().includes(filtros.orden.toLowerCase())
-      );
-    }
-
-    setFilteredSalidas(filtered);
-  }, [filtros, salidas]);
-
   const handleShowDetail = (salida: SalidaEquipo) => {
     setSelectedSalida(salida);
     setShowDetailDialog(true);
-  };
-
-  const clearFilters = () => {
-    setFiltros({
-      fechaDesde: "",
-      fechaHasta: "",
-      motivo: "",
-      cliente: "",
-      orden: "",
-    });
   };
 
   const formatDate = (dateString?: string) => {
@@ -192,45 +119,6 @@ export function SalidasEquipoView() {
     }
   };
 
-  const exportSalidas = () => {
-    const csvContent = [
-      [
-        "Fecha Salida",
-        "Orden",
-        "Equipo",
-        "Cliente",
-        "Motivo",
-        "Usuario",
-        "Observaciones",
-      ].join(","),
-      ...filteredSalidas.map((salida) =>
-        [
-          formatDate(salida.fecha_salida),
-          salida.orden_codigo || "",
-          salida.equipo_nombre || "",
-          salida.cliente_nombre || "",
-          motivosMap[salida.motivo_salida as keyof typeof motivosMap] ||
-            salida.motivo_salida,
-          salida.usuario_nombre || "",
-          (salida.observaciones || "").replace(/,/g, ";"),
-        ].join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `salidas_equipos_${new Date().toISOString().split("T")[0]}.csv`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="space-y-6 px-6 pt-6">
       <ViewTitle />
@@ -243,7 +131,7 @@ export function SalidasEquipoView() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{filteredSalidas.length}</div>
+            <div className="text-2xl font-bold">{salidas.length}</div>
           </CardContent>
         </Card>
 
@@ -255,9 +143,8 @@ export function SalidasEquipoView() {
           <CardContent>
             <div className="text-2xl font-bold">
               {
-                filteredSalidas.filter(
-                  (s) => s.motivo_salida === "entregado_cliente"
-                ).length
+                salidas.filter((s) => s.motivo_salida === "entregado_cliente")
+                  .length
               }
             </div>
           </CardContent>
@@ -270,10 +157,7 @@ export function SalidasEquipoView() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {
-                filteredSalidas.filter((s) => s.motivo_salida === "abandonado")
-                  .length
-              }
+              {salidas.filter((s) => s.motivo_salida === "abandonado").length}
             </div>
           </CardContent>
         </Card>
@@ -288,7 +172,7 @@ export function SalidasEquipoView() {
           <CardContent>
             <div className="text-2xl font-bold">
               {
-                filteredSalidas.filter(
+                salidas.filter(
                   (s) => s.motivo_salida === "retirado_sin_reparacion"
                 ).length
               }
@@ -299,25 +183,7 @@ export function SalidasEquipoView() {
 
       {/* Controles y filtros */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex gap-2">
-          <Button
-            onClick={() => setShowFilters(!showFilters)}
-            variant="outline"
-            size="sm"
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
-          </Button>
-          <Button
-            onClick={exportSalidas}
-            variant="outline"
-            size="sm"
-            disabled={filteredSalidas.length === 0}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Exportar CSV
-          </Button>
-        </div>
+        <div className="flex gap-2"></div>
 
         <Button
           onClick={loadSalidas}
@@ -332,105 +198,11 @@ export function SalidasEquipoView() {
         </Button>
       </div>
 
-      {/* Panel de filtros */}
-      {showFilters && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Filtros de Búsqueda</CardTitle>
-            <CardDescription>
-              Filtra las salidas por fecha, motivo, cliente u orden de trabajo
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div className="space-y-2">
-                <Label>Fecha Desde</Label>
-                <Input
-                  type="date"
-                  value={filtros.fechaDesde}
-                  onChange={(e) =>
-                    setFiltros({ ...filtros, fechaDesde: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Fecha Hasta</Label>
-                <Input
-                  type="date"
-                  value={filtros.fechaHasta}
-                  onChange={(e) =>
-                    setFiltros({ ...filtros, fechaHasta: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Motivo</Label>
-                <Select
-                  value={filtros.motivo}
-                  onValueChange={(value) =>
-                    setFiltros({ ...filtros, motivo: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos los motivos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Todos los motivos</SelectItem>
-                    <SelectItem value="entregado_cliente">
-                      Entregado al Cliente
-                    </SelectItem>
-                    <SelectItem value="retirado_sin_reparacion">
-                      Retirado sin Reparación
-                    </SelectItem>
-                    <SelectItem value="abandonado">Abandonado</SelectItem>
-                    <SelectItem value="baja_definitiva">
-                      Baja Definitiva
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Cliente</Label>
-                <Input
-                  placeholder="Buscar cliente..."
-                  value={filtros.cliente}
-                  onChange={(e) =>
-                    setFiltros({ ...filtros, cliente: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Orden</Label>
-                <Input
-                  placeholder="Buscar orden..."
-                  value={filtros.orden}
-                  onChange={(e) =>
-                    setFiltros({ ...filtros, orden: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-4">
-              <Button onClick={clearFilters} variant="outline" size="sm">
-                Limpiar Filtros
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Tabla de salidas */}
       <Card>
         <CardHeader>
           <CardTitle>Registro de Salidas</CardTitle>
-          <CardDescription>
-            Mostrando {filteredSalidas.length} de {salidas.length} salidas
-          </CardDescription>
+          <CardDescription>Mostrando {salidas.length} salidas</CardDescription>
         </CardHeader>
         <CardContent className="px-6">
           <div className="rounded-md border overflow-x-auto">
@@ -454,17 +226,17 @@ export function SalidasEquipoView() {
                       Cargando salidas...
                     </TableCell>
                   </TableRow>
-                ) : filteredSalidas.length === 0 ? (
+                ) : salidas.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}
                       className="text-center py-8 text-muted-foreground"
                     >
-                      No se encontraron salidas con los filtros aplicados
+                      No se encontraron salidas
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSalidas.map((salida) => (
+                  salidas.map((salida) => (
                     <TableRow key={salida.salida_id}>
                       <TableCell>
                         <div className="flex items-center space-x-2">
