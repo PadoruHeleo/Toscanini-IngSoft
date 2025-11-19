@@ -1882,7 +1882,7 @@ export default function CotizacionFormDialog({
             <DialogDescription>
               ¿Está seguro que desea <b>rechazar</b> esta cotización?
               <br />
-              El estado de la orden cambiará a <b>Aprobación Pendiente</b>.
+              El estado de la orden cambiará a <b>Cotización Rechazada</b>.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
