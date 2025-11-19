@@ -1,7 +1,6 @@
 import * as React from "react";
 import {
   IconChartBar,
-  IconHelp,
   IconInnerShadowTop,
   IconSettings,
   IconLayoutDashboard,
@@ -159,11 +158,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       title: "Ajustes de Cuenta",
       url: "#",
       icon: IconSettings,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: IconHelp,
     },
   ];
   return (

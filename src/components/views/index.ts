@@ -6,7 +6,6 @@ export * from "./dialogs/ClienteFormDialog";
 export * from "./OrdenesTrabajoView";
 export * from "./dialogs/OrdenTrabajoFormDialog";
 export * from "./AjustesDeCuentaView";
-export * from "./HelpView";
 export * from "./LoginView";
 export * from "./PasswordResetView";
 export * from "./PiezasView";

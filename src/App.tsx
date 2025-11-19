@@ -5,7 +5,6 @@ import {
   ClientesView,
   OrdenesTrabajoView,
   AjustesDeCuentaView,
-  HelpView,
   PiezasView,
   UsuarioView,
   TerminosCondicionesView,
@@ -82,9 +81,6 @@ function ViewRenderer() {
     case "projects":
     case "ajustes de cuenta":
       return <AjustesDeCuentaView />;
-    case "get help":
-    case "gethelp":
-      return <HelpView />;
     default:
       return <HomeView />;
   }
