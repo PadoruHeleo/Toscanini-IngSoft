@@ -39,49 +39,97 @@ impl Default for DatabaseStatus {
     }
 }
 
+/// Función auxiliar para verificar existencia de certificados SSL
+fn verify_ssl_certificates(config: &DatabaseConfig) -> Result<(), sqlx::Error> {
+    if let Some(ssl_ca_path) = &config.ssl_ca {
+        if !Path::new(ssl_ca_path).exists() {
+            return Err(sqlx::Error::Configuration(
+                format!("SSL CA certificate file not found: {}", ssl_ca_path).into()
+            ));
+        }
+    }
+    
+    if let Some(ssl_cert_path) = &config.ssl_cert {
+        if !Path::new(ssl_cert_path).exists() {
+            return Err(sqlx::Error::Configuration(
+                format!("SSL client certificate file not found: {}", ssl_cert_path).into()
+            ));
+        }
+    }
+    
+    if let Some(ssl_key_path) = &config.ssl_key {
+        if !Path::new(ssl_key_path).exists() {
+            return Err(sqlx::Error::Configuration(
+                format!("SSL client key file not found: {}", ssl_key_path).into()
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
 /// Construye opciones de conexión MySQL con soporte SSL si está configurado
 async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: bool) -> Result<MySqlConnectOptions, sqlx::Error> {
+    use sqlx::mysql::MySqlSslMode;
+    
     let mut options = MySqlConnectOptions::new()
         .host(&config.host)
         .port(config.port)
-        .username(&config.username)
-        .password(&config.password);
+        .username(&config.username);
+    
+    // Solo agregar password si NO está vacía (para compatibilidad con XAMPP)
+    if !config.password.is_empty() {
+        options = options.password(&config.password);
+    } else {
+        println!("Connecting without password (XAMPP default configuration)");
+    }
     
     if include_database {
         options = options.database(&config.database);
     }
     
-    // Configurar SSL si los certificados están disponibles
-    if config.ssl_ca.is_some() || config.ssl_cert.is_some() || config.ssl_key.is_some() {
-        use sqlx::mysql::MySqlSslMode;
-        options = options.ssl_mode(MySqlSslMode::Required);
-        
-        // Verificar que los certificados existen antes de intentar conectarse
-        if let Some(ssl_ca_path) = &config.ssl_ca {
-            if !Path::new(ssl_ca_path).exists() {
-                return Err(sqlx::Error::Configuration(
-                    format!("SSL CA certificate file not found: {}", ssl_ca_path).into()
-                ));
+    // Leer variable de entorno para controlar SSL explícitamente
+    let ssl_mode_env = std::env::var("MYSQL_SSL_MODE").ok();
+    
+    match ssl_mode_env.as_deref() {
+        Some("DISABLED") | Some("disabled") => {
+            println!("SSL explicitly DISABLED for database connection");
+            options = options.ssl_mode(MySqlSslMode::Disabled);
+        }
+        Some("PREFERRED") | Some("preferred") => {
+            println!("SSL mode: PREFERRED (try SSL, fallback to unencrypted)");
+            options = options.ssl_mode(MySqlSslMode::Preferred);
+        }
+        Some("REQUIRED") | Some("required") => {
+            println!("SSL mode: REQUIRED");
+            options = options.ssl_mode(MySqlSslMode::Required);
+            // Verificar certificados solo si SSL es requerido
+            verify_ssl_certificates(config)?;
+        }
+        Some("VERIFY_CA") | Some("verify_ca") => {
+            println!("SSL mode: VERIFY_CA");
+            options = options.ssl_mode(MySqlSslMode::VerifyCa);
+            verify_ssl_certificates(config)?;
+        }
+        Some("VERIFY_IDENTITY") | Some("verify_identity") => {
+            println!("SSL mode: VERIFY_IDENTITY");
+            options = options.ssl_mode(MySqlSslMode::VerifyIdentity);
+            verify_ssl_certificates(config)?;
+        }
+        Some(other) => {
+            println!("Warning: unknown MYSQL_SSL_MODE '{}', using DISABLED", other);
+            options = options.ssl_mode(MySqlSslMode::Disabled);
+        }
+        None => {
+            // Por defecto: DISABLED si no hay certificados, PREFERRED si los hay
+            if config.ssl_ca.is_some() || config.ssl_cert.is_some() || config.ssl_key.is_some() {
+                println!("SSL certificates found but no MYSQL_SSL_MODE set. Using PREFERRED mode.");
+                options = options.ssl_mode(MySqlSslMode::Preferred);
+            } else {
+                println!("No SSL configuration found. SSL DISABLED.");
+                options = options.ssl_mode(MySqlSslMode::Disabled);
             }
         }
-        
-        if let Some(ssl_cert_path) = &config.ssl_cert {
-            if !Path::new(ssl_cert_path).exists() {
-                return Err(sqlx::Error::Configuration(
-                    format!("SSL client certificate file not found: {}", ssl_cert_path).into()
-                ));
-            }
-        }
-        
-        if let Some(ssl_key_path) = &config.ssl_key {
-            if !Path::new(ssl_key_path).exists() {
-                return Err(sqlx::Error::Configuration(
-                    format!("SSL client key file not found: {}", ssl_key_path).into()
-                ));
-            }
-        }
-        
-        println!("SSL enabled for database connection");
     }
     
     Ok(options)
