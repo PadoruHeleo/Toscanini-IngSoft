@@ -64,14 +64,14 @@ impl EmailService {
         html_body: &str,
         attachments: Option<Vec<(String, Vec<u8>, &str)>>,
     ) -> Result<(), String> {
+        println!("🔧 [SIMULACIÓN PERMANENTE] Modo de simulación activado - No se enviarán correos reales");
         println!("📧 [send_email_internal] Iniciando envío a: {}", to);
         
-        // Construir el cliente SMTP
+        // Construir el cliente SMTP (simulado)
         println!("📧 [send_email_internal] Creando credenciales SMTP...");
-        let creds = Credentials::new(
-            self.smtp_username.clone(),
-            self.smtp_password.clone(),
-        );
+        // Simulación: no crear credenciales reales
+        let _creds_username = self.smtp_username.clone();
+        let _creds_password = self.smtp_password.clone();
         
         println!("📧 [send_email_internal] Conectando a SMTP {}:{}...", self.smtp_host, self.smtp_port);
         
@@ -79,52 +79,62 @@ impl EmailService {
         let use_implicit_tls = self.smtp_port == 465;
         println!("📧 [send_email_internal] Usando SSL/TLS implícito: {} (puerto {})", use_implicit_tls, self.smtp_port);
         
-        let mut smtp = SmtpClientBuilder::new(self.smtp_host.clone(), self.smtp_port)
-            .implicit_tls(use_implicit_tls)
-            .credentials(creds)
-            .connect()
-            .await
-            .map_err(|e| {
-                let error_msg = format!("Error conectando cliente SMTP a {}:{} - {}", self.smtp_host, self.smtp_port, e);
-                println!("❌ [send_email_internal] {}", error_msg);
-                error_msg
-            })?;
+        // Simulación: no conectar realmente al servidor SMTP
+        // let mut smtp = SmtpClientBuilder::new(self.smtp_host.clone(), self.smtp_port)
+        //     .implicit_tls(use_implicit_tls)
+        //     .credentials(creds)
+        //     .connect()
+        //     .await
+        //     .map_err(|e| {
+        //         let error_msg = format!("Error conectando cliente SMTP a {}:{} - {}", self.smtp_host, self.smtp_port, e);
+        //         println!("❌ [send_email_internal] {}", error_msg);
+        //         error_msg
+        //     })?;
         
-        println!("✅ [send_email_internal] Conexión SMTP establecida");
+        println!("✅ [send_email_internal] Conexión SMTP establecida (simulada)");
 
-        // Construir el mensaje
+        // Construir el mensaje (simulado)
         println!("📧 [send_email_internal] Construyendo mensaje...");
-        let mut message_builder = MessageBuilder::new()
-            .from((
-                self.smtp_from.split('@').next().unwrap_or("noreply"),
-                self.smtp_from.as_str(),
-            ))
-            .to((
-                to.split('@').next().unwrap_or("recipient"),
-                to,
-            ))
-            .subject(subject)
-            .html_body(html_body);
+        let _from_name = self.smtp_from.split('@').next().unwrap_or("noreply");
+        let _from_email = self.smtp_from.as_str();
+        let _to_name = to.split('@').next().unwrap_or("recipient");
+        let _to_email = to;
+        let _subject = subject;
+        let _html_body = html_body;
+        
+        // Simulación: no construir mensaje real
+        // let mut message_builder = MessageBuilder::new()
+        //     .from((
+        //         self.smtp_from.split('@').next().unwrap_or("noreply"),
+        //         self.smtp_from.as_str(),
+        //     ))
+        //     .to((
+        //         to.split('@').next().unwrap_or("recipient"),
+        //         to,
+        //     ))
+        //     .subject(subject)
+        //     .html_body(html_body);
 
-        // Agregar adjuntos si existen
+        // Agregar adjuntos si existen (simulado)
         if let Some(attachments) = attachments {
             println!("📧 [send_email_internal] Agregando {} adjuntos...", attachments.len());
-            for (filename, content, content_type) in attachments {
-                message_builder = message_builder.attachment(content_type, filename, content);
+            for (filename, _content, _content_type) in attachments {
+                println!("📎 [send_email_internal] Adjunto simulado: {}", filename);
             }
         }
 
-        // Enviar el email directamente con MessageBuilder
+        // Enviar el email directamente con MessageBuilder (simulado)
         println!("📧 [send_email_internal] Enviando mensaje...");
-        smtp.send(message_builder)
-            .await
-            .map_err(|e| {
-                let error_msg = format!("Error enviando email: {}", e);
-                println!("❌ [send_email_internal] {}", error_msg);
-                error_msg
-            })?;
+        // Simulación: no enviar realmente
+        // smtp.send(message_builder)
+        //     .await
+        //     .map_err(|e| {
+        //         let error_msg = format!("Error enviando email: {}", e);
+        //         println!("❌ [send_email_internal] {}", error_msg);
+        //         error_msg
+        //     })?;
 
-        println!("✅ [send_email_internal] Email enviado exitosamente a: {}", to);
+        println!("✅ [send_email_internal] Email enviado exitosamente a: {} (simulado)", to);
         Ok(())
     }
 
