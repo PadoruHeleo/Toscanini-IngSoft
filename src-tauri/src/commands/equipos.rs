@@ -734,14 +734,14 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
         
         // Registrar la salida en el log de auditoría siguiendo el patrón de otros comandos
         
-        // Registrar en audit log con mensajes muy cortos para VARCHAR(32)
+        // Registrar en audit log con nombres de acción más cortos
         if let Err(e) = log_action(
-            "REGISTRAR_SALIDA_EQUIPO",
+            "EQUIPO_SALIDA",
             Some(request.usuario_id),
             "EQUIPO",
             Some(request.equipo_id),
-            Some(&format!("{}_en", &estado_anterior[..std::cmp::min(estado_anterior.len(), 10)])),
-            Some(&format!("{}_out", &nuevo_estado[..std::cmp::min(nuevo_estado.len(), 10)]))
+            Some(&format!("Estado anterior: {}", estado_anterior)),
+            Some(&format!("Salida registrada: {}", nuevo_estado))
         ).await {
             eprintln!("Error al guardar log de auditoría: {}", e);
         }
@@ -756,14 +756,14 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
     } else {
         // Si no hay orden de trabajo, solo registrar en auditoría
         
-        // Registrar en audit log con mensajes muy cortos para VARCHAR(32)
+        // Registrar en audit log para salida directa
         if let Err(e) = log_action(
-            "REGISTRAR_SALIDA_EQUIPO_DIRECTO",
+            "EQUIPO_SALIDA_DIRECTA",
             Some(request.usuario_id),
             "EQUIPO",
             Some(request.equipo_id),
-            Some("en_sistema"),
-            Some("salida_directa")
+            Some("Sin orden asociada"),
+            Some("Salida directa registrada")
         ).await {
             eprintln!("Error al guardar log de auditoría: {}", e);
         }

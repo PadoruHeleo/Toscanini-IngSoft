@@ -281,12 +281,12 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
         if let Some(false) = user.is_active {
             // Registrar intento de login con usuario desactivado
             let _ = log_action(
-                "LOGIN_FAILED_DISABLED",
+                "LOGIN_FAILED",
                 None,
                 "USUARIO",
                 Some(user.usuario_id),
                 None,
-                Some(&format!("Intento de login con usuario desactivado: {}", usuario_correo))
+                Some(&format!("Intento de login fallido - Usuario desactivado: {}", usuario_correo))
             ).await;
             return Err("USER_DISABLED".to_string());
         }
@@ -339,11 +339,20 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
                     "USUARIO",
                     Some(user.usuario_id),
                     None,
-                    Some(&format!("Intento de login fallido para {}", usuario_correo))
+                    Some(&format!("Intento de login fallido - Contraseña incorrecta: {}", usuario_correo))
                 ).await;
                 return Err("INVALID_PASSWORD".to_string());
             }
         } else {
+            // Registrar intento de login con usuario sin contraseña
+            let _ = log_action(
+                "LOGIN_FAILED",
+                None,
+                "USUARIO",
+                Some(user.usuario_id),
+                None,
+                Some(&format!("Intento de login fallido - Usuario sin contraseña: {}", usuario_correo))
+            ).await;
             return Err("USER_NO_PASSWORD".to_string());
         }
     } else {
@@ -354,7 +363,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
             "USUARIO",
             None,
             None,
-            Some(&format!("Intento de login con usuario inexistente: {}", usuario_correo))
+            Some(&format!("Intento de login fallido - Usuario inexistente: {}", usuario_correo))
         ).await;
         return Err("USER_NOT_FOUND".to_string());
     }
