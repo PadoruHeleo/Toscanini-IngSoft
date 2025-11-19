@@ -4,6 +4,7 @@ pub mod utils;
 pub mod email;
 pub mod config;
 pub mod pdf;
+pub mod ssh_tunnel;
 
 use database::{init_database, start_auto_reconnect_task, start_periodic_connection_check};
 

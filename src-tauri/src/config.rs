@@ -34,6 +34,23 @@ pub struct DatabaseConfig {
     pub ssl_cert: Option<String>,   // Ruta al certificado del cliente
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssl_key: Option<String>,    // Ruta a la clave privada del cliente
+    // Configuración SSH para túnel
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_host: Option<String>,   // Host del servidor SSH
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_port: Option<u16>,      // Puerto SSH (default: 22)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_user: Option<String>,   // Usuario SSH
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>, // Contraseña SSH
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>, // Ruta a clave privada SSH
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_remote_host: Option<String>, // Host MySQL en servidor remoto (default: localhost)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_remote_port: Option<u16>,   // Puerto MySQL remoto (default: 3306)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_local_port: Option<u16>,    // Puerto local para túnel (auto-asignado si None)
 }
 
 impl Default for DatabaseConfig {
@@ -47,6 +64,14 @@ impl Default for DatabaseConfig {
             ssl_ca: None,
             ssl_cert: None,
             ssl_key: None,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_path: None,
+            ssh_remote_host: None,
+            ssh_remote_port: None,
+            ssh_local_port: None,
         }
     }
 }
@@ -307,6 +332,21 @@ fn load_from_env_or_default() -> DatabaseConfig {
         ssl_ca: std::env::var("DB_SSL_CA").ok(),
         ssl_cert: std::env::var("DB_SSL_CERT").ok(),
         ssl_key: std::env::var("DB_SSL_KEY").ok(),
+        // Variables SSH
+        ssh_host: std::env::var("SSH_HOST").ok(),
+        ssh_port: std::env::var("SSH_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok()),
+        ssh_user: std::env::var("SSH_USER").ok(),
+        ssh_password: std::env::var("SSH_PASSWORD").ok(),
+        ssh_key_path: std::env::var("SSH_KEY_PATH").ok(),
+        ssh_remote_host: std::env::var("SSH_REMOTE_HOST").ok(),
+        ssh_remote_port: std::env::var("SSH_REMOTE_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok()),
+        ssh_local_port: std::env::var("SSH_LOCAL_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok()),
     }
 }
 
@@ -363,5 +403,13 @@ pub fn parse_database_url(url: &str) -> Result<DatabaseConfig, Box<dyn std::erro
         ssl_ca: None,
         ssl_cert: None,
         ssl_key: None,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_password: None,
+        ssh_key_path: None,
+        ssh_remote_host: None,
+        ssh_remote_port: None,
+        ssh_local_port: None,
     })
 }

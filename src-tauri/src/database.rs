@@ -2,6 +2,7 @@ use sqlx::{MySql, Pool, mysql::{MySqlConnectOptions, MySqlPool}};
 use std::sync::{OnceLock, Arc, Mutex};
 use std::path::Path;
 use crate::config::{load_database_config, DatabaseConfig, parse_database_url};
+use crate::ssh_tunnel::{SshTunnel, is_ssh_configured};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -10,6 +11,7 @@ pub type DbPool = Pool<MySql>;
 // Cambiar el tipo almacenado para usar Arc directamente
 static DB_POOL: OnceLock<Arc<Mutex<Option<Arc<DbPool>>>>> = OnceLock::new();
 static DB_CONNECTION_STATUS: OnceLock<Arc<Mutex<DatabaseStatus>>> = OnceLock::new();
+static SSH_TUNNEL: OnceLock<Arc<Mutex<Option<Arc<Mutex<SshTunnel>>>>>> = OnceLock::new();
 
 // Macro para funciones que requieren base de datos
 #[macro_export]
@@ -69,12 +71,42 @@ fn verify_ssl_certificates(config: &DatabaseConfig) -> Result<(), sqlx::Error> {
 }
 
 /// Construye opciones de conexión MySQL con soporte SSL si está configurado
+/// Si SSH está configurado, usa localhost y el puerto local del túnel
 async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: bool) -> Result<MySqlConnectOptions, sqlx::Error> {
     use sqlx::mysql::MySqlSslMode;
     
+    // Si hay túnel SSH, usar localhost y el puerto local del túnel
+    let (host, port) = if is_ssh_configured(config) {
+        let local_port = if let Some(tunnel_arc) = SSH_TUNNEL.get() {
+            if let Ok(tunnel_guard) = tunnel_arc.lock() {
+                if let Some(ref tunnel) = *tunnel_guard {
+                    if let Ok(tunnel_lock) = tunnel.lock() {
+                        Some(tunnel_lock.local_port())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        if let Some(local_port) = local_port {
+            ("localhost".to_string(), local_port)
+        } else {
+            (config.host.clone(), config.port)
+        }
+    } else {
+        (config.host.clone(), config.port)
+    };
+    
     let mut options = MySqlConnectOptions::new()
-        .host(&config.host)
-        .port(config.port)
+        .host(&host)
+        .port(port)
         .username(&config.username);
     
     // Solo agregar password si NO está vacía (para compatibilidad con XAMPP)
@@ -135,8 +167,88 @@ async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: 
     Ok(options)
 }
 
-/// Conecta a MySQL usando las opciones configuradas (con soporte SSL)
+/// Crea o obtiene el túnel SSH si está configurado
+async fn ensure_ssh_tunnel(config: &DatabaseConfig) -> Result<(), Box<dyn std::error::Error>> {
+    if !is_ssh_configured(config) {
+        return Ok(());
+    }
+    
+    // Inicializar SSH_TUNNEL si no existe
+    if SSH_TUNNEL.get().is_none() {
+        let _ = SSH_TUNNEL.set(Arc::new(Mutex::new(None)));
+    }
+    
+    // Verificar si ya existe un túnel activo
+    // Simplificar la verificación para evitar problemas de borrow checker
+    let existing_port = {
+        if let Some(tunnel_arc) = SSH_TUNNEL.get() {
+            if let Ok(guard) = tunnel_arc.lock() {
+                if let Some(ref tunnel) = *guard {
+                    // Bloque interno para tunnel_lock - se dropea antes que guard
+                    if let Ok(lock) = tunnel.lock() {
+                        if lock.is_active() {
+                            Some(lock.local_port())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+    
+    if let Some(port) = existing_port {
+        println!("Túnel SSH ya está activo en puerto {}", port);
+        return Ok(());
+    }
+    
+    // Crear nuevo túnel si no existe o no está activo (fuera del lock para evitar problemas de Send)
+    println!("Creando nuevo túnel SSH...");
+    let tunnel = SshTunnel::create(config).await?;
+    let local_port = tunnel.local_port();
+    
+    // Guardar el túnel
+    if let Some(tunnel_arc) = SSH_TUNNEL.get() {
+        if let Ok(mut tunnel_guard) = tunnel_arc.lock() {
+            *tunnel_guard = Some(Arc::new(Mutex::new(tunnel)));
+            println!("Túnel SSH creado exitosamente en puerto {}", local_port);
+        }
+    }
+    
+    Ok(())
+}
+
+/// Cierra el túnel SSH si existe
+pub fn close_ssh_tunnel() {
+    if let Some(tunnel_arc) = SSH_TUNNEL.get() {
+        if let Ok(mut tunnel_guard) = tunnel_arc.lock() {
+            if let Some(tunnel) = tunnel_guard.take() {
+                if let Ok(tunnel_lock) = Arc::try_unwrap(tunnel) {
+                    tunnel_lock.into_inner().unwrap().close();
+                    println!("Túnel SSH cerrado");
+                }
+            }
+        }
+    }
+}
+
+/// Conecta a MySQL usando las opciones configuradas (con soporte SSL y SSH)
 async fn connect_mysql_pool(config: &DatabaseConfig, include_database: bool) -> Result<Pool<MySql>, sqlx::Error> {
+    // Asegurar que el túnel SSH esté activo si está configurado
+    if let Err(e) = ensure_ssh_tunnel(config).await {
+        return Err(sqlx::Error::Configuration(
+            format!("Error creando túnel SSH: {}", e).into()
+        ));
+    }
+    
     let options = build_mysql_connect_options(config, include_database).await?;
     MySqlPool::connect_with(options).await
 }
@@ -182,6 +294,11 @@ pub async fn init_database() -> Result<(), sqlx::Error> {
     // Inicializar el estado de conexión si no existe
     if DB_CONNECTION_STATUS.get().is_none() {
         let _ = DB_CONNECTION_STATUS.set(Arc::new(Mutex::new(DatabaseStatus::default())));
+    }
+    
+    // Inicializar SSH_TUNNEL si no existe
+    if SSH_TUNNEL.get().is_none() {
+        let _ = SSH_TUNNEL.set(Arc::new(Mutex::new(None)));
     }
     
     // Primero intentar conectarse con la base de datos especificada
@@ -330,6 +447,9 @@ pub async fn check_database_connection() -> bool {
 
 pub async fn retry_database_connection() -> Result<(), sqlx::Error> {
     println!("Attempting to retry database connection...");
+    
+    // Cerrar túnel SSH existente si hay uno
+    close_ssh_tunnel();
     
     // Intentar cargar configuración segura primero
     let config = match load_database_config() {
@@ -529,6 +649,8 @@ pub fn start_auto_reconnect_task() {
                 
                 if !is_connected {
                     println!("Conexión perdida detectada - iniciando reconexión...");
+                    // Cerrar túnel SSH si existe para forzar reconexión
+                    close_ssh_tunnel();
                 }
             }
             
@@ -578,6 +700,8 @@ pub fn start_periodic_connection_check(interval_seconds: u64) {
             if is_connected {
             } else {
                 println!("✗ Conexión fallida - intentando reconectar...");
+                // Cerrar túnel SSH si existe para forzar reconexión
+                close_ssh_tunnel();
                 // Intentar reconectar automáticamente
                 if let Err(e) = retry_database_connection().await {
                     println!("Error al intentar reconectar: {}", e);
