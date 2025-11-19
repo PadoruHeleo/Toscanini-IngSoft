@@ -454,8 +454,8 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
     
-    let was_deleted = if fue_enviado && has_dependencies > 0 {
-        // Eliminación lógica: solo si fue enviado al cliente Y tiene órdenes asociadas
+    let was_deleted = if fue_enviado {
+        // Eliminación lógica: cualquier informe que fue enviado al cliente
         // Marcar como eliminado y desvincular de órdenes
         sqlx::query("UPDATE INFORME SET deleted_at = CURRENT_TIMESTAMP WHERE informe_id = ?")
             .bind(informe_id)
@@ -463,12 +463,14 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
             .await
             .map_err(|e| format!("Database error: {}", e))?;
         
-        // Desvincular de órdenes de trabajo
-        sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
-            .bind(informe_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| format!("Database error: {}", e))?;
+        // Desvincular de órdenes de trabajo si existen
+        if has_dependencies > 0 {
+            sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+                .bind(informe_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("Database error: {}", e))?;
+        }
         
         true
     } else {
@@ -495,7 +497,7 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
     
     // Registrar la acción en el log de auditoría
     if was_deleted {
-        let action_type = if fue_enviado && has_dependencies > 0 {
+        let action_type = if fue_enviado {
             "DELETE_INFORME_LOGICAL"
         } else {
             "DELETE_INFORME"
@@ -506,7 +508,7 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
             "INFORME",
             Some(informe_id),
             Some(&format!("Informe {} eliminado: {}", 
-                if fue_enviado && has_dependencies > 0 { "lógicamente" } else { "físicamente" },
+                if fue_enviado { "lógicamente" } else { "físicamente" },
                 informe_to_delete.informe_codigo.as_deref().unwrap_or("N/A")
             )),
             None

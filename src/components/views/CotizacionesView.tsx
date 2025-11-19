@@ -8,6 +8,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,6 +91,11 @@ export function CotizacionesView() {
   const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
   const [pdfCotizacionCodigo, setPdfCotizacionCodigo] = useState<string>("");
 
+  // Estados para modal de confirmación de eliminación
+  const [showConfirmDeleteDialog, setShowConfirmDeleteDialog] = useState(false);
+  const [cotizacionToDelete, setCotizacionToDelete] =
+    useState<Cotizacion | null>(null);
+
   const loadCotizaciones = async () => {
     try {
       setLoading(true);
@@ -125,24 +138,24 @@ export function CotizacionesView() {
     setShowPdfViewer(true);
   };
 
-  const handleDeleteCotizacion = async (cotizacion: Cotizacion) => {
-    if (!user) return;
+  const handleDeleteCotizacion = (cotizacion: Cotizacion) => {
+    setCotizacionToDelete(cotizacion);
+    setShowConfirmDeleteDialog(true);
+  };
 
-    const confirmed = window.confirm(
-      `¿Está seguro de que desea eliminar la cotización ${cotizacion.cotizacion_codigo}?`
-    );
-
-    if (!confirmed) return;
+  const confirmDeleteCotizacion = async () => {
+    if (!user || !cotizacionToDelete) return;
 
     try {
       const result = await invoke<boolean>("delete_cotizacion", {
-        cotizacionId: cotizacion.cotizacion_id,
+        cotizacionId: cotizacionToDelete.cotizacion_id,
+        deletedBy: user.usuario_id,
       });
 
       if (result) {
         success(
           "Cotización eliminada",
-          `La cotización ${cotizacion.cotizacion_codigo} ha sido eliminada exitosamente.`
+          `La cotización ${cotizacionToDelete.cotizacion_codigo} ha sido eliminada exitosamente.`
         );
         loadCotizaciones();
       } else {
@@ -154,6 +167,9 @@ export function CotizacionesView() {
         "Error al eliminar cotización",
         typeof error === "string" ? error : "Ha ocurrido un error inesperado."
       );
+    } finally {
+      setShowConfirmDeleteDialog(false);
+      setCotizacionToDelete(null);
     }
   };
 
@@ -414,6 +430,46 @@ export function CotizacionesView() {
           cotizacionId={pdfCotizacionId}
         />
       )}
+
+      {/* Modal de confirmación para eliminar cotización */}
+      <Dialog
+        open={showConfirmDeleteDialog}
+        onOpenChange={setShowConfirmDeleteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro de que desea eliminar la cotización{" "}
+              <strong>{cotizacionToDelete?.cotizacion_codigo}</strong>?
+              <br />
+              <br />
+              Esta acción realizará eliminación lógica y desvinculará la
+              cotización de la orden de trabajo. El registro se conservará para
+              auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowConfirmDeleteDialog(false);
+                setCotizacionToDelete(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmDeleteCotizacion}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Confirmar Eliminación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

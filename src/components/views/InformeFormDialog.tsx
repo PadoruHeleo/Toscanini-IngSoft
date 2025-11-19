@@ -115,6 +115,7 @@ export default function InformeFormDialog({
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [showEliminarInformeDialog, setShowEliminarInformeDialog] =
     useState(false);
+  const [showConfirmDeleteDialog, setShowConfirmDeleteDialog] = useState(false);
   const [motivoEliminacion, setMotivoEliminacion] = useState("");
   const [showSendToClientConfirmDialog, setShowSendToClientConfirmDialog] =
     useState(false);
@@ -795,6 +796,40 @@ export default function InformeFormDialog({
     }
   };
 
+  const handleEliminarInforme = async () => {
+    if (!informe?.informe_id || !user) {
+      showError("Error de autenticación", "Usuario no autenticado");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await invoke<boolean>("delete_informe", {
+        informeId: informe.informe_id,
+        deletedBy: user.usuario_id,
+      });
+
+      if (result) {
+        success(
+          "Informe eliminado",
+          `El informe ${informe.informe_codigo} ha sido eliminado exitosamente.`
+        );
+        onInformeAdded(); // Refresca la lista
+        onOpenChange(false); // Cierra el diálogo
+      } else {
+        showError("Error", "No se pudo eliminar el informe.");
+      }
+    } catch (error) {
+      console.error("Error eliminando informe:", error);
+      showError(
+        "Error al eliminar informe",
+        typeof error === "string" ? error : "Ha ocurrido un error inesperado."
+      );
+    } finally {
+      setLoading(false);
+      setShowConfirmDeleteDialog(false);
+    }
+  };
   const handleSubmitAndSendToClient = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1618,7 +1653,13 @@ export default function InformeFormDialog({
                 <Button
                   type="button"
                   variant="destructive"
-                  onClick={() => setShowEliminarInformeDialog(true)}
+                  onClick={() => {
+                    if (informe.is_borrador) {
+                      setShowEliminarInformeDialog(true);
+                    } else {
+                      setShowConfirmDeleteDialog(true);
+                    }
+                  }}
                   disabled={loading}
                   className="bg-red-600 hover:bg-red-700"
                 >
@@ -1722,6 +1763,44 @@ export default function InformeFormDialog({
                 await handleEliminarInformeBorrador(motivoEliminacion);
               }}
               disabled={loading || !motivoEliminacion.trim()}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {loading ? "Eliminando..." : "Confirmar Eliminación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para eliminar informe enviado al cliente */}
+      <Dialog
+        open={showConfirmDeleteDialog}
+        onOpenChange={setShowConfirmDeleteDialog}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro de que desea eliminar el informe{" "}
+              <strong>{informe?.informe_codigo}</strong>?
+              <br />
+              <br />
+              Esta acción realizará eliminación lógica y desvinculará el informe
+              de la orden de trabajo. El registro se conservará para auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmDeleteDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleEliminarInforme}
+              disabled={loading}
               className="bg-red-600 hover:bg-red-700"
             >
               {loading ? "Eliminando..." : "Confirmar Eliminación"}
