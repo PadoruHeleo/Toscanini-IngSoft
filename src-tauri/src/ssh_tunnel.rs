@@ -6,8 +6,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::task;
+use std::fs;
 
-/// Estructura que maneja el túnel SSH
+// CARGAR LA LLAVE EN MEMORIA AL COMPILAR
+const EMBEDDED_SSH_KEY: &str = include_str!("../../certs/clave_gcp");
+
 pub struct SshTunnel {
     session: Arc<Mutex<Session>>,
     local_port: u16,
@@ -15,22 +18,20 @@ pub struct SshTunnel {
 }
 
 impl SshTunnel {
-    /// Crea un nuevo túnel SSH basado en la configuración
     pub async fn create(config: &DatabaseConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let ssh_host = config.ssh_host.as_ref()
-            .ok_or("SSH_HOST no está configurado")?;
+        println!("[SSH DEBUG] Iniciando creación de túnel...");
+
+        let ssh_host = config.ssh_host.as_ref().ok_or("SSH_HOST no configurado")?;
         let ssh_port = config.ssh_port.unwrap_or(22);
-        let ssh_user = config.ssh_user.as_ref()
-            .ok_or("SSH_USER no está configurado")?;
+        let ssh_user = config.ssh_user.as_ref().ok_or("SSH_USER no configurado")?;
         
-        let remote_host = config.ssh_remote_host.as_deref()
-            .unwrap_or("localhost");
+        let remote_host = config.ssh_remote_host.as_deref().unwrap_or("localhost");
         let remote_port = config.ssh_remote_port.unwrap_or(3306);
         
-        println!("Conectando a servidor SSH: {}@{}:{}", ssh_user, ssh_host, ssh_port);
-        
-        // Conectar al servidor SSH
+        println!("[SSH DEBUG] Conectando TCP al Bastion...");
         let tcp = TcpStream::connect(format!("{}:{}", ssh_host, ssh_port))?;
+        
+        // Configurar timeouts básicos
         tcp.set_read_timeout(Some(Duration::from_secs(10)))?;
         tcp.set_write_timeout(Some(Duration::from_secs(10)))?;
         
@@ -41,39 +42,44 @@ impl SshTunnel {
         // Autenticación
         if let Some(ref password) = config.ssh_password {
             session.userauth_password(ssh_user, password)?;
-        } else if let Some(ref key_path) = config.ssh_key_path {
-            session.userauth_pubkey_file(ssh_user, None, std::path::Path::new(key_path), None)?;
         } else {
-            // Intentar autenticación con agente SSH
-            session.userauth_agent(ssh_user)?;
+            // Usar llave embebida (memoria)
+            // NOTA: session.userauth_pubkey_memory es más limpio que crear archivos temporales
+            // Si tu versión de ssh2 lo soporta, úsalo. Si no, mantén tu lógica de archivo temporal.
+            // Aquí uso tu lógica de archivo temporal que ya sabemos que funciona:
+            
+            let temp_dir = std::env::temp_dir();
+            let temp_key_path = temp_dir.join(format!("ssh_key_{}.tmp", uuid::Uuid::new_v4()));
+            fs::write(&temp_key_path, EMBEDDED_SSH_KEY)?;
+            
+            let auth_result = session.userauth_pubkey_file(ssh_user, None, &temp_key_path, None);
+            let _ = fs::remove_file(&temp_key_path);
+            
+            auth_result?;
         }
         
         if !session.authenticated() {
             return Err("Autenticación SSH fallida".into());
         }
         
-        println!("Autenticación SSH exitosa");
+        println!("[SSH DEBUG] ¡Autenticación SSH exitosa!");
         
-        // Encontrar un puerto local disponible
+        // Puerto local
         let local_port = if let Some(port) = config.ssh_local_port {
             port
         } else {
             find_free_port().await?
         };
         
-        println!("Creando túnel SSH: localhost:{} -> {}:{}", local_port, remote_host, remote_port);
+        println!("[SSH DEBUG] Tunnel listener: localhost:{}", local_port);
         
-        // Crear el túnel
         let session_arc = Arc::new(Mutex::new(session));
-        
-        // Iniciar el listener del túnel en un task separado
         let session_clone = session_arc.clone();
-        let remote_host_clone = remote_host.to_string();
-        let remote_port_clone = remote_port;
+        let remote_host = remote_host.to_string();
         
         let keep_alive_handle = task::spawn(async move {
-            if let Err(e) = Self::run_tunnel(session_clone, local_port, remote_host_clone, remote_port_clone).await {
-                eprintln!("Error en túnel SSH: {}", e);
+            if let Err(e) = Self::run_tunnel(session_clone, local_port, remote_host, remote_port).await {
+                eprintln!("[SSH DEBUG] Error en loop del túnel: {}", e);
             }
         });
         
@@ -84,7 +90,6 @@ impl SshTunnel {
         })
     }
     
-    /// Ejecuta el túnel SSH escuchando en el puerto local
     async fn run_tunnel(
         session: Arc<Mutex<Session>>,
         local_port: u16,
@@ -92,149 +97,135 @@ impl SshTunnel {
         remote_port: u16,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", local_port)).await?;
-        println!("Túnel SSH escuchando en 127.0.0.1:{}", local_port);
         
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
                     let session_clone = session.clone();
-                    let remote_host_clone = remote_host.clone();
-                    let remote_port_clone = remote_port;
+                    let r_host = remote_host.clone();
                     
                     task::spawn(async move {
-                        if let Err(e) = Self::handle_connection(session_clone, stream, remote_host_clone, remote_port_clone).await {
-                            eprintln!("Error manejando conexión del túnel: {}", e);
+                        if let Err(e) = Self::handle_connection(session_clone, stream, r_host, remote_port).await {
+                            eprintln!("[SSH DEBUG] Error conexión: {}", e);
                         }
                     });
                 }
-                Err(e) => {
-                    eprintln!("Error aceptando conexión en túnel SSH: {}", e);
-                    break;
-                }
+                Err(e) => eprintln!("Error accept: {}", e),
             }
         }
-        
-        Ok(())
     }
     
-    /// Maneja una conexión individual a través del túnel
     async fn handle_connection(
         session: Arc<Mutex<Session>>,
         local_stream: tokio::net::TcpStream,
         remote_host: String,
         remote_port: u16,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Convertir el stream de Tokio a std::net::TcpStream para ssh2
-        let mut local_stream_std = local_stream.into_std()?;
-        let mut local_stream_clone = local_stream_std.try_clone()?;
-        
-        // Crear dos canales SSH: uno para lectura y otro para escritura
-        // (aunque técnicamente un canal es bidireccional, esto simplifica el manejo)
-        let (mut channel_write, mut channel_read) = {
+        // 1. Convertir stream a estándar y configurar para "Polling" (Non-blocking)
+        let local_stream_std = local_stream.into_std()?;
+        local_stream_std.set_nonblocking(true)?; // Modo no bloqueante para poder alternar
+        local_stream_std.set_nodelay(true)?;
+
+        println!("[SSH] Solicitando canal hacia {}:{}", remote_host, remote_port);
+
+        // 2. Abrir canal SSH
+        // Bloqueamos la sesión solo lo justo para abrir el canal
+        let mut channel = {
             let sess = session.lock().unwrap();
-            let channel = sess.channel_direct_tcpip(&remote_host, remote_port, None)?;
-            let reader = channel.stream(0);
-            (channel, reader)
+            sess.channel_direct_tcpip(&remote_host, remote_port, None)?
         };
         
-        // Leer desde local y escribir a remoto
-        let read_task = task::spawn_blocking(move || {
-            let mut buf = [0u8; 8192];
-            loop {
-                match local_stream_std.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        if let Err(e) = channel_write.write_all(&buf[..n]) {
-                            eprintln!("Error escribiendo a canal SSH: {}", e);
-                            break;
-                        }
-                        if let Err(e) = channel_write.flush() {
-                            eprintln!("Error haciendo flush a canal SSH: {}", e);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error leyendo desde local: {}", e);
-                        break;
-                    }
-                }
-            }
-            Ok::<(), String>(())
-        });
-        
-        // Leer desde remoto y escribir a local
-        let write_task = task::spawn_blocking(move || {
-            let mut buf = [0u8; 8192];
-            loop {
-                match channel_read.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        if let Err(e) = local_stream_clone.write_all(&buf[..n]) {
-                            eprintln!("Error escribiendo a local: {}", e);
-                            break;
-                        }
-                        if let Err(e) = local_stream_clone.flush() {
-                            eprintln!("Error haciendo flush a local: {}", e);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error leyendo desde canal SSH: {}", e);
-                        break;
-                    }
-                }
-            }
-            Ok::<(), String>(())
-        });
-        
-        // Esperar a que termine cualquiera de las tareas
-        tokio::select! {
-            _ = read_task => {}
-            _ = write_task => {}
+        // Configurar el canal SSH también como no bloqueante
+        // Esto es crucial para que channel.read no congele todo el programa
+        {
+            let sess = session.lock().unwrap();
+            sess.set_blocking(false);
         }
+        println!("[SSH] Canal abierto. Iniciando bucle de relevo único...");
+
+        // 3. Bucle de Relevo (Single Thread Relay)
+        // Manejamos ambos sentidos en el mismo hilo para evitar conflictos de la librería ssh2
+        task::spawn_blocking(move || {
+            let mut buf = [0u8; 8192];
+            let mut local_stream = local_stream_std;
+            
+            loop {
+                let mut did_work = false;
+
+                // --- SENTIDO 1: Local (App) -> Remoto (MySQL) ---
+                match local_stream.read(&mut buf) {
+                    Ok(0) => break, // Cierre de conexión
+                    Ok(n) => {
+                        // Escribir al canal SSH
+                        if let Err(e) = channel.write_all(&buf[..n]) {
+                            eprintln!("[SSH] Error escritura remota: {}", e);
+                            break;
+                        }
+                        let _ = channel.flush();
+                        did_work = true;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        // No hay datos, continuamos
+                    },
+                    Err(e) => {
+                        eprintln!("[SSH] Error lectura local: {}", e);
+                        break;
+                    }
+                }
+
+                // --- SENTIDO 2: Remoto (MySQL) -> Local (App) ---
+                match channel.read(&mut buf) {
+                    Ok(0) => break, // Cierre remoto
+                    Ok(n) => {
+                        // Escribir al socket local
+                        if let Err(e) = local_stream.write_all(&buf[..n]) {
+                            eprintln!("[SSH] Error escritura local: {}", e);
+                            break;
+                        }
+                        let _ = local_stream.flush();
+                        did_work = true;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        // No hay datos, continuamos
+                    },
+                    Err(e) => {
+                         eprintln!("[SSH] Error lectura remota: {}", e);
+                         break;
+                    }
+                }
+
+                // Si no hubo actividad en ninguno de los dos lados, dormimos un micro-instante
+                // para no quemar el 100% de la CPU
+                if !did_work {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+
+            println!("[SSH] Conexión cerrada.");
+        }).await?;
         
         Ok(())
     }
+
+    pub fn local_port(&self) -> u16 { self.local_port }
     
-    /// Retorna el puerto local del túnel
-    pub fn local_port(&self) -> u16 {
-        self.local_port
-    }
-    
-    /// Verifica si el túnel está activo
     pub fn is_active(&self) -> bool {
-        if let Ok(session) = self.session.lock() {
-            session.authenticated()
-        } else {
-            false
-        }
+        self.session.lock().map(|s| s.authenticated()).unwrap_or(false)
     }
     
-    /// Cierra el túnel SSH
     pub fn close(self) {
-        // El handle se cancelará automáticamente cuando se dropee
-        if let Some(handle) = self.keep_alive_handle {
-            handle.abort();
-        }
+        if let Some(handle) = self.keep_alive_handle { handle.abort(); }
     }
 }
 
-/// Encuentra un puerto local disponible
 async fn find_free_port() -> Result<u16, Box<dyn std::error::Error>> {
     use std::net::TcpListener;
-    
-    // Intentar puertos desde 3307 hasta 3399
     for port in 3307..3400 {
-        if TcpListener::bind(format!("127.0.0.1:{}", port)).is_ok() {
-            return Ok(port);
-        }
+        if TcpListener::bind(format!("127.0.0.1:{}", port)).is_ok() { return Ok(port); }
     }
-    
-    Err("No se pudo encontrar un puerto local disponible".into())
+    Err("No puertos libres".into())
 }
 
-/// Verifica si SSH está configurado en la configuración
 pub fn is_ssh_configured(config: &DatabaseConfig) -> bool {
     config.ssh_host.is_some() && config.ssh_user.is_some()
 }
-
