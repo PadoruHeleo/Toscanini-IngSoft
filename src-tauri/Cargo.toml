@@ -60,6 +60,7 @@ idna_adapter = "=1.2.0"
 litemap = "=0.7.4"
 ssh2 = "0.9"
 tokio-stream = "0.1"
+socket2 = "0.5"
 
 [[bin]]
 name = "tauri-app"

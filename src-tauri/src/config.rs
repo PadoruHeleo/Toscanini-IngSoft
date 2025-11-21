@@ -312,42 +312,89 @@ pub fn parse_embedded_env() {
 
 /// Carga configuración desde variables de entorno o usa valores por defecto
 fn load_from_env_or_default() -> DatabaseConfig {
-    if let Ok(database_url) = std::env::var("DATABASE_URL") {
-        // Parsear URL de conexión si está disponible
-        if let Ok(config) = parse_database_url(&database_url) {
-            return config;
+    // 1. Intentar obtener la configuración base (MySQL)
+    let mut config = if let Ok(database_url) = std::env::var("DATABASE_URL") {
+        // Si hay URL, la usamos como base
+        match parse_database_url(&database_url) {
+            Ok(cfg) => cfg,
+            Err(_) => DatabaseConfig::default(), // Fallback si la URL es inválida
         }
+    } else {
+        // Si no hay URL, construimos la base con variables sueltas
+        DatabaseConfig {
+            host: std::env::var("DB_HOST")
+                .or_else(|_| std::env::var("DB_REMOTE_HOST"))
+                .unwrap_or_else(|_| "localhost".to_string()),
+            port: std::env::var("DB_PORT")
+                .or_else(|_| std::env::var("DB_REMOTE_PORT"))
+                .unwrap_or_else(|_| "3306".to_string())
+                .parse()
+                .unwrap_or(3306),
+            username: std::env::var("DB_USERNAME").unwrap_or_else(|_| "root".to_string()),
+            password: std::env::var("DB_PASSWORD").unwrap_or_else(|_| "".to_string()),
+            database: std::env::var("DB_DATABASE").unwrap_or_else(|_| "toscaninidb".to_string()),
+            ssl_ca: std::env::var("DB_SSL_CA").ok(),
+            ssl_cert: std::env::var("DB_SSL_CERT").ok(),
+            ssl_key: std::env::var("DB_SSL_KEY").ok(),
+            // Inicializar SSH en None temporalmente
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_path: None,
+            ssh_remote_host: None,
+            ssh_remote_port: None,
+            ssh_local_port: None,
+        }
+    };
+
+    // 2. AHORA inyectamos la configuración SSH/BASTION (Esto se ejecuta siempre)
+    // Mapeamos tanto SSH_* como BASTION_*
+    
+    if config.ssh_host.is_none() {
+        config.ssh_host = std::env::var("SSH_HOST").or_else(|_| std::env::var("BASTION_HOST")).ok();
+    }
+    
+    if config.ssh_port.is_none() {
+        config.ssh_port = std::env::var("SSH_PORT")
+            .or_else(|_| std::env::var("BASTION_PORT"))
+            .ok()
+            .and_then(|p| p.parse().ok());
+    }
+    
+    if config.ssh_user.is_none() {
+        config.ssh_user = std::env::var("SSH_USER").or_else(|_| std::env::var("BASTION_USERNAME")).ok();
+    }
+    
+    if config.ssh_password.is_none() {
+        config.ssh_password = std::env::var("SSH_PASSWORD").ok();
+    }
+    
+    if config.ssh_key_path.is_none() {
+        config.ssh_key_path = std::env::var("SSH_KEY_PATH")
+            .or_else(|_| std::env::var("BASTION_PRIVATE_KEY_PATH"))
+            .ok();
+    }
+    
+    if config.ssh_remote_host.is_none() {
+        config.ssh_remote_host = std::env::var("SSH_REMOTE_HOST").or_else(|_| std::env::var("DB_REMOTE_HOST")).ok();
+    }
+    
+    if config.ssh_remote_port.is_none() {
+        config.ssh_remote_port = std::env::var("SSH_REMOTE_PORT")
+            .or_else(|_| std::env::var("DB_REMOTE_PORT"))
+            .ok()
+            .and_then(|p| p.parse().ok());
+    }
+    
+    if config.ssh_local_port.is_none() {
+        config.ssh_local_port = std::env::var("SSH_LOCAL_PORT")
+            .or_else(|_| std::env::var("BASTION_LOCAL_PORT"))
+            .ok()
+            .and_then(|p| p.parse().ok());
     }
 
-    // Usar variables individuales o valores por defecto
-    DatabaseConfig {
-        host: std::env::var("DB_HOST").unwrap_or_else(|_| "localhost".to_string()),
-        port: std::env::var("DB_PORT")
-            .unwrap_or_else(|_| "3306".to_string())
-            .parse()
-            .unwrap_or(3306),
-        username: std::env::var("DB_USERNAME").unwrap_or_else(|_| "root".to_string()),
-        password: std::env::var("DB_PASSWORD").unwrap_or_else(|_| "".to_string()),
-        database: std::env::var("DB_DATABASE").unwrap_or_else(|_| "toscanini_db".to_string()),
-        ssl_ca: std::env::var("DB_SSL_CA").ok(),
-        ssl_cert: std::env::var("DB_SSL_CERT").ok(),
-        ssl_key: std::env::var("DB_SSL_KEY").ok(),
-        // Variables SSH
-        ssh_host: std::env::var("SSH_HOST").ok(),
-        ssh_port: std::env::var("SSH_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok()),
-        ssh_user: std::env::var("SSH_USER").ok(),
-        ssh_password: std::env::var("SSH_PASSWORD").ok(),
-        ssh_key_path: std::env::var("SSH_KEY_PATH").ok(),
-        ssh_remote_host: std::env::var("SSH_REMOTE_HOST").ok(),
-        ssh_remote_port: std::env::var("SSH_REMOTE_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok()),
-        ssh_local_port: std::env::var("SSH_LOCAL_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok()),
-    }
+    config
 }
 
 /// Parsea una URL de conexión MySQL

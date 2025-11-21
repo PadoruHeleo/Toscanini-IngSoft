@@ -121,7 +121,8 @@ async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: 
     let mut options = MySqlConnectOptions::new()
         .host(&host)
         .port(port)
-        .username(&config.username);
+        .username(&config.username)
+        .statement_cache_capacity(0); // Ayuda con problemas de protocolo en túneles
     
     // Solo agregar password si NO está vacía (para compatibilidad con XAMPP)
     if !config.password.is_empty() {
