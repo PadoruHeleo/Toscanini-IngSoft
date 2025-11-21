@@ -75,32 +75,46 @@ fn verify_ssl_certificates(config: &DatabaseConfig) -> Result<(), sqlx::Error> {
 async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: bool) -> Result<MySqlConnectOptions, sqlx::Error> {
     use sqlx::mysql::MySqlSslMode;
     
+    println!("[DB] build_mysql_connect_options: Construyendo opciones de conexión MySQL");
+    println!("[DB] build_mysql_connect_options: include_database={}", include_database);
+    
     // Si hay túnel SSH, usar localhost y el puerto local del túnel
     let (host, port) = if is_ssh_configured(config) {
+        println!("[DB] build_mysql_connect_options: SSH está configurado, obteniendo puerto del túnel...");
         let local_port = if let Some(tunnel_arc) = SSH_TUNNEL.get() {
             if let Ok(tunnel_guard) = tunnel_arc.lock() {
                 if let Some(ref tunnel) = *tunnel_guard {
                     if let Ok(tunnel_lock) = tunnel.lock() {
-                        Some(tunnel_lock.local_port())
+                        let port = tunnel_lock.local_port();
+                        println!("[DB] build_mysql_connect_options: ✓ Puerto del túnel obtenido: {}", port);
+                        Some(port)
                     } else {
+                        println!("[DB] build_mysql_connect_options: ERROR: No se pudo obtener lock del túnel");
                         None
                     }
                 } else {
+                    println!("[DB] build_mysql_connect_options: No hay túnel guardado");
                     None
                 }
             } else {
+                println!("[DB] build_mysql_connect_options: ERROR: No se pudo obtener lock del guard");
                 None
             }
         } else {
+            println!("[DB] build_mysql_connect_options: ERROR: SSH_TUNNEL no está inicializado");
             None
         };
         
         if let Some(local_port) = local_port {
+            println!("[DB] build_mysql_connect_options: Usando túnel SSH - localhost:{}", local_port);
             ("localhost".to_string(), local_port)
         } else {
+            println!("[DB] build_mysql_connect_options: No se pudo obtener puerto del túnel, usando configuración original");
             (config.host.clone(), config.port)
         }
     } else {
+        println!("[DB] build_mysql_connect_options: SSH no está configurado, usando configuración directa");
+        println!("[DB] build_mysql_connect_options: Host={}, Port={}", config.host, config.port);
         (config.host.clone(), config.port)
     };
     
@@ -170,58 +184,80 @@ async fn build_mysql_connect_options(config: &DatabaseConfig, include_database: 
 
 /// Crea o obtiene el túnel SSH si está configurado
 async fn ensure_ssh_tunnel(config: &DatabaseConfig) -> Result<(), Box<dyn std::error::Error>> {
+    println!("[DB] ensure_ssh_tunnel: Verificando configuración SSH...");
+    
     if !is_ssh_configured(config) {
+        println!("[DB] ensure_ssh_tunnel: SSH no está configurado, continuando sin túnel");
         return Ok(());
     }
     
+    println!("[DB] ensure_ssh_tunnel: SSH está configurado");
+    println!("[DB] ensure_ssh_tunnel: SSH_HOST={:?}, SSH_USER={:?}", config.ssh_host, config.ssh_user);
+    
     // Inicializar SSH_TUNNEL si no existe
     if SSH_TUNNEL.get().is_none() {
+        println!("[DB] ensure_ssh_tunnel: Inicializando SSH_TUNNEL...");
         let _ = SSH_TUNNEL.set(Arc::new(Mutex::new(None)));
+        println!("[DB] ensure_ssh_tunnel: ✓ SSH_TUNNEL inicializado");
     }
     
     // Verificar si ya existe un túnel activo
-    // Simplificar la verificación para evitar problemas de borrow checker
+    println!("[DB] ensure_ssh_tunnel: Verificando si existe un túnel activo...");
     let existing_port = {
         if let Some(tunnel_arc) = SSH_TUNNEL.get() {
             if let Ok(guard) = tunnel_arc.lock() {
                 if let Some(ref tunnel) = *guard {
+                    println!("[DB] ensure_ssh_tunnel: Túnel encontrado, verificando estado...");
                     // Bloque interno para tunnel_lock - se dropea antes que guard
                     if let Ok(lock) = tunnel.lock() {
                         if lock.is_active() {
-                            Some(lock.local_port())
+                            let port = lock.local_port();
+                            println!("[DB] ensure_ssh_tunnel: ✓ Túnel activo encontrado en puerto {}", port);
+                            Some(port)
                         } else {
+                            println!("[DB] ensure_ssh_tunnel: Túnel encontrado pero no está activo");
                             None
                         }
                     } else {
+                        println!("[DB] ensure_ssh_tunnel: Error al obtener lock del túnel");
                         None
                     }
                 } else {
+                    println!("[DB] ensure_ssh_tunnel: No hay túnel guardado");
                     None
                 }
             } else {
+                println!("[DB] ensure_ssh_tunnel: Error al obtener lock del guard");
                 None
             }
         } else {
+            println!("[DB] ensure_ssh_tunnel: SSH_TUNNEL no está inicializado");
             None
         }
     };
     
     if let Some(port) = existing_port {
-        println!("Túnel SSH ya está activo en puerto {}", port);
+        println!("[DB] ensure_ssh_tunnel: ✓ Túnel SSH ya está activo en puerto {}", port);
         return Ok(());
     }
     
     // Crear nuevo túnel si no existe o no está activo (fuera del lock para evitar problemas de Send)
-    println!("Creando nuevo túnel SSH...");
+    println!("[DB] ensure_ssh_tunnel: No hay túnel activo, creando nuevo túnel SSH...");
     let tunnel = SshTunnel::create(config).await?;
     let local_port = tunnel.local_port();
+    println!("[DB] ensure_ssh_tunnel: ✓ Túnel SSH creado, puerto local: {}", local_port);
     
     // Guardar el túnel
+    println!("[DB] ensure_ssh_tunnel: Guardando túnel en SSH_TUNNEL...");
     if let Some(tunnel_arc) = SSH_TUNNEL.get() {
         if let Ok(mut tunnel_guard) = tunnel_arc.lock() {
             *tunnel_guard = Some(Arc::new(Mutex::new(tunnel)));
-            println!("Túnel SSH creado exitosamente en puerto {}", local_port);
+            println!("[DB] ensure_ssh_tunnel: ✓ Túnel SSH guardado exitosamente en puerto {}", local_port);
+        } else {
+            println!("[DB] ensure_ssh_tunnel: ERROR: No se pudo obtener lock para guardar túnel");
         }
+    } else {
+        println!("[DB] ensure_ssh_tunnel: ERROR: SSH_TUNNEL no está inicializado");
     }
     
     Ok(())
@@ -243,15 +279,34 @@ pub fn close_ssh_tunnel() {
 
 /// Conecta a MySQL usando las opciones configuradas (con soporte SSL y SSH)
 async fn connect_mysql_pool(config: &DatabaseConfig, include_database: bool) -> Result<Pool<MySql>, sqlx::Error> {
+    println!("[DB] connect_mysql_pool: Iniciando conexión a MySQL");
+    println!("[DB] connect_mysql_pool: include_database={}", include_database);
+    
     // Asegurar que el túnel SSH esté activo si está configurado
+    println!("[DB] connect_mysql_pool: Asegurando túnel SSH...");
     if let Err(e) = ensure_ssh_tunnel(config).await {
+        println!("[DB] connect_mysql_pool: ERROR creando túnel SSH: {}", e);
         return Err(sqlx::Error::Configuration(
             format!("Error creando túnel SSH: {}", e).into()
         ));
     }
+    println!("[DB] connect_mysql_pool: ✓ Túnel SSH verificado/creado");
     
+    println!("[DB] connect_mysql_pool: Construyendo opciones de conexión...");
     let options = build_mysql_connect_options(config, include_database).await?;
-    MySqlPool::connect_with(options).await
+    println!("[DB] connect_mysql_pool: ✓ Opciones de conexión construidas");
+    println!("[DB] connect_mysql_pool: Conectando a MySQL...");
+    
+    match MySqlPool::connect_with(options).await {
+        Ok(pool) => {
+            println!("[DB] connect_mysql_pool: ✓ Conexión a MySQL exitosa");
+            Ok(pool)
+        }
+        Err(e) => {
+            println!("[DB] connect_mysql_pool: ERROR conectando a MySQL: {}", e);
+            Err(e)
+        }
+    }
 }
 
 pub async fn init_database() -> Result<(), sqlx::Error> {
