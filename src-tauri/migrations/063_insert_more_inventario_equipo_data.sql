@@ -1,0 +1,2 @@
+-- No hay más datos de inventario de equipos en la base de datos real
+-- Esta migración queda vacía pero se mantiene para mantener la estructura

@@ -8,15 +8,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Edit, Trash2, History } from "lucide-react";
-import { ClienteFormDialog } from "./ClienteFormDialog";
-import { ClienteHistorialDialog } from "./ClienteHistorialDialog";
+import { ClienteFormDialog } from "./dialogs/ClienteFormDialog";
+import { ClienteHistorialDialog } from "./dialogs/ClienteHistorialDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { UnificarFiltrosClientes } from "./UnificarFiltrosClientes";
+import { UnificarFiltrosClientes } from "./filters/UnificarFiltrosClientes";
 import { useClientePermissions } from "@/hooks/use-permissions";
 import {
   Dialog,
@@ -61,9 +61,9 @@ export function ClientesView() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Validación de texto (sin números)
+  // Validación de texto: permitir letras, números y caracteres comunes (RUT, email, fechas)
   const isValidText = (text: string) =>
-    /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s'\-]*$/.test(text);
+    /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s'"\-._,\/:@.]*$/.test(text);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -71,10 +71,6 @@ export function ClientesView() {
   };
 
   const handleClearSearch = () => setSearchTerm("");
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (/[0-9]/.test(e.key)) e.preventDefault();
-  };
 
   // Cargar clientes inicial
   useEffect(() => {
@@ -101,7 +97,7 @@ export function ClientesView() {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
     searchTimeoutRef.current = setTimeout(() => {
-      // UnificarFiltrosClientes se encarga de filtrar
+      // UnificarFiltrosClientes se encarga de filtrar mediante la prop searchTerm
     }, 150);
 
     return () => {
@@ -174,7 +170,7 @@ export function ClientesView() {
 
   if (loading) {
     return (
-      <div className="p-4">
+      <div className="px-6 pt-6">
         <ViewTitle />
         <div className="text-center py-8">Cargando clientes...</div>
       </div>
@@ -182,8 +178,8 @@ export function ClientesView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <ViewTitle />
         {canCreateCliente && (
           <Button onClick={() => setShowAddForm(true)}>Agregar Cliente</Button>
@@ -196,17 +192,16 @@ export function ClientesView() {
       </div>
 
       {/* Barra de búsqueda */}
-      <div className="flex items-center space-x-2 mb-4">
+      <div className="flex items-center space-x-2">
         <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
-            placeholder="Buscar por nombre..."
+            placeholder="Buscar por RUT, Nombre, Correo, Teléfono o Dirección"
             value={searchTerm}
             onChange={handleSearchChange}
-            onKeyPress={handleKeyPress}
             className="pl-8"
-            title="Solo se permiten letras y espacios"
+            title="Buscar por RUT, Nombre, Correo, Teléfono o Dirección"
           />
         </div>
         <div className="flex-grow min-w-0">

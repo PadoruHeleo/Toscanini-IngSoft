@@ -89,6 +89,7 @@ pub struct Filtros {
     pub modelos: Option<Vec<String>>, 
     pub prioridades: Option<Vec<String>>,
     pub clientes: Option<Vec<String>>,
+    pub estados: Option<Vec<String>>, // ← NUEVO
 }
 
 /// Obtener todas las órdenes de trabajo
@@ -102,7 +103,7 @@ pub async fn get_ordenes_trabajo() -> Result<Vec<OrdenTrabajo>, String> {
          FROM ORDEN_TRABAJO 
          ORDER BY created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -119,7 +120,7 @@ pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabaj
          WHERE orden_id = ?"
     )
     .bind(orden_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -136,7 +137,7 @@ pub async fn get_orden_trabajo_by_codigo(orden_codigo: String) -> Result<Option<
          WHERE orden_codigo = ?"
     )
     .bind(orden_codigo)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -155,7 +156,7 @@ pub async fn get_ordenes_trabajo_by_equipo(equipo_id: i32) -> Result<Vec<OrdenTr
          ORDER BY created_at DESC"
     )
     .bind(equipo_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -174,7 +175,7 @@ pub async fn get_ordenes_trabajo_by_estado(estado: String) -> Result<Vec<OrdenTr
          ORDER BY created_at DESC"
     )
     .bind(estado)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -193,7 +194,7 @@ pub async fn get_ordenes_trabajo_by_prioridad(prioridad: String) -> Result<Vec<O
          ORDER BY created_at DESC"
     )
     .bind(prioridad)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -212,7 +213,7 @@ pub async fn get_ordenes_trabajo_by_usuario(usuario_id: i32) -> Result<Vec<Orden
          ORDER BY created_at DESC"
     )
     .bind(usuario_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -242,7 +243,7 @@ pub async fn get_ordenes_trabajo_detalladas() -> Result<Vec<OrdenTrabajoDetallad
          LEFT JOIN INFORME inf ON ot.informe_id = inf.informe_id
          ORDER BY ot.created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -271,7 +272,7 @@ pub async fn get_orden_trabajo_detallada_by_id(orden_id: i32) -> Result<Option<O
          WHERE ot.orden_id = ?"
     )
     .bind(orden_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -291,7 +292,7 @@ pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<
         "SELECT orden_codigo FROM ORDEN_TRABAJO WHERE orden_codigo LIKE ? ORDER BY orden_id DESC LIMIT 1"
     )
     .bind(format!("OT-{}-%", year))
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .ok();
     
@@ -324,7 +325,7 @@ pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<
     .bind(request.cotizacion_id)
     .bind(request.informe_id)
     .bind(&request.pre_informe)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -425,7 +426,7 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
     query_builder = query_builder.bind(orden_id);
     
     query_builder
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
@@ -472,7 +473,8 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
 #[tauri::command]
 pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
-      // Validar que el estado sea válido
+    
+    // Validar que el estado sea válido
     let estados_validos = vec![
         "recibido",
         "cotizacion_enviada", 
@@ -486,7 +488,41 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
     ];
     if !estados_validos.contains(&nuevo_estado.as_str()) {
         return Err("Estado no válido".to_string());
-    }    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    }
+    
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    
+    // NUEVA VALIDACIÓN: Si se intenta cambiar a "en_reparacion", validar que la cotización esté aprobada
+    if nuevo_estado == "en_reparacion" {
+        if let Some(ref orden) = current_orden {
+            // Verificar que el estado actual permita este cambio
+            let estado_actual = orden.estado.as_deref().unwrap_or("");
+            if estado_actual != "cotizacion_enviada" && estado_actual != "aprobacion_pendiente" {
+                return Err(format!(
+                    "No se puede cambiar a 'en_reparacion' desde el estado '{}'. Solo se permite desde 'cotizacion_enviada' o 'aprobacion_pendiente'.",
+                    estado_actual
+                ));
+            }
+            
+            // Verificar que existe una cotización asociada
+            if let Some(cotizacion_id) = orden.cotizacion_id {
+                // Verificar que la cotización esté aprobada
+                let cotizacion_aprobada: Option<i32> = sqlx::query_scalar(
+                    "SELECT is_aprobada FROM COTIZACION WHERE cotizacion_id = ?"
+                )
+                .bind(cotizacion_id)
+                .fetch_optional(&*pool)
+                .await
+                .map_err(|e| format!("Error verificando estado de cotización: {}", e))?;
+                
+                if cotizacion_aprobada != Some(1) {
+                    return Err("No se puede cambiar a 'en_reparacion' porque la cotización no está aprobada. Debe aprobar la cotización primero.".to_string());
+                }
+            } else {
+                return Err("No se puede cambiar a 'en_reparacion' porque la orden no tiene una cotización asociada.".to_string());
+            }
+        }
+    }
     
     // Si el estado es 'entregado', actualizar finished_at
     let query_builder = if nuevo_estado == "entregado" {
@@ -500,7 +536,7 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
     };
     
     query_builder
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -513,7 +549,23 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
         current_orden.as_ref().and_then(|o| o.estado.as_deref()),
         Some(&nuevo_estado)
     ).await;
-    
+
+    // Si el nuevo estado es "espera_de_retiro", enviar email automáticamente con el informe
+    if nuevo_estado == "espera_de_retiro" {
+        println!("🔄 Estado cambiado a 'espera_de_retiro', enviando email automáticamente al cliente...");
+        // Intentar enviar el email, pero no fallar si hay algún problema (solo loguear)
+        match crate::email::send_informe_email(orden_id, updated_by).await {
+            Ok(msg) => {
+                println!("✅ Email de informe enviado exitosamente: {}", msg);
+            }
+            Err(e) => {
+                eprintln!("⚠️ No se pudo enviar el email de informe automáticamente: {}", e);
+                // No retornamos error aquí para que el cambio de estado se complete
+                // El email puede enviarse manualmente después si es necesario
+            }
+        }
+    }
+
     get_orden_trabajo_by_id(orden_id).await
 }
 
@@ -525,7 +577,7 @@ pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32,
     sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = ? WHERE orden_id = ?")
         .bind(cotizacion_id)
         .bind(orden_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -547,10 +599,25 @@ pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32,
 pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
+    // NUEVA VALIDACIÓN: Verificar que la orden esté en estado "en_reparacion"
+    let orden = get_orden_trabajo_by_id(orden_id).await?
+        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
+    
+    if let Some(estado) = &orden.estado {
+        if estado != "en_reparacion" {
+            return Err(format!(
+                "No se puede asignar un informe a una orden en estado '{}'. Solo se pueden crear informes cuando la orden está en estado 'en_reparacion'.",
+                estado
+            ));
+        }
+    } else {
+        return Err("No se puede determinar el estado de la orden.".to_string());
+    }
+    
     sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = ? WHERE orden_id = ?")
         .bind(informe_id)
         .bind(orden_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -577,7 +644,7 @@ pub async fn delete_orden_trabajo(orden_id: i32, deleted_by: i32) -> Result<bool
     
     let result = sqlx::query("DELETE FROM ORDEN_TRABAJO WHERE orden_id = ?")
         .bind(orden_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -626,7 +693,7 @@ pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
     let stats_estado: Vec<CountByField> = sqlx::query_as(
         "SELECT estado, NULL as prioridad, COUNT(*) as count FROM ORDEN_TRABAJO GROUP BY estado"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -634,19 +701,19 @@ pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
     let stats_prioridad: Vec<CountByField> = sqlx::query_as(
         "SELECT NULL as estado, prioridad, COUNT(*) as count FROM ORDEN_TRABAJO GROUP BY prioridad"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
     // Total de órdenes
     let total: CountResult = sqlx::query_as("SELECT COUNT(*) as count FROM ORDEN_TRABAJO")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
     // Órdenes con garantía
     let con_garantia: CountResult = sqlx::query_as("SELECT COUNT(*) as count FROM ORDEN_TRABAJO WHERE has_garantia = TRUE")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
       let stats = serde_json::json!({
@@ -696,7 +763,7 @@ pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrab
     .bind(&search_pattern)
     .bind(&search_pattern)
     .bind(&search_pattern)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -723,7 +790,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
         "SELECT cliente_nombre FROM CLIENTE WHERE cliente_id = ?"
     )
     .bind(equipo.cliente_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?
     .unwrap_or_else(|| "Cliente no encontrado".to_string());
@@ -761,12 +828,12 @@ pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<O
     let orden = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, 
                 has_garantia, equipo_id, cotizacion_id, informe_id, 
-                created_by, created_at 
+                pre_informe, created_by, created_at, finished_at
          FROM ORDEN_TRABAJO 
          WHERE informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -850,6 +917,17 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
         }
     }
     
+    // Nuevo filtro por estados
+    if let Some(estados) = filtros.estados {
+        if !estados.is_empty() {
+            let placeholders = vec!["?"; estados.len()].join(",");
+            query.push_str(&format!(" AND LOWER(ot.estado) IN ({})", placeholders));
+            for estado in estados {
+                params.push(estado.to_lowercase());
+            }
+        }
+    }
+    
     query.push_str(" ORDER BY ot.created_at DESC");
 
     let mut sqlx_query = sqlx::query_as::<_, OrdenTrabajoDetallada>(&query);
@@ -859,7 +937,7 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
     }
 
     sqlx_query
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))
 }
@@ -870,7 +948,7 @@ pub async fn get_modelos_disponibles() -> Result<Vec<String>, String> {
     let modelos = sqlx::query_scalar::<_, String>(
         "SELECT DISTINCT equipo_modelo FROM EQUIPO WHERE equipo_modelo IS NOT NULL AND equipo_modelo != '' ORDER BY equipo_modelo"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -883,7 +961,7 @@ pub async fn get_marcas_disponibles() -> Result<Vec<String>, String> {
     let marcas = sqlx::query_scalar::<_, String>(
         "SELECT DISTINCT equipo_marca FROM EQUIPO WHERE equipo_marca IS NOT NULL AND equipo_marca != '' ORDER BY equipo_marca"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -901,7 +979,7 @@ pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
          WHERE c.cliente_nombre IS NOT NULL AND c.cliente_nombre != '' 
          ORDER BY c.cliente_nombre"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -919,7 +997,7 @@ pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<Orden
          ORDER BY created_at DESC"
     )
     .bind(cliente_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     Ok(ordenes)
@@ -931,7 +1009,7 @@ pub async fn remove_cotizacion_from_ordenes(cotizacion_id: i32, updated_by: i32)
     
     let result = sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = NULL WHERE cotizacion_id = ?")
         .bind(cotizacion_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -958,7 +1036,7 @@ pub async fn remove_informe_from_ordenes(informe_id: i32, updated_by: i32) -> Re
     
     let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
         .bind(informe_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     

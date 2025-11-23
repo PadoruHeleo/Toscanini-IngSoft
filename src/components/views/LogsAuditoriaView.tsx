@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Eye } from "lucide-react";
@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { UnificarFiltrosLogs } from "./UnificarFiltrosLogs";
+import { UnificarFiltrosLogs } from "./filters/UnificarFiltrosLogs";
 
 interface AuditLogWithUser {
   log_id: number;
@@ -135,7 +135,7 @@ export function LogsAuditoriaView() {
 
   if (loading) {
     return (
-      <div className="p-4">
+      <div className="px-6 pt-6">
         <ViewTitle onRefresh={loadLogs} />
         <div className="text-center py-8">Cargando logs de auditoría...</div>
       </div>
@@ -143,13 +143,13 @@ export function LogsAuditoriaView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <ViewTitle onRefresh={loadLogs} />
       </div>
 
       {/* Barra de búsqueda y filtros unificados */}
-      <div className="flex items-center space-x-2 mb-4">
+      <div className="flex items-center space-x-2">
         <div className="relative w-auto">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input

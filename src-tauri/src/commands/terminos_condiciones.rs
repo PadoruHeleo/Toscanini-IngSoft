@@ -3,6 +3,7 @@ use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
 use chrono::{DateTime, Utc};
+use std::collections::HashSet;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct TerminoCondicion {
@@ -78,7 +79,7 @@ pub async fn get_terminos_condiciones() -> Result<Vec<TerminoCondicion>, String>
          FROM TERMINOS_CONDICIONES
          ORDER BY termino_nombre ASC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -97,7 +98,7 @@ pub async fn get_terminos_condiciones_activos() -> Result<Vec<TerminoCondicion>,
          WHERE is_active = TRUE
          ORDER BY termino_nombre ASC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -117,7 +118,7 @@ pub async fn get_terminos_condiciones_by_tipo(tipo: String) -> Result<Vec<Termin
          ORDER BY is_default DESC, termino_nombre ASC"
     )
     .bind(tipo)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -138,7 +139,7 @@ pub async fn get_terminos_condiciones_default(tipo: String) -> Result<Vec<Termin
          ORDER BY termino_nombre ASC"
     )
     .bind(tipo)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -157,7 +158,7 @@ pub async fn get_termino_condicion_by_id(termino_id: i32) -> Result<Option<Termi
          WHERE termino_id = ?"
     )
     .bind(termino_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -186,7 +187,7 @@ pub async fn create_termino_condicion(
     .bind(&request.termino_descripcion)
     .bind(&request.tipo_referencia)
     .bind(request.is_default.unwrap_or(false))
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -272,7 +273,7 @@ pub async fn update_termino_condicion(
     query_builder = query_builder.bind(termino_id);
     
     let result = query_builder
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -318,7 +319,7 @@ pub async fn delete_termino_condicion(termino_id: i32, deleted_by: i32) -> Resul
         "UPDATE TERMINOS_CONDICIONES SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE termino_id = ?"
     )
     .bind(termino_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -356,7 +357,7 @@ pub async fn get_terminos_by_informe(informe_id: i32) -> Result<Vec<TerminoInfor
          ORDER BY tc.termino_nombre ASC"
     )
     .bind(informe_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -377,7 +378,7 @@ pub async fn get_terminos_by_cotizacion(cotizacion_id: i32) -> Result<Vec<Termin
          ORDER BY t.termino_nombre ASC"
     )
     .bind(cotizacion_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -392,12 +393,38 @@ pub async fn apply_terminos_to_informe(
     applied_by: i32
 ) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
+    
+    // Obtener términos actuales del informe
+    let terminos_actuales = get_terminos_by_informe(informe_id).await?;
+    
+    // Normalizar los términos actuales para comparación (solo IDs y estado aplicado)
+    let terminos_actuales_set: HashSet<(i32, bool)> = terminos_actuales
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Normalizar los términos nuevos para comparación
+    let terminos_nuevos_set: HashSet<(i32, bool)> = terminos
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Comparar si hay cambios
+    if terminos_actuales_set == terminos_nuevos_set {
+        println!("ℹ️ apply_terminos_to_informe: No hay cambios en los términos para informe_id {}. No se actualiza ni registra en auditoría.", informe_id);
+        return Ok(()); // No hay cambios, retornar sin hacer nada ni registrar en auditoría
+    }
+    
+    println!("🔄 apply_terminos_to_informe: Detectados cambios en términos para informe_id {}, procediendo con actualización", informe_id);
     let terminos_count = terminos.len();
     
-    // Primero, eliminar términos existentes para este informe
+    // Iniciar transacción
+    let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
+    
+    // Eliminar términos existentes para este informe
     sqlx::query("DELETE FROM TERMINOS_INFORME WHERE informe_id = ?")
         .bind(informe_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error removing existing terms: {}", e))?;
     
@@ -409,12 +436,15 @@ pub async fn apply_terminos_to_informe(
         .bind(termino.termino_id)
         .bind(informe_id)
         .bind(termino.aplicado.unwrap_or(true))
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error applying term: {}", e))?;
     }
     
-    // Registrar en el log de auditoría
+    // Confirmar transacción
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
+    
+    // Registrar en el log de auditoría solo si hubo cambios
     let _ = log_action(
         "APPLY_TERMINOS_INFORME",
         Some(applied_by),
@@ -435,12 +465,38 @@ pub async fn apply_terminos_to_cotizacion(
     applied_by: i32
 ) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
+    
+    // Obtener términos actuales de la cotización
+    let terminos_actuales = get_terminos_by_cotizacion(cotizacion_id).await?;
+    
+    // Normalizar los términos actuales para comparación (solo IDs y estado aplicado)
+    let terminos_actuales_set: HashSet<(i32, bool)> = terminos_actuales
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Normalizar los términos nuevos para comparación
+    let terminos_nuevos_set: HashSet<(i32, bool)> = terminos
+        .iter()
+        .map(|t| (t.termino_id, t.aplicado.unwrap_or(true)))
+        .collect();
+    
+    // Comparar si hay cambios
+    if terminos_actuales_set == terminos_nuevos_set {
+        println!("ℹ️ apply_terminos_to_cotizacion: No hay cambios en los términos para cotizacion_id {}. No se actualiza ni registra en auditoría.", cotizacion_id);
+        return Ok(()); // No hay cambios, retornar sin hacer nada ni registrar en auditoría
+    }
+    
+    println!("🔄 apply_terminos_to_cotizacion: Detectados cambios en términos para cotizacion_id {}, procediendo con actualización", cotizacion_id);
     let terminos_count = terminos.len();
     
-    // Primero, eliminar términos existentes para esta cotización
+    // Iniciar transacción
+    let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
+    
+    // Eliminar términos existentes para esta cotización
     sqlx::query("DELETE FROM TERMINOS_COTIZACION WHERE cotizacion_id = ?")
         .bind(cotizacion_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error removing existing terms: {}", e))?;
     
@@ -452,12 +508,15 @@ pub async fn apply_terminos_to_cotizacion(
         .bind(termino.termino_id)
         .bind(cotizacion_id)
         .bind(termino.aplicado.unwrap_or(true))
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Database error applying term: {}", e))?;
     }
     
-    // Registrar en el log de auditoría
+    // Confirmar transacción
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
+    
+    // Registrar en el log de auditoría solo si hubo cambios
     let _ = log_action(
         "APPLY_TERMINOS_COTIZACION",
         Some(applied_by),
@@ -541,7 +600,7 @@ pub async fn reactivate_termino_condicion(termino_id: i32, reactivated_by: i32) 
         "UPDATE TERMINOS_CONDICIONES SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE termino_id = ?"
     )
     .bind(termino_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -583,7 +642,7 @@ pub async fn toggle_termino_default(
     )
     .bind(is_default)
     .bind(termino_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -626,7 +685,7 @@ pub async fn create_termino_informe_relation(
     .bind(termino_id)
     .bind(informe_id)
     .bind(aplicado.unwrap_or(true))
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -667,7 +726,7 @@ pub async fn create_termino_cotizacion_relation(
     .bind(termino_id)
     .bind(cotizacion_id)
     .bind(aplicado.unwrap_or(true))
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -704,7 +763,7 @@ pub async fn update_termino_informe_relation(
     .bind(aplicado)
     .bind(termino_id)
     .bind(informe_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -745,7 +804,7 @@ pub async fn update_termino_cotizacion_relation(
     .bind(aplicado)
     .bind(termino_id)
     .bind(cotizacion_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -784,7 +843,7 @@ pub async fn delete_termino_informe_relation(
     )
     .bind(termino_id)
     .bind(informe_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -819,7 +878,7 @@ pub async fn delete_termino_cotizacion_relation(
     )
     .bind(termino_id)
     .bind(cotizacion_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -854,7 +913,7 @@ pub async fn get_informes_by_termino(termino_id: i32) -> Result<Vec<TerminoInfor
          ORDER BY ti.created_at DESC"
     )
     .bind(termino_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -875,7 +934,7 @@ pub async fn get_cotizaciones_by_termino(termino_id: i32) -> Result<Vec<TerminoC
          ORDER BY tc.created_at DESC"
     )
     .bind(termino_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -895,7 +954,7 @@ pub async fn check_termino_in_informe(
     )
     .bind(termino_id)
     .bind(informe_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -915,7 +974,7 @@ pub async fn check_termino_in_cotizacion(
     )
     .bind(termino_id)
     .bind(cotizacion_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     

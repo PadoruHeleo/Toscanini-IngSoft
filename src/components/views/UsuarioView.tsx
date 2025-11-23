@@ -8,11 +8,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Edit, Trash2 } from "lucide-react";
-import { UsuarioFormDialog } from "./UsuarioFormDialog";
+import { UsuarioFormDialog } from "./dialogs/UsuarioFormDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -128,7 +128,7 @@ export function UsuarioView() {
 
   if (loading) {
     return (
-      <div className="p-4">
+      <div className="px-6 pt-6">
         <ViewTitle />
         <div className="text-center py-8">Cargando usuarios...</div>
       </div>
@@ -136,13 +136,13 @@ export function UsuarioView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <ViewTitle />
         <Button onClick={() => setShowAddForm(true)}>Agregar Usuario</Button>
       </div>
       {/* Barra de búsqueda */}
-      <div className="flex items-center space-x-2 mb-4">
+      <div className="flex items-center space-x-2">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input

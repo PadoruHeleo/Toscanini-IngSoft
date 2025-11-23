@@ -26,9 +26,9 @@ import {
   Edit,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { usePiezasPermissions } from "@/hooks/use-permissions";
-import { AccessDenied } from "@/components/AccessDenied";
+import { AccessDenied } from "@/components/common/AccessDenied";
 import { useToastContext } from "@/contexts/ToastContext";
 
 interface PiezaInventario {
@@ -303,7 +303,7 @@ export function InventarioPiezasView() {
   }
 
   return (
-    <div className="p-6">
+    <div className="px-6 pt-6 space-y-6">
       <ViewTitle onRefresh={handleRefresh} />
 
       <div className="mb-6">

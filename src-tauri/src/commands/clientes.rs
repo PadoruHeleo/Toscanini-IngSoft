@@ -92,7 +92,7 @@ pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
     let clientes = sqlx::query_as::<_, Cliente>(
         &format!("{} WHERE is_active = 1 ORDER BY cliente_nombre", BASE_SELECT)
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -107,7 +107,7 @@ pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, Strin
         &format!("{} WHERE cliente_id = ?", BASE_SELECT)
     )
     .bind(cliente_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -121,7 +121,7 @@ pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, 
         &format!("{} WHERE cliente_rut = ?", BASE_SELECT)
     )
     .bind(cliente_rut)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -135,7 +135,7 @@ pub async fn get_clientes_by_created_by(created_by: i32) -> Result<Vec<Cliente>,
         &format!("{} WHERE created_by = ? AND is_active = 1 ORDER BY cliente_nombre", BASE_SELECT)
     )
     .bind(created_by)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -153,7 +153,7 @@ pub async fn search_clientes(search_term: String) -> Result<Vec<Cliente>, String
     .bind(&search_pattern)
     .bind(&search_pattern)
     .bind(&search_pattern)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -178,7 +178,7 @@ pub async fn create_cliente(request: CreateClienteRequest) -> Result<Cliente, St
     .bind(&request.cliente_telefono)
     .bind(&request.cliente_direccion)
     .bind(&request.created_by)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -231,7 +231,7 @@ pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, upda
     .bind(&request.cliente_telefono)
     .bind(&request.cliente_direccion)
     .bind(cliente_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -279,7 +279,7 @@ pub async fn delete_cliente(request: DeleteClienteRequest) -> Result<bool, Strin
         "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ? AND is_active = 1"
     )
     .bind(request.cliente_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking client existence: {}", e))?;
 
@@ -292,7 +292,7 @@ pub async fn delete_cliente(request: DeleteClienteRequest) -> Result<bool, Strin
         "SELECT COUNT(*) FROM EQUIPO WHERE cliente_id = ?"
     )
     .bind(request.cliente_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
 
@@ -303,7 +303,7 @@ pub async fn delete_cliente(request: DeleteClienteRequest) -> Result<bool, Strin
     // Marcar el cliente como inactivo
     let result = sqlx::query("UPDATE CLIENTE SET is_active = 0 WHERE cliente_id = ?")
         .bind(request.cliente_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
@@ -350,7 +350,7 @@ pub async fn reactivate_cliente(cliente_id: i32, reactivated_by: i32) -> Result<
         "SELECT COUNT(*) FROM CLIENTE WHERE cliente_id = ? AND is_active = 0"
     )
     .bind(cliente_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking client existence: {}", e))?;
     
@@ -361,7 +361,7 @@ pub async fn reactivate_cliente(cliente_id: i32, reactivated_by: i32) -> Result<
     // Marcar el cliente como activo
     let result = sqlx::query("UPDATE CLIENTE SET is_active = 1 WHERE cliente_id = ?")
         .bind(cliente_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -391,7 +391,7 @@ pub async fn reactivate_cliente(cliente_id: i32, reactivated_by: i32) -> Result<
 pub async fn count_clientes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM CLIENTE WHERE is_active = 1")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -407,7 +407,7 @@ pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec
     )
     .bind(limit)
     .bind(offset)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -448,10 +448,12 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
     if let Some(search_term) = filtros.search {
         if !search_term.trim().is_empty() {
             let search_pattern = format!("%{}%", search_term.trim());
-            query.push_str(" AND cliente_nombre LIKE ?");
-            params.push(search_pattern);
+            query.push_str(" AND (cliente_nombre LIKE ? OR cliente_rut LIKE ? OR cliente_correo LIKE ? OR cliente_telefono LIKE ? OR cliente_direccion LIKE ? OR DATE(created_at) LIKE ?)");
+            for _ in 0..6 {
+                params.push(search_pattern.clone());
+            }
         }
-    }
+    }    
     
     // Filtro por fecha
     if let Some(fecha_inicio) = filtros.fecha_inicio {
@@ -507,7 +509,7 @@ pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Clie
     }
 
     let clientes = q
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Database error en get_clientes_filtrados: {}", e))?;
     Ok(clientes)
@@ -526,7 +528,7 @@ pub async fn get_ruts_clientes() -> Result<Vec<String>, String> {
     let ruts = sqlx::query_as::<_, RutResult>(
         "SELECT DISTINCT cliente_rut FROM CLIENTE WHERE cliente_rut IS NOT NULL ORDER BY cliente_rut"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error en get_ruts_clientes: {}", e))?;
 
@@ -551,7 +553,7 @@ pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
     let correos = sqlx::query_as::<_, CorreoResult>(
         "SELECT DISTINCT cliente_correo FROM CLIENTE WHERE cliente_correo IS NOT NULL ORDER BY cliente_correo"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error en get_correos_clientes: {}", e))?;
 
@@ -576,7 +578,7 @@ pub async fn get_ciudades_clientes() -> Result<Vec<String>, String> {
     let ciudades = sqlx::query_as::<_, CiudadResult>(
         "SELECT DISTINCT cliente_direccion FROM CLIENTE WHERE cliente_direccion IS NOT NULL ORDER BY cliente_direccion"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error en get_ciudades_clientes: {}", e))?;
 

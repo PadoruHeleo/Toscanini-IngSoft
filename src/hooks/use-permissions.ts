@@ -231,7 +231,10 @@ export function useOrdenTrabajoPermissions() {
         showViewCotizacion: !!orden.cotizacion_id,
 
         // Botones de informe
-        showCreateInforme: !orden.informe_id && (isAdmin() || isTecnico()),
+        showCreateInforme:
+          !orden.informe_id &&
+          (isAdmin() || isTecnico()) &&
+          orden.estado === "en_reparacion",
         showViewInforme: !!orden.informe_id,
 
         // Botón de eliminar orden

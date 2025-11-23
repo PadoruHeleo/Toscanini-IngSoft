@@ -42,9 +42,9 @@ import {
   Download,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { usePermissions } from "@/hooks/use-permissions";
-import { AccessDenied } from "@/components/AccessDenied";
+import { AccessDenied } from "@/components/common/AccessDenied";
 import { useToastContext } from "@/contexts/ToastContext";
 
 interface SalidaEquipo {
@@ -232,23 +232,8 @@ export function SalidasEquipoView() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-6 pt-6">
       <ViewTitle />
-
-      {/* Título personalizado para esta vista */}
-      <div className="border-b pb-4">
-        <div className="flex items-center space-x-3">
-          <Package className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Salidas de Equipos
-            </h1>
-            <p className="text-muted-foreground">
-              Historial completo de todas las salidas de equipos del sistema
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Estadísticas rápidas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -447,7 +432,7 @@ export function SalidasEquipoView() {
             Mostrando {filteredSalidas.length} de {salidas.length} salidas
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-6">
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>

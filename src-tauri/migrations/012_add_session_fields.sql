@@ -1,5 +1,0 @@
--- Agregar campos de sesión a la tabla USUARIO
-ALTER TABLE USUARIO 
-ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP NULL,
-ADD COLUMN IF NOT EXISTS session_expires_at TIMESTAMP NULL,
-ADD COLUMN IF NOT EXISTS session_token VARCHAR(255) NULL;

@@ -1,10 +1,10 @@
 "use client";
 
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 
 export function HelpView() {
   return (
-    <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+    <div className="px-6 pt-6 space-y-6">
       <ViewTitle />
       <div className="border border-dashed rounded-lg p-6 text-center">
         <p className="text-muted-foreground">

@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ViewTitle } from "@/components/ViewTitle";
+import { ViewTitle } from "@/components/layout/ViewTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,12 +20,12 @@ import {
   FileText,
   LogOut,
 } from "lucide-react";
-import OrdenTrabajoFormDialog from "./OrdenTrabajoFormDialog";
-import CotizacionFormDialog from "./CotizacionFormDialog";
-import InformeFormDialog from "./InformeFormDialog";
-import { PdfViewer } from "@/components/PdfViewer";
-import { UnificarFiltros } from "./UnificarFiltros";
-import { RegistrarSalidaDialog } from "./RegistrarSalidaDialog";
+import OrdenTrabajoFormDialog from "./dialogs/OrdenTrabajoFormDialog";
+import CotizacionFormDialog from "./dialogs/CotizacionFormDialog";
+import InformeFormDialog from "./dialogs/InformeFormDialog";
+import { PdfViewer } from "@/components/features/documents/PdfViewer";
+import { UnificarFiltros } from "./filters/UnificarFiltros";
+import { RegistrarSalidaDialog } from "./dialogs/RegistrarSalidaDialog";
 import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrdenTrabajoPermissions } from "@/hooks/use-permissions";
@@ -103,9 +103,9 @@ const formatEstadoText = (estado?: string) => {
 
 const formatPrioridadText = (prioridad?: string) => {
   const prioridadMap: { [key: string]: string } = {
-    alta: "🔴 Alta",
-    media: "🟡 Media",
-    baja: "🟢 Baja",
+    alta: "Alta",
+    media: "Media",
+    baja: "Baja",
   };
   return prioridadMap[prioridad || ""] || "N/A";
 };
@@ -115,7 +115,6 @@ const getCotizacionButtonInfo = (orden: OrdenTrabajo) => {
     return {
       hasQuote: false,
       text: "Crear Cotización",
-      icon: "plus",
       className: "text-green-600 hover:text-green-700",
       title: "Crear nueva cotización para esta orden",
     };
@@ -176,6 +175,7 @@ export function OrdenesTrabajoView() {
   const [showInformePdfViewer, setShowInformePdfViewer] = useState(false);
   const [pdfInformeId, setPdfInformeId] = useState<number | null>(null);
   const [pdfCotizacionId, setPdfCotizacionId] = useState<number | null>(null);
+  const [pdfOrdenTrabajoId, setPdfOrdenTrabajoId] = useState<number | null>(null);
   const [pdfOrdenCodigo, setPdfOrdenCodigo] = useState<string>("");
 
   // Estados para Registro de Salida
@@ -241,7 +241,23 @@ export function OrdenesTrabajoView() {
     const baseDate = new Date(base);
     const now = new Date();
     const diffMs = now.getTime() - baseDate.getTime();
-    return diffMs > 60 * 60 * 1000;
+
+    // Ajustar el tiempo según el estado y prioridad para coincidir con las alertas
+    if (orden.estado === "recibido") {
+      // Para órdenes de prioridad alta: 24 horas (como checkOrdenPrioridadNoAtendida)
+      if (orden.prioridad === "alta") {
+        return diffMs >= 24 * 60 * 60 * 1000; // 24 horas
+      }
+      // Para órdenes normales en recibido: 3 días (como checkOrdenCotNoEnviada)
+      return diffMs >= 3 * 24 * 60 * 60 * 1000; // 3 días
+    }
+
+    // Para estado "en_reparacion": usar 3 días (tiempo razonable para reparación)
+    if (orden.estado === "en_reparacion") {
+      return diffMs >= 3 * 24 * 60 * 60 * 1000; // 3 días
+    }
+
+    return false;
   };
 
   const ordenesOrdenadas = [...filteredOrdenes].sort((a, b) => {
@@ -425,6 +441,7 @@ export function OrdenesTrabajoView() {
     }
     setPdfInformeId(orden.informe_id || null);
     setPdfCotizacionId(orden.cotizacion_id || null);
+    setPdfOrdenTrabajoId(orden.orden_id || null);
     setPdfOrdenCodigo(orden.orden_codigo || "Sin código");
     setShowInformePdfViewer(true);
   };
@@ -434,6 +451,17 @@ export function OrdenesTrabajoView() {
       showError(
         "Informe existente",
         "Esta orden ya tiene un informe asociado."
+      );
+      return;
+    }
+
+    // NUEVA VALIDACIÓN: Verificar que la orden esté en estado "en_reparacion"
+    if (orden.estado !== "en_reparacion") {
+      showError(
+        "Estado inválido",
+        `No se puede crear un informe para una orden en estado "${formatEstadoText(
+          orden.estado
+        )}". Solo se pueden crear informes cuando la orden está en estado "En Reparación".`
       );
       return;
     }
@@ -489,7 +517,7 @@ export function OrdenesTrabajoView() {
 
   if (loading) {
     return (
-      <div className="p-4">
+      <div className="px-6 pt-6">
         <ViewTitle />
         <div className="text-center py-8">Cargando órdenes de trabajo...</div>
       </div>
@@ -497,8 +525,8 @@ export function OrdenesTrabajoView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <ViewTitle onRefresh={loadOrdenes} />
         <Button onClick={() => setShowAddForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -506,7 +534,7 @@ export function OrdenesTrabajoView() {
         </Button>
       </div>
       {/* Barra de búsqueda */}
-      <div className="flex items-center space-x-2 mb-4">
+      <div className="flex items-center space-x-2">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -590,24 +618,35 @@ export function OrdenesTrabajoView() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {getTiempoEnEstado(
-                      orden.estado_updated_at || orden.created_at
-                    )}
-                    {isTiempoEnEstadoCritico(orden) && (
-                      <span
-                        style={{
-                          color: "#dc2626",
-                          fontWeight: "bold",
-                          marginLeft: 8,
-                        }}
-                      >
-                        Atrasado
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 w-[5.5rem] inline-block text-right">
+                        {getTiempoEnEstado(
+                          orden.estado_updated_at || orden.created_at
+                        )}
                       </span>
-                    )}
+                      {isTiempoEnEstadoCritico(orden) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-300 animate-pulse">
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          Atrasado
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs transition-colors ${getPrioridadStyles(
+                      className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs transition-colors min-w-[4.5rem] ${getPrioridadStyles(
                         orden.prioridad
                       )}`}
                     >
@@ -616,151 +655,164 @@ export function OrdenesTrabajoView() {
                   </TableCell>{" "}
                   <TableCell>
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                      className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors min-w-[3rem] ${
                         orden.has_garantia
                           ? "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200"
                           : "bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200"
                       }`}
                     >
-                      {orden.has_garantia ? "✅ Sí" : "❌ No"}
+                      {orden.has_garantia ? "Sí" : "No"}
                     </span>
                   </TableCell>
                   <TableCell>{formatDate(orden.created_at)}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex gap-1 justify-end flex-wrap">
+                    <div className="flex gap-1 justify-between items-center flex-wrap w-full">
                       {(() => {
                         const actions = getVisibleActions(orden);
 
                         return (
                           <>
-                            {/* Botones de cotización */}
-                            {actions.showCreateCotizacion &&
-                              (() => {
-                                const buttonInfo =
-                                  getCotizacionButtonInfo(orden);
-                                return (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleCrearCotizacion(orden)}
-                                    disabled={
-                                      loadingCotizacion === orden.orden_id
-                                    }
-                                    className={`${buttonInfo.className} disabled:opacity-50`}
-                                    title={buttonInfo.title}
-                                  >
-                                    {loadingCotizacion === orden.orden_id ? (
-                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                    ) : (
-                                      <Plus className="h-3 w-3" />
-                                    )}
-                                    {buttonInfo.text}
-                                  </Button>
-                                );
-                              })()}
+                            {/* Grupo de botones principales (izquierda) */}
+                            <div className="flex gap-1 flex-wrap">
+                              {/* Botones de cotización */}
+                              {actions.showCreateCotizacion &&
+                                (() => {
+                                  const buttonInfo =
+                                    getCotizacionButtonInfo(orden);
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleCrearCotizacion(orden)
+                                      }
+                                      disabled={
+                                        loadingCotizacion === orden.orden_id
+                                      }
+                                      className={`${buttonInfo.className} disabled:opacity-50`}
+                                      title={buttonInfo.title}
+                                    >
+                                      {loadingCotizacion === orden.orden_id ? (
+                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Plus className="h-3 w-3" />
+                                      )}
+                                      {buttonInfo.text}
+                                    </Button>
+                                  );
+                                })()}
 
-                            {actions.showViewCotizacion &&
-                              (() => {
-                                const buttonInfo =
-                                  getCotizacionButtonInfo(orden);
-                                return (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleVerCotizacion(orden)}
-                                    disabled={
-                                      loadingCotizacion === orden.orden_id
-                                    }
-                                    className={`${buttonInfo.className} disabled:opacity-50`}
-                                    title={buttonInfo.title}
-                                  >
-                                    {loadingCotizacion === orden.orden_id ? (
-                                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                    ) : (
-                                      <Eye className="h-3 w-3" />
-                                    )}
-                                    {buttonInfo.text}
-                                  </Button>
-                                );
-                              })()}
+                              {actions.showViewCotizacion &&
+                                (() => {
+                                  const buttonInfo =
+                                    getCotizacionButtonInfo(orden);
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleVerCotizacion(orden)}
+                                      disabled={
+                                        loadingCotizacion === orden.orden_id
+                                      }
+                                      className={`${buttonInfo.className} disabled:opacity-50`}
+                                      title={buttonInfo.title}
+                                    >
+                                      {loadingCotizacion === orden.orden_id ? (
+                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Eye className="h-3 w-3" />
+                                      )}
+                                      {buttonInfo.text}
+                                    </Button>
+                                  );
+                                })()}
 
-                            {/* Botones de informe */}
-                            {actions.showCreateInforme && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCrearInforme(orden)}
-                                className="text-green-600 hover:text-green-700"
-                                title="Crear nuevo informe"
-                              >
-                                <Plus className="h-3 w-3" />
-                                Crear Informe
-                              </Button>
-                            )}
+                              {/* Botones de informe */}
+                              {actions.showCreateInforme && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCrearInforme(orden)}
+                                  className="text-green-600 hover:text-green-700"
+                                  title="Crear nuevo informe"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Crear Informe
+                                </Button>
+                              )}
 
-                            {actions.showViewInforme && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleVerInforme(orden)}
-                                className="text-blue-600 hover:text-blue-700"
-                                title="Ver informe existente"
-                              >
-                                <Eye className="h-3 w-3" />
-                                Ver Informe
-                              </Button>
-                            )}
+                              {actions.showViewInforme && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleVerInforme(orden)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                  title="Ver informe existente"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  Ver Informe
+                                </Button>
+                              )}
 
-                            {/* Botón PDF - visible si hay cotización O informe */}
-                            {(orden.cotizacion_id || orden.informe_id) && (
+                              {/* Botón registrar salida - visible en estados compatibles */}
+                              {actions.showRegistrarSalida && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRegistrarSalida(orden)}
+                                  className="text-orange-600 hover:text-orange-700"
+                                  title="Registrar salida del equipo"
+                                >
+                                  <LogOut className="h-3 w-3" />
+                                  Registrar Salida
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Grupo de botones de acción (derecha) - Editar, Ver PDF, Borrar */}
+                            <div className="flex gap-1 flex-wrap">
+                              {/* Botón PDF - siempre visible, deshabilitado si no hay cotización ni informe */}
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleVerInformePdf(orden)}
-                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                title="Ver PDF (Cotización e Informe)"
+                                disabled={
+                                  !orden.cotizacion_id && !orden.informe_id
+                                }
+                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={
+                                  orden.cotizacion_id || orden.informe_id
+                                    ? "Ver PDF (Cotización e Informe)"
+                                    : "No hay documentos disponibles"
+                                }
                               >
                                 <FileText className="h-3 w-3" />
                               </Button>
-                            )}
 
-                            {/* Botón editar - siempre visible */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditOrden(orden)}
-                              className="text-gray-600 hover:text-gray-700"
-                              title="Editar orden"
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-
-                            {/* Botón registrar salida - visible en estados compatibles */}
-                            {actions.showRegistrarSalida && (
+                              {/* Botón editar - siempre visible */}
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleRegistrarSalida(orden)}
-                                className="text-orange-600 hover:text-orange-700"
-                                title="Registrar salida del equipo"
+                                onClick={() => handleEditOrden(orden)}
+                                className="text-gray-600 hover:text-gray-700"
+                                title="Editar orden"
                               >
-                                <LogOut className="h-3 w-3" />
-                                Registrar Salida
+                                <Edit className="h-3 w-3" />
                               </Button>
-                            )}
 
-                            {/* Botón eliminar - solo para admin y técnico */}
-                            {actions.showDeleteOrden && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteOrden(orden)}
-                                className="text-red-600 hover:text-red-700"
-                                title="Eliminar orden"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            )}
+                              {/* Botón eliminar - solo para admin y técnico */}
+                              {actions.showDeleteOrden && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDeleteOrden(orden)}
+                                  className="text-red-600 hover:text-red-700"
+                                  title="Eliminar orden"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </>
                         );
                       })()}
@@ -811,29 +863,9 @@ export function OrdenesTrabajoView() {
         isEditing={!!editingCotizacion}
         ordenTrabajoId={selectedOrdenForCotizacion?.orden_id}
         onSendToClient={async () => {
-          try {
-            if (!user || !selectedOrdenForCotizacion) return;
-
-            await invoke("cambiar_estado_orden_trabajo", {
-              ordenId: selectedOrdenForCotizacion.orden_id,
-              nuevoEstado: "cotizacion_enviada",
-              updatedBy: user.usuario_id,
-            });
-
-            success(
-              "Cotización enviada",
-              "La cotización ha sido enviada al cliente exitosamente."
-            );
-
-            loadOrdenes();
-          } catch (error) {
-            console.error("Error actualizando estado de orden:", error);
-            showError(
-              "Advertencia",
-              "La cotización se envió pero no se pudo actualizar el estado de la orden."
-            );
-            loadOrdenes();
-          }
+          // El backend ya maneja el cambio de estado automáticamente
+          // Solo recargamos las órdenes para reflejar los cambios
+          loadOrdenes();
         }}
       />
       {/* Dialog para crear/editar informe */}
@@ -855,11 +887,12 @@ export function OrdenesTrabajoView() {
         ordenTrabajoId={selectedOrdenForInforme?.orden_id}
       />
       {/* PDF Viewer para Informes */}
-      {(pdfInformeId || pdfCotizacionId) && (
+      {(pdfInformeId || pdfCotizacionId || pdfOrdenTrabajoId) && (
         <PdfViewer
           open={showInformePdfViewer}
           onOpenChange={setShowInformePdfViewer}
           title={`Documentos - Orden ${pdfOrdenCodigo}`}
+          ordenTrabajoId={pdfOrdenTrabajoId || undefined}
           informeId={pdfInformeId || undefined}
           cotizacionId={pdfCotizacionId || undefined}
         />

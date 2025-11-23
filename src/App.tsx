@@ -1,4 +1,4 @@
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar } from "@/components/layout/app-sidebar";
 import {
   HomeView,
   EquiposView,
@@ -14,16 +14,17 @@ import {
   InventarioPiezasView,
   SalidasEquipoView,
 } from "@/components/views";
-import { AccessDenied } from "@/components/AccessDenied";
+import { AccessDenied } from "@/components/common/AccessDenied";
 import { useViewPermissions } from "@/hooks/use-permissions";
 import { usePeriodicNotification } from "@/hooks/use-periodic-notification";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ViewProvider, useView } from "@/contexts/ViewContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/contexts/ToastContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { SessionExpirationWarning } from "@/components/SessionExpirationWarning";
-import { DatabaseConnectionBanner } from "@/components/DatabaseConnectionBanner";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { SessionExpirationWarning } from "@/components/features/session/SessionExpirationWarning";
+import { DatabaseConnectionBanner } from "@/components/features/database/DatabaseConnectionBanner";
+import { DatabaseStatusIndicator } from "@/components/common/DatabaseStatusIndicator";
 import { Toaster } from "@/components/ui/toaster";
 
 // Componente de las notificaciones periodicas, actualmente maneja las notificaciones a laboratorio por atraso
@@ -109,6 +110,7 @@ export default function App() {
               </SidebarInset>
             </SidebarProvider>
             <SessionExpirationWarning />
+            <DatabaseStatusIndicator />
             <Toaster />
           </ProtectedRoute>
         </ViewProvider>

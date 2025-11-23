@@ -1,4 +1,5 @@
-import React from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Card,
   CardContent,
@@ -8,397 +9,702 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import {
   IconRadio,
-  IconSettings,
   IconUsers,
   IconClipboardData,
   IconFileText,
   IconTools,
+  IconAlertTriangle,
+  IconTrendingUp,
   IconShield,
-  IconDatabase,
-  IconMail,
-  IconCalendar,
-  IconPrinter,
-  IconSearch,
 } from "@tabler/icons-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useView } from "@/contexts/ViewContext";
 
-interface FeatureCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  features: string[];
-  status: "completed" | "in-progress" | "planned";
+interface OrdenTrabajoDetallada {
+  orden_id: number;
+  orden_codigo?: string;
+  orden_desc?: string;
+  prioridad?: string;
+  estado?: string;
+  has_garantia?: boolean;
+  equipo_id?: number;
+  created_by?: number;
+  cotizacion_id?: number;
+  informe_id?: number;
+  pre_informe?: string;
+  created_at?: string;
+  finished_at?: string;
+  numero_serie?: string;
+  equipo_marca?: string;
+  equipo_modelo?: string;
+  equipo_tipo?: string;
+  cliente_id?: number;
+  cliente_nombre?: string;
+  creador_nombre?: string;
+  cotizacion_codigo?: string;
+  costo_total?: number;
+  informe_codigo?: string;
 }
 
-const FeatureCard: React.FC<FeatureCardProps> = ({
-  icon,
-  title,
-  description,
-  features,
-  status,
-}) => {
-  const getStatusBadge = () => {
-    switch (status) {
-      case "completed":
-        return (
-          <Badge className="bg-green-100 text-green-800">Completado</Badge>
-        );
-      case "in-progress":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800">En Desarrollo</Badge>
-        );
-      case "planned":
-        return <Badge className="bg-blue-100 text-blue-800">Planificado</Badge>;
+interface StatsData {
+  total: number;
+  con_garantia: number;
+  por_estado: Array<{ estado: string | null; count: number }>;
+  por_prioridad: Array<{ prioridad: string | null; count: number }>;
+}
+
+interface AlertResult {
+  hasOldOrders: boolean;
+  type: string;
+  messages: string[];
+}
+
+export function HomeView() {
+  const { user } = useAuth();
+  const { setCurrentView } = useView();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [totalEquipos, setTotalEquipos] = useState<number>(0);
+  const [totalClientes, setTotalClientes] = useState<number>(0);
+  const [totalCotizaciones, setTotalCotizaciones] = useState<number>(0);
+  const [totalInformes, setTotalInformes] = useState<number>(0);
+  const [equiposStats, setEquiposStats] = useState<any>(null);
+  const [alertas, setAlertas] = useState<AlertResult[]>([]);
+  const [ordenesRecientes, setOrdenesRecientes] = useState<
+    OrdenTrabajoDetallada[]
+  >([]);
+  const [currentDate, setCurrentDate] = useState<string>("");
+
+  useEffect(() => {
+    const updateDate = () => {
+      const now = new Date();
+      setCurrentDate(
+        now.toLocaleDateString("es-ES", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      );
+    };
+    updateDate();
+    const interval = setInterval(updateDate, 60000); // Actualizar cada minuto
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+
+      // Cargar estadísticas de órdenes
+      const ordenesStats = await invoke<StatsData>("get_ordenes_trabajo_stats");
+      setStats(ordenesStats);
+
+      // Cargar totales
+      const equipos = await invoke<number>("count_equipos");
+      setTotalEquipos(equipos);
+
+      const clientes = await invoke<number>("count_clientes");
+      setTotalClientes(clientes);
+
+      const cotizaciones = await invoke<number>("count_cotizaciones");
+      setTotalCotizaciones(cotizaciones);
+
+      const informes = await invoke<number>("count_informes");
+      setTotalInformes(informes);
+
+      // Cargar estadísticas de equipos
+      const equiposStatsData = await invoke<any>(
+        "get_estadisticas_equipos_sistema"
+      );
+      setEquiposStats(equiposStatsData);
+
+      // Cargar alertas
+      const ordenesDetalladas = await invoke<OrdenTrabajoDetallada[]>(
+        "get_ordenes_trabajo_detalladas"
+      );
+      const alertasData = await checkOrdenesAllNotifications(ordenesDetalladas);
+      setAlertas(alertasData);
+
+      // Cargar órdenes recientes (últimas 5)
+      const ordenesRecientesData = ordenesDetalladas
+        .sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return dateB - dateA;
+        })
+        .slice(0, 5);
+      setOrdenesRecientes(ordenesRecientesData);
+    } catch (error) {
+      console.error("Error cargando datos del dashboard:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-100 rounded-md">{icon}</div>
-            <div>
-              <CardTitle className="text-lg">{title}</CardTitle>
-              <CardDescription className="text-sm">
-                {description}
-              </CardDescription>
-            </div>
-          </div>
-          {getStatusBadge()}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-1">
-          {features.map((feature, index) => (
-            <li key={index} className="flex items-center text-sm text-gray-600">
-              <span className="w-1 h-1 bg-blue-400 rounded-full mr-2"></span>
-              {feature}
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  );
-};
+  // Funciones de alertas (copiadas de use-periodic-notification.ts)
+  async function checkOrdenSinCotizacion(
+    ordenesData: OrdenTrabajoDetallada[]
+  ): Promise<AlertResult> {
+    const now = new Date();
+    let hasOldOrders: boolean = false;
+    let messages: Array<string> = [];
 
-export function HomeView() {
-  const features: FeatureCardProps[] = [
-    {
-      icon: <IconRadio className="h-6 w-6 text-blue-600" />,
-      title: "Gestión de Equipos",
-      description:
-        "Administración completa del inventario de equipos de comunicación",
-      features: [
-        "Registro de equipos con marca, modelo y número de serie",
-        "Autocompletado inteligente para marcas y modelos existentes",
-        "Asociación con clientes propietarios",
-        "Control de ubicación y precios",
-        "Historial completo de cada equipo",
-        "Búsqueda y filtrado avanzado",
-      ],
-      status: "completed",
-    },
-    {
-      icon: <IconUsers className="h-6 w-6 text-green-600" />,
-      title: "Gestión de Clientes",
-      description: "Base de datos centralizada de clientes y sus equipos",
-      features: [
-        "Registro completo de datos del cliente",
-        "Historial de equipos por cliente",
-        "Información de contacto y comunicación",
-        "Gestión de garantías y contratos",
-        "Reportes de actividad por cliente",
-      ],
-      status: "in-progress",
-    },
-    {
-      icon: <IconTools className="h-6 w-6 text-orange-600" />,
-      title: "Órdenes de Trabajo",
-      description: "Control completo del flujo de trabajo de mantenimiento",
-      features: [
-        "Creación automática desde ingreso de equipos",
-        "Estados de seguimiento (Recibido, En Proceso, Completado)",
-        "Asignación de prioridades",
-        "Pre-informes de estado inicial",
-        "Integración con cotizaciones e informes",
-        "Códigos únicos de identificación",
-      ],
-      status: "in-progress",
-    },
-    {
-      icon: <IconFileText className="h-6 w-6 text-purple-600" />,
-      title: "Cotizaciones",
-      description: "Generación y gestión de presupuestos para servicios",
-      features: [
-        "Creación de cotizaciones detalladas",
-        "Gestión de piezas y materiales necesarios",
-        "Cálculo automático de totales",
-        "Estados de aprobación",
-        "Vinculación con órdenes de trabajo",
-        "Generación de documentos PDF",
-      ],
-      status: "in-progress",
-    },
-    {
-      icon: <IconClipboardData className="h-6 w-6 text-red-600" />,
-      title: "Informes Técnicos",
-      description: "Documentación detallada de trabajos realizados",
-      features: [
-        "Informes de diagnóstico y reparación",
-        "Registro de piezas utilizadas",
-        "Documentación de procedimientos",
-        "Fotografías y evidencias",
-        "Firmas digitales de conformidad",
-        "Exportación a PDF",
-      ],
-      status: "in-progress",
-    },
-    {
-      icon: <IconDatabase className="h-6 w-6 text-indigo-600" />,
-      title: "Gestión de Inventario",
-      description: "Control de piezas y materiales en stock",
-      features: [
-        "Registro de piezas y componentes",
-        "Control de stock y disponibilidad",
-        "Alertas de stock bajo",
-        "Historial de movimientos",
-        "Integración con cotizaciones",
-        "Reportes de inventario",
-      ],
-      status: "planned",
-    },
-    {
-      icon: <IconShield className="h-6 w-6 text-gray-600" />,
-      title: "Seguridad y Auditoría",
-      description: "Control de acceso y trazabilidad de operaciones",
-      features: [
-        "Sistema de usuarios y roles",
-        "Autenticación segura con JWT",
-        "Log de auditoría completo",
-        "Control de sesiones",
-        "Recuperación de contraseñas",
-        "Trazabilidad de cambios",
-      ],
-      status: "completed",
-    },
-    {
-      icon: <IconMail className="h-6 w-6 text-blue-500" />,
-      title: "Notificaciones",
-      description: "Sistema de comunicación y alertas automáticas",
-      features: [
-        "Notificaciones por email",
-        "Alertas de vencimientos",
-        "Recordatorios de seguimiento",
-        "Estados de órdenes de trabajo",
-        "Confirmaciones de recepción",
-        "Notificaciones personalizables",
-      ],
-      status: "planned",
-    },
-    {
-      icon: <IconPrinter className="h-6 w-6 text-teal-600" />,
-      title: "Reportes y Documentos",
-      description: "Generación automática de documentos y reportes",
-      features: [
-        "Reportes de productividad",
-        "Estadísticas de equipos",
-        "Documentos PDF personalizables",
-        "Etiquetas de equipos",
-        "Certificados de trabajo",
-        "Reportes financieros",
-      ],
-      status: "planned",
-    },
-  ];
+    for (const orden of ordenesData) {
+      if (orden.cotizacion_id === null && orden.created_at) {
+        const createdAt = new Date(orden.created_at);
+        const diffTime = Math.abs(now.getTime() - createdAt.getTime());
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-  const completedFeatures = features.filter(
-    (f) => f.status === "completed"
-  ).length;
-  const totalFeatures = features.length;
-  const completionPercentage = Math.round(
-    (completedFeatures / totalFeatures) * 100
+        if (diffDays >= 2) {
+          hasOldOrders = true;
+          let message: string = `La orden ${orden.orden_codigo} del equipo ${
+            orden.equipo_marca
+          } ${
+            orden.equipo_modelo
+          }, ingresado el ${createdAt.toLocaleDateString()}, lleva ${diffDays} días sin cotización`;
+          messages.push(message);
+        }
+      }
+    }
+
+    return {
+      hasOldOrders: hasOldOrders,
+      type: "sin cotización",
+      messages: messages,
+    };
+  }
+
+  async function checkOrdenCotNoEnviada(
+    ordenesData: OrdenTrabajoDetallada[]
+  ): Promise<AlertResult> {
+    const now = new Date();
+    let hasOldOrders: boolean = false;
+    let messages: Array<string> = [];
+
+    for (const orden of ordenesData) {
+      if (orden.estado == "recibido" && orden.created_at) {
+        const createdAt = new Date(orden.created_at);
+        const diffTime = Math.abs(now.getTime() - createdAt.getTime());
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 3) {
+          hasOldOrders = true;
+          let message: string = `La orden ${orden.orden_codigo} del equipo ${
+            orden.equipo_marca
+          } ${
+            orden.equipo_modelo
+          }, ingresado el ${createdAt.toLocaleDateString()}, lleva ${diffDays} días sin cotización enviada al cliente`;
+          messages.push(message);
+        }
+      }
+    }
+
+    return {
+      hasOldOrders: hasOldOrders,
+      type: "con cotización no enviada",
+      messages: messages,
+    };
+  }
+
+  async function checkOrdenPrioridadNoAtendida(
+    ordenesData: OrdenTrabajoDetallada[]
+  ): Promise<AlertResult> {
+    const now = new Date();
+    let hasOldOrders: boolean = false;
+    let messages: Array<string> = [];
+
+    for (const orden of ordenesData) {
+      if (
+        orden.estado == "recibido" &&
+        orden.created_at &&
+        orden.prioridad == "alta"
+      ) {
+        const createdAt = new Date(orden.created_at);
+        const diffTime = Math.abs(now.getTime() - createdAt.getTime());
+        const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+
+        if (diffHours >= 24) {
+          hasOldOrders = true;
+          let message: string = `La orden de prioridad ${orden.prioridad} ${
+            orden.orden_codigo
+          } del equipo ${orden.equipo_marca} ${
+            orden.equipo_modelo
+          }, ingresado el ${createdAt.toLocaleDateString()}, lleva ${diffHours} horas sin ser atendida`;
+          messages.push(message);
+        }
+      }
+    }
+
+    return {
+      hasOldOrders: hasOldOrders,
+      type: "con prioridad alta no atendida",
+      messages: messages,
+    };
+  }
+
+  async function checkOrdenesAllNotifications(
+    ordenesData: OrdenTrabajoDetallada[]
+  ): Promise<AlertResult[]> {
+    const result_sin_cotizacion = await checkOrdenSinCotizacion(ordenesData);
+    const result_cot_no_enviada = await checkOrdenCotNoEnviada(ordenesData);
+    const result_prioridad_no_atendida = await checkOrdenPrioridadNoAtendida(
+      ordenesData
+    );
+
+    return [
+      result_sin_cotizacion,
+      result_cot_no_enviada,
+      result_prioridad_no_atendida,
+    ];
+  }
+
+  const getEstadoColor = (estado: string | null) => {
+    switch (estado) {
+      case "recibido":
+        return "bg-blue-100 text-blue-800";
+      case "cotizacion_enviada":
+        return "bg-yellow-100 text-yellow-800";
+      case "en_reparacion":
+        return "bg-orange-100 text-orange-800";
+      case "espera_de_retiro":
+        return "bg-green-100 text-green-800";
+      case "entregado":
+        return "bg-gray-100 text-gray-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getPrioridadColor = (prioridad: string | null) => {
+    switch (prioridad) {
+      case "alta":
+        return "bg-red-100 text-red-800";
+      case "media":
+        return "bg-yellow-100 text-yellow-800";
+      case "baja":
+        return "bg-green-100 text-green-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const totalAlertas = alertas.reduce(
+    (acc, alerta) => acc + (alerta.hasOldOrders ? alerta.messages.length : 0),
+    0
   );
 
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center space-x-3">
-          <IconRadio className="h-12 w-12 text-blue-600" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Sistema de Gestión Toscanini
-            </h1>
-            <p className="text-lg text-gray-600">
-              Plataforma integral para servicios técnicos de equipos de
-              comunicación
-            </p>
-          </div>
-        </div>
+  const ordenesPendientes =
+    stats?.por_estado
+      .filter(
+        (e) =>
+          e.estado === "recibido" ||
+          e.estado === "cotizacion_enviada" ||
+          e.estado === "en_reparacion"
+      )
+      .reduce((acc, e) => acc + e.count, 0) || 0;
 
-        <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-            <span>{completedFeatures} módulos completados</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-            <span>
-              {features.filter((f) => f.status === "in-progress").length} en
-              desarrollo
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-            <span>
-              {features.filter((f) => f.status === "planned").length}{" "}
-              planificados
-            </span>
-          </div>
-        </div>
+  const ordenesPrioridadAlta =
+    stats?.por_prioridad
+      .filter((p) => p.prioridad === "alta")
+      .reduce((acc, p) => acc + p.count, 0) || 0;
 
-        <div className="max-w-md mx-auto">
-          <div className="flex justify-between text-sm text-gray-600 mb-1">
-            <span>Progreso del desarrollo</span>
-            <span>{completionPercentage}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${completionPercentage}%` }}
-            ></div>
-          </div>
-        </div>
-      </div>
+  const ordenesAtrasadas = alertas.reduce(
+    (acc, alerta) => acc + (alerta.hasOldOrders ? alerta.messages.length : 0),
+    0
+  );
 
-      <Separator />
-
-      {/* Características principales */}
-      <div className="space-y-4">
+  if (loading) {
+    return (
+      <div className="px-6 pt-6 flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Características Principales
-          </h2>
-          <p className="text-gray-600">
-            Una solución completa para la gestión de servicios técnicos
-          </p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando dashboard...</p>
         </div>
+      </div>
+    );
+  }
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, index) => (
-            <FeatureCard key={index} {...feature} />
-          ))}
+  return (
+    <div className="px-6 pt-6 space-y-6">
+      {/* Header con información contextual */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Bienvenido, {user?.usuario_nombre || "Usuario"}
+          </h1>
+          <p className="text-gray-600 mt-1">{currentDate}</p>
+        </div>
+        <div className="flex items-center space-x-4">
+          {/* El banner de conexión se muestra automáticamente en App.tsx */}
         </div>
       </div>
 
       <Separator />
 
-      {/* Información adicional */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Sección superior: Distribuciones (izquierda) y Actividad Reciente (derecha) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Columna izquierda: Distribuciones */}
+        <div className="space-y-6">
+          {/* Distribución por estado */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribución por Estado</CardTitle>
+              <CardDescription>
+                Órdenes de trabajo agrupadas por estado actual
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stats?.por_estado && stats.por_estado.length > 0 ? (
+                  stats.por_estado.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Badge className={getEstadoColor(item.estado)}>
+                          {item.estado || "Sin estado"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium">
+                          {item.count}
+                        </span>
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{
+                              width: `${
+                                stats.total > 0
+                                  ? (item.count / stats.total) * 100
+                                  : 0
+                              }%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No hay datos disponibles
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Distribución por prioridad */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribución por Prioridad</CardTitle>
+              <CardDescription>
+                Órdenes de trabajo agrupadas por nivel de prioridad
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stats?.por_prioridad && stats.por_prioridad.length > 0 ? (
+                  stats.por_prioridad.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Badge className={getPrioridadColor(item.prioridad)}>
+                          {item.prioridad || "Sin prioridad"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium">
+                          {item.count}
+                        </span>
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-orange-600 h-2 rounded-full"
+                            style={{
+                              width: `${
+                                stats.total > 0
+                                  ? (item.count / stats.total) * 100
+                                  : 0
+                              }%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No hay datos disponibles
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Columna derecha: Actividad Reciente */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <IconCalendar className="h-5 w-5 text-blue-600" />
-              <span>Flujo de Trabajo</span>
-            </CardTitle>
+            <CardTitle>Actividad Reciente</CardTitle>
+            <CardDescription>
+              Últimas 5 órdenes de trabajo creadas
+            </CardDescription>
           </CardHeader>
-          <CardContent className="text-sm text-gray-600">
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold">
-                  1
-                </span>
-                <span>Recepción de equipos</span>
+          <CardContent>
+            {ordenesRecientes.length > 0 ? (
+              <div className="space-y-3">
+                {ordenesRecientes.map((orden) => (
+                  <div
+                    key={orden.orden_id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-semibold text-sm">
+                          {orden.orden_codigo || `Orden #${orden.orden_id}`}
+                        </span>
+                        <Badge className={getEstadoColor(orden.estado || null)}>
+                          {orden.estado || "Sin estado"}
+                        </Badge>
+                        {orden.prioridad && (
+                          <Badge className={getPrioridadColor(orden.prioridad)}>
+                            {orden.prioridad}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        <span>
+                          {orden.equipo_marca} {orden.equipo_modelo}
+                        </span>
+                        {orden.cliente_nombre && (
+                          <span className="ml-2">• {orden.cliente_nombre}</span>
+                        )}
+                        {orden.created_at && (
+                          <span className="ml-2">
+                            •{" "}
+                            {new Date(orden.created_at).toLocaleDateString(
+                              "es-ES"
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCurrentView("órdenes de trabajo")}
+                    >
+                      Ver
+                    </Button>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold">
-                  2
-                </span>
-                <span>Diagnóstico y cotización</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold">
-                  3
-                </span>
-                <span>Reparación y pruebas</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold">
-                  4
-                </span>
-                <span>Entrega y facturación</span>
-              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">
+                No hay órdenes recientes
+              </p>
+            )}
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setCurrentView("órdenes de trabajo")}
+              >
+                Ver todas las órdenes
+              </Button>
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <IconSearch className="h-5 w-5 text-green-600" />
-              <span>Beneficios Clave</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-gray-600">
-            <ul className="space-y-2">
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-green-400 rounded-full"></span>
-                <span>Trazabilidad completa</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-green-400 rounded-full"></span>
-                <span>Reducción de tiempos</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-green-400 rounded-full"></span>
-                <span>Control de calidad</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-green-400 rounded-full"></span>
-                <span>Gestión centralizada</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-green-400 rounded-full"></span>
-                <span>Reportes automáticos</span>
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
+      {/* Sección inferior: Tarjetas de métricas ocupando todo el ancho */}
+      <div className="space-y-6">
+        {/* Tarjetas de métricas en grid de 4 columnas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Órdenes
+              </CardTitle>
+              <IconClipboardData className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.total || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                {ordenesPendientes} pendientes
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <IconSettings className="h-5 w-5 text-purple-600" />
-              <span>Tecnología</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-gray-600">
-            <ul className="space-y-2">
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-purple-400 rounded-full"></span>
-                <span>Aplicación de escritorio (Tauri)</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-purple-400 rounded-full"></span>
-                <span>Interface React + TypeScript</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-purple-400 rounded-full"></span>
-                <span>Base de datos SQLite</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-purple-400 rounded-full"></span>
-                <span>Backend Rust</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <span className="w-1 h-1 bg-purple-400 rounded-full"></span>
-                <span>Componentes Shadcn/ui</span>
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Órdenes Críticas
+              </CardTitle>
+              <IconAlertTriangle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                {ordenesAtrasadas}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Requieren atención urgente
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Prioridad Alta
+              </CardTitle>
+              <IconTrendingUp className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">
+                {ordenesPrioridadAlta}
+              </div>
+              <p className="text-xs text-muted-foreground">Órdenes urgentes</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Equipos
+              </CardTitle>
+              <IconRadio className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalEquipos}</div>
+              <p className="text-xs text-muted-foreground">
+                {equiposStats?.en_sistema || 0} en sistema
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Clientes
+              </CardTitle>
+              <IconUsers className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalClientes}</div>
+              <p className="text-xs text-muted-foreground">
+                Clientes registrados
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Cotizaciones
+              </CardTitle>
+              <IconFileText className="h-4 w-4 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalCotizaciones}</div>
+              <p className="text-xs text-muted-foreground">
+                Cotizaciones totales
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Informes</CardTitle>
+              <IconTools className="h-4 w-4 text-indigo-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalInformes}</div>
+              <p className="text-xs text-muted-foreground">
+                Informes generados
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Con Garantía
+              </CardTitle>
+              <IconShield className="h-4 w-4 text-teal-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats?.con_garantia || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Órdenes con garantía
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Alertas ocupando todo el ancho */}
+        {totalAlertas > 0 && (
+          <Card className="border-red-200 bg-red-50">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-red-800">
+                <IconAlertTriangle className="h-5 w-5" />
+                <span>Alertas y Acciones Urgentes</span>
+              </CardTitle>
+              <CardDescription className="text-red-700">
+                {totalAlertas} alerta{totalAlertas !== 1 ? "s" : ""} que
+                requieren atención inmediata
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {alertas.map((alerta, idx) => {
+                  if (!alerta.hasOldOrders) return null;
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-white p-4 rounded-lg border border-red-200"
+                    >
+                      <h4 className="font-semibold text-red-800 mb-2">
+                        ⚠️ Órdenes {alerta.type}
+                      </h4>
+                      <ul className="space-y-1">
+                        {alerta.messages.map((msg, msgIdx) => (
+                          <li
+                            key={msgIdx}
+                            className="text-sm text-gray-700 flex items-start"
+                          >
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
+                            {msg}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-100"
+                  onClick={() => setCurrentView("órdenes de trabajo")}
+                >
+                  Ver todas las órdenes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

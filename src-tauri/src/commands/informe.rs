@@ -20,6 +20,7 @@ pub struct Informe {
     pub recomendaciones: Option<String>,
     pub solucion_aplicada: Option<String>,
     pub tecnico_responsable: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -92,11 +93,12 @@ pub async fn get_informes() -> Result<Vec<Informe>, String> {
       let informes = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs, 
                 is_borrador, created_by, created_at,
-                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
          FROM INFORME 
+         WHERE deleted_at IS NULL
          ORDER BY created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -114,9 +116,10 @@ pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> 
                 i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
+         WHERE i.deleted_at IS NULL
          ORDER BY i.created_at DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -131,12 +134,12 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
     let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
                 is_borrador, created_by, created_at,
-                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
          FROM INFORME 
-         WHERE informe_id = ?"
+         WHERE informe_id = ? AND deleted_at IS NULL"
     )
     .bind(informe_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     println!("[DEBUG] get_informe_by_id: Resultado = {:?}", informe);
@@ -150,12 +153,12 @@ pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Info
       let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
                 is_borrador, created_by, created_at,
-                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
          FROM INFORME 
-         WHERE informe_codigo = ?"
+         WHERE informe_codigo = ? AND deleted_at IS NULL"
     )
     .bind(&informe_codigo)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -172,10 +175,10 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
     
     // Buscar el mayor número correlativo existente para el año actual
     let last_codigo: Option<String> = sqlx::query_scalar(
-        "SELECT informe_codigo FROM INFORME WHERE informe_codigo LIKE ? ORDER BY informe_id DESC LIMIT 1"
+        "SELECT informe_codigo FROM INFORME WHERE informe_codigo LIKE ? AND deleted_at IS NULL ORDER BY informe_id DESC LIMIT 1"
     )
     .bind(format!("INF-{}-%", year))
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .ok();
     
@@ -266,7 +269,7 @@ pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: Stri
     // Desvincula el informe de la orden de trabajo
     let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
         .bind(informe_id)
-        .execute(pool)
+        .execute(&*pool)
         .await
         .map_err(|e| format!("Database error al desvincular informe: {}", e))?;
 
@@ -323,7 +326,7 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
     .bind(&request.solucion_aplicada)
     .bind(&request.tecnico_responsable)
     .bind(informe_id)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -361,63 +364,102 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
     get_informe_by_id(informe_id).await
 }
 
-/// Eliminar un informe
+/// Eliminar un informe (eliminación lógica solo si fue enviado al cliente)
 #[tauri::command]
 pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    // Obtener el informe antes de eliminarlo para logging
-    let informe_to_delete = get_informe_by_id(informe_id).await?;
+    // Obtener el informe antes de eliminarlo para logging (sin filtrar por deleted_at)
+    let informe_to_delete = sqlx::query_as::<_, Informe>(
+        "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
+                is_borrador, created_by, created_at,
+                diagnostico, recomendaciones, solucion_aplicada, tecnico_responsable, deleted_at
+         FROM INFORME 
+         WHERE informe_id = ?"
+    )
+    .bind(informe_id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .ok_or_else(|| "Informe no encontrado".to_string())?;
+    
+    // Si ya está eliminado lógicamente, no hacer nada
+    if informe_to_delete.deleted_at.is_some() {
+        return Err("El informe ya fue eliminado".to_string());
+    }
     
     // Verificar si el informe tiene órdenes de trabajo asociadas
     let has_dependencies = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM ORDEN_TRABAJO WHERE informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_one(pool)
+    .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error checking dependencies: {}", e))?;
     
-    if has_dependencies > 0 {
-        return Err("No se puede eliminar el informe porque tiene órdenes de trabajo asociadas".to_string());
-    }
+    // Verificar si fue enviado al cliente (is_borrador == false)
+    let fue_enviado = informe_to_delete.is_borrador == Some(false);
     
     // Iniciar transacción
     let mut tx = pool.begin().await.map_err(|e| format!("Database error: {}", e))?;
     
-    // Eliminar primero las relaciones con piezas
-    sqlx::query("DELETE FROM PIEZAS_INFORME WHERE informe_id = ?")
-        .bind(informe_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Luego eliminar el informe
-    let result = sqlx::query("DELETE FROM INFORME WHERE informe_id = ?")
-        .bind(informe_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    let was_deleted = result.rows_affected() > 0;
+    let was_deleted = if fue_enviado && has_dependencies > 0 {
+        // Eliminación lógica: solo si fue enviado al cliente Y tiene órdenes asociadas
+        // Marcar como eliminado y desvincular de órdenes
+        sqlx::query("UPDATE INFORME SET deleted_at = CURRENT_TIMESTAMP WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        // Desvincular de órdenes de trabajo
+        sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        true
+    } else {
+        // Eliminación física: borradores o sin órdenes asociadas
+        // Eliminar primero las relaciones con piezas
+        sqlx::query("DELETE FROM PIEZAS_INFORME WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        // Luego eliminar el informe
+        let result = sqlx::query("DELETE FROM INFORME WHERE informe_id = ?")
+            .bind(informe_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+        
+        result.rows_affected() > 0
+    };
     
     // Confirmar transacción
     tx.commit().await.map_err(|e| format!("Database error: {}", e))?;
     
     // Registrar la acción en el log de auditoría
     if was_deleted {
-        if let Some(ref informe) = informe_to_delete {
-            let _ = log_action(
-                "DELETE_INFORME",
-                Some(deleted_by),
-                "INFORME",
-                Some(informe_id),
-                Some(&format!("Informe eliminado: {}", 
-                    informe.informe_codigo.as_deref().unwrap_or("N/A")
-                )),
-                None
-            ).await;
-        }
+        let action_type = if fue_enviado && has_dependencies > 0 {
+            "DELETE_INFORME_LOGICAL"
+        } else {
+            "DELETE_INFORME"
+        };
+        let _ = log_action(
+            action_type,
+            Some(deleted_by),
+            "INFORME",
+            Some(informe_id),
+            Some(&format!("Informe {} eliminado: {}", 
+                if fue_enviado && has_dependencies > 0 { "lógicamente" } else { "físicamente" },
+                informe_to_delete.informe_codigo.as_deref().unwrap_or("N/A")
+            )),
+            None
+        ).await;
     }
     
     Ok(was_deleted)
@@ -436,11 +478,11 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
                 i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
-         WHERE i.informe_codigo LIKE ? 
+         WHERE i.informe_codigo LIKE ? AND i.deleted_at IS NULL
          ORDER BY i.created_at DESC"
     )
     .bind(&search_pattern)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -452,8 +494,8 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
 pub async fn count_informes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM INFORME")
-        .fetch_one(pool)
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM INFORME WHERE deleted_at IS NULL")
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -471,12 +513,13 @@ pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec
                 i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
          FROM INFORME i
          LEFT JOIN USUARIO u ON i.created_by = u.usuario_id
+         WHERE i.deleted_at IS NULL
          ORDER BY i.created_at DESC
          LIMIT ? OFFSET ?"
     )
     .bind(limit)
     .bind(offset)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -496,7 +539,7 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
          WHERE pi.informe_id = ?"
     )
     .bind(informe_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -505,51 +548,132 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
 
 /// Enviar informe por email al cliente
 #[tauri::command]
-pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {    use crate::email::EmailService;
+pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {
     use crate::commands::ordenes_trabajo::get_orden_trabajo_by_informe_id;
+    use crate::commands::equipos::get_equipo_by_id;
+    use crate::commands::clientes::get_cliente_by_id;
+    use crate::pdf::commands::generate_informe_pdf_command;
     
-    let pool = get_db_pool_safe()?;
+    println!("🔍 [DEBUG] send_informe_to_client: inicio, informe_id={}", informe_id);
     
     // Obtener el informe
     let informe = get_informe_by_id(informe_id).await?
-        .ok_or_else(|| "Informe no encontrado".to_string())?;
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] Informe no encontrado: {}", informe_id);
+            "Informe no encontrado".to_string()
+        })?;
+    println!("✅ [DEBUG] Informe encontrado: {:?}", informe.informe_codigo);
     
     // Obtener la orden de trabajo asociada al informe
-    let orden_trabajo = get_orden_trabajo_by_informe_id(informe_id).await?
-        .ok_or_else(|| "No se encontró orden de trabajo asociada al informe".to_string())?;
+    println!("🔍 [DEBUG] Buscando orden de trabajo para informe_id={}", informe_id);
+    let orden_trabajo = match get_orden_trabajo_by_informe_id(informe_id).await {
+        Ok(Some(orden)) => {
+            println!("✅ [DEBUG] Orden de trabajo encontrada: {:?}", orden.orden_codigo);
+            orden
+        }
+        Ok(None) => {
+            println!("❌ [DEBUG] No se encontró orden de trabajo para informe_id={}", informe_id);
+            return Err("No se encontró orden de trabajo asociada al informe. Asegúrate de que el informe esté asociado a una orden de trabajo antes de enviarlo.".to_string());
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error al buscar orden de trabajo: {}", e);
+            return Err(format!("Error al buscar orden de trabajo: {}", e));
+        }
+    };
+
+    // Obtener el equipo
+    let equipo_id = orden_trabajo.equipo_id
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] La orden {} no tiene equipo asociado", orden_trabajo.orden_id);
+            "La orden no tiene equipo asociado".to_string()
+        })?;
+    println!("✅ [DEBUG] Equipo ID: {}", equipo_id);
     
-    // Obtener información del cliente desde el equipo
-    let cliente_info = sqlx::query_as::<_, (i32, String, Option<String>)>(
-        "SELECT c.cliente_id, c.cliente_nombre, c.cliente_correo 
-         FROM CLIENTE c 
-         INNER JOIN EQUIPO e ON c.cliente_id = e.cliente_id 
-         WHERE e.equipo_id = ?"
-    )
-    .bind(orden_trabajo.equipo_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?
-    .ok_or_else(|| "No se encontró información del cliente".to_string())?;
+    let equipo = get_equipo_by_id(equipo_id).await?
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] Equipo no encontrado: {}", equipo_id);
+            "Equipo no encontrado".to_string()
+        })?;
     
-    let cliente_email = cliente_info.2
-        .ok_or_else(|| "El cliente no tiene un correo electrónico registrado".to_string())?;
+    // Obtener el cliente
+    let cliente_id = equipo.cliente_id
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] El equipo {} no tiene cliente asociado", equipo_id);
+            "El equipo no tiene cliente asociado".to_string()
+        })?;
+    println!("✅ [DEBUG] Cliente ID: {}", cliente_id);
     
-    // Obtener las piezas del informe
-    let piezas_informe = get_piezas_informe(informe_id).await?;
+    let cliente = get_cliente_by_id(cliente_id).await?
+        .ok_or_else(|| {
+            println!("❌ [DEBUG] Cliente no encontrado: {}", cliente_id);
+            "Cliente no encontrado".to_string()
+        })?;
+    
+    // Verificar email del cliente
+    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
+        println!("❌ [DEBUG] Cliente {} no tiene email configurado", cliente_id);
+        return Err("El cliente no tiene email configurado".to_string());
+    }
+    println!("✅ [DEBUG] Email del cliente: {}", cliente.cliente_correo.as_ref().unwrap());
+    
+    // Generar el PDF del informe
+    println!("📄 [DEBUG] Generando PDF de informe {}...", informe_id);
+    let pdf_bytes = match generate_informe_pdf_command(informe_id).await {
+        Ok(bytes) => {
+            println!("✅ [DEBUG] PDF generado exitosamente ({} bytes)", bytes.len());
+            bytes
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error generando PDF: {}", e);
+            return Err(format!("Error generando PDF del informe: {}", e));
+        }
+    };
+    
+    // Obtener el email del cliente (clonar para evitar problemas de borrow)
+    let cliente_email = cliente.cliente_correo
+        .clone()
+        .ok_or_else(|| "El cliente no tiene email configurado".to_string())?;
+    
+    // Verificar RESEND_API_KEY
+    use std::env;
+    match env::var("RESEND_API_KEY") {
+        Ok(_) => println!("✅ [DEBUG] RESEND_API_KEY encontrada"),
+        Err(_) => {
+            println!("❌ [DEBUG] RESEND_API_KEY no encontrada");
+            return Err("RESEND_API_KEY no configurada en las variables de entorno".to_string());
+        }
+    }
     
     // Crear el servicio de email
-    let email_service = EmailService::new()
-        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
+    let email_service = match crate::email::EmailService::new() {
+        Ok(service) => {
+            println!("✅ [DEBUG] EmailService inicializado");
+            service
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error inicializando EmailService: {}", e);
+            return Err(format!("Error inicializando servicio de email: {}", e));
+        }
+    };
     
-    // Enviar el email
-    email_service.send_informe_email(
+    // Enviar el email con PDF
+    println!("📧 [DEBUG] Enviando email de informe con PDF a {}...", cliente_email);
+    match email_service.send_informe_email_with_pdf(
         &cliente_email,
-        &cliente_info.1,
+        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
         &informe,
         &orden_trabajo,
-        &piezas_informe,
-    ).await
-    .map_err(|e| format!("Error enviando email: {}", e))?;
+        &equipo,
+        &pdf_bytes,
+    ).await {
+        Ok(_) => {
+            println!("✅ [DEBUG] Email enviado exitosamente");
+        }
+        Err(e) => {
+            println!("❌ [DEBUG] Error enviando email: {}", e);
+            return Err(format!("Error enviando email: {}", e));
+        }
+    }
     
     // Registrar la acción en el log de auditoría
     let _ = log_action(
@@ -558,12 +682,13 @@ pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<boo
         "INFORME",
         Some(informe_id),
         None,
-        Some(&format!("Informe {} enviado a {}", 
+        Some(&format!("Informe {} enviado a {} con PDF adjunto", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"),
             cliente_email
         ))
     ).await;
     
+    println!("✅ [DEBUG] send_informe_to_client completado exitosamente");
     Ok(true)
 }
 
@@ -573,15 +698,15 @@ pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, St
     let informes = sqlx::query_as::<_, Informe>(
         "SELECT i.informe_id, i.informe_codigo, i.informe_acciones, i.informe_obs,
                 i.is_borrador, i.created_by, i.created_at,
-                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable
+                i.diagnostico, i.recomendaciones, i.solucion_aplicada, i.tecnico_responsable, i.deleted_at
          FROM INFORME i
          INNER JOIN ORDEN_TRABAJO ot ON i.informe_id = ot.informe_id
          INNER JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
-         WHERE e.cliente_id = ?
+         WHERE e.cliente_id = ? AND i.deleted_at IS NULL
          ORDER BY i.created_at DESC"
     )
     .bind(cliente_id)
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error al obtener informes del cliente: {}", e))?;
     Ok(informes)

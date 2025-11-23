@@ -66,7 +66,7 @@ pub async fn create_audit_log(request: CreateAuditLogRequest) -> Result<AuditLog
     .bind(&request.log_entidad_id)
     .bind(&request.log_prev_v)
     .bind(&request.log_new_v)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -89,7 +89,7 @@ pub async fn get_audit_log_by_id(log_id: i32) -> Result<Option<AuditLog>, String
          WHERE log_id = ?"
     )
     .bind(log_id)
-    .fetch_optional(pool)
+    .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -188,7 +188,7 @@ pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogW
     }
     
     let logs = sqlx_query
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -214,7 +214,7 @@ pub async fn get_audit_logs_by_user(usuario_id: i32, limit: Option<i32>) -> Resu
     
     let logs = sqlx::query_as::<_, AuditLogWithUser>(&query)
         .bind(usuario_id)
-        .fetch_all(pool)
+        .fetch_all(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -239,14 +239,14 @@ pub async fn get_audit_logs_by_entity(entidad_tabla: String, entidad_id: Option<
         sqlx::query_as::<_, AuditLogWithUser>(&query)
             .bind(&entidad_tabla)
             .bind(id)
-            .fetch_all(pool)
+            .fetch_all(&*pool)
             .await
             .map_err(|e| format!("Database error: {}", e))?
     } else {
         query.push_str(" ORDER BY a.created_at DESC LIMIT 100");
         sqlx::query_as::<_, AuditLogWithUser>(&query)
             .bind(&entidad_tabla)
-            .fetch_all(pool)
+            .fetch_all(&*pool)
             .await
             .map_err(|e| format!("Database error: {}", e))?
     };
@@ -263,7 +263,7 @@ pub async fn cleanup_old_audit_logs(days_old: i32) -> Result<u64, String> {
         "DELETE FROM AUDIT_LOG WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)"
     )
     .bind(days_old)
-    .execute(pool)
+    .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -276,7 +276,7 @@ pub async fn count_audit_logs() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM AUDIT_LOG")
-        .fetch_one(pool)
+        .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -317,7 +317,7 @@ pub async fn get_audit_stats() -> Result<serde_json::Value, String> {
          GROUP BY log_accion 
          ORDER BY count DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -332,7 +332,7 @@ pub async fn get_audit_stats() -> Result<serde_json::Value, String> {
          ORDER BY count DESC
          LIMIT 10"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     
@@ -343,7 +343,7 @@ pub async fn get_audit_stats() -> Result<serde_json::Value, String> {
          GROUP BY log_entidad_tabla 
          ORDER BY count DESC"
     )
-    .fetch_all(pool)
+    .fetch_all(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
     

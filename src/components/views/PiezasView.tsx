@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { usePiezasPermissions } from "@/hooks/use-permissions";
-import { AccessDenied } from "@/components/AccessDenied";
+import { AccessDenied } from "@/components/common/AccessDenied";
 
 interface Pieza {
   pieza_id: number;
@@ -162,8 +162,8 @@ export default function PiezasView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-6 pt-6 space-y-6">
+      <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold">Administrar Piezas</h2>
         <Button onClick={() => handleOpenForm()}>
           <Plus className="h-4 w-4 mr-2" /> Agregar Pieza

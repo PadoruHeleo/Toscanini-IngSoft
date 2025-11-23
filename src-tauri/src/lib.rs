@@ -3,24 +3,42 @@ pub mod database;
 pub mod utils;
 pub mod email;
 pub mod config;
-pub mod pdf_generator;
+pub mod pdf;
 
-use database::init_database;
+use database::{init_database, start_auto_reconnect_task, start_periodic_connection_check};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Cargar variables de entorno desde .env
     dotenv::dotenv().ok();
     
-    // Inicializar runtime de Tokio para operaciones async
+    // Crear runtime de Tokio que se mantenga vivo
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-      // Inicializar la base de datos
+    
+    // Inicializar la base de datos
     rt.block_on(async {
         if let Err(e) = init_database().await {
             eprintln!("Warning: Failed to initialize database: {}", e);
-            // No terminar la aplicación, solo mostrar advertencia
         }
-    });tauri::Builder::default()
+        
+        // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
+        start_auto_reconnect_task();
+        
+        // Iniciar verificación periódica cada 60 segundos (incluso cuando está conectada)
+        start_periodic_connection_check(10);
+    });
+    
+    // Mantener el runtime vivo usando spawn_blocking
+    std::thread::spawn(move || {
+        rt.block_on(async {
+            // Mantener el runtime corriendo indefinidamente
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            }
+        });
+    });
+    
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())        
         .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
@@ -41,8 +59,11 @@ pub fn run() {
             commands::users::cleanup_expired_reset_codes,
             commands::users::change_user_password,
             commands::users::change_user_email,
+            commands::users::change_user_phone,
             commands::users::send_password_email,
             commands::users::verify_phone,
+            commands::users::verify_email_in_use,
+            commands::users::verify_rut_in_use,
             commands::logs::create_audit_log,
             commands::logs::get_audit_log_by_id,
             commands::logs::get_audit_logs,
@@ -194,8 +215,12 @@ pub fn run() {
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
             email::send_orden_trabajo_cliente,
-            pdf_generator::generate_cotizacion_pdf_command,
-            pdf_generator::generate_informe_pdf_command
+            email::send_cotizacion_email,
+            email::send_informe_email,
+            pdf::commands::generate_cotizacion_pdf_command,
+            pdf::commands::generate_informe_pdf_command,
+            pdf::commands::generate_orden_trabajo_pdf_command,
+            commands::cotizacion::update_cotizacion_piezas,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
