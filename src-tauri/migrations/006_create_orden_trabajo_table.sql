@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS ORDEN_TRABAJO (
     orden_id INT PRIMARY KEY AUTO_INCREMENT,
     orden_codigo VARCHAR(50) UNIQUE,
     orden_desc VARCHAR(1024),
-    prioridad ENUM('baja', 'media', 'alta'),    estado ENUM(
+    prioridad ENUM('baja', 'media', 'alta'), estado ENUM(
         'recibido',
         'cotizacion_enviada',
         'aprobacion_pendiente',

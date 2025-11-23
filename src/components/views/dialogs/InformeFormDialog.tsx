@@ -821,36 +821,53 @@ export default function InformeFormDialog({
     }
   };
 
-  const handleEliminarInformeBorrador = async (motivo: string) => {
-    if (!informe?.informe_id || !user) {
-      showError("Error de autenticación", "Usuario no autenticado");
-      return;
-    }
-    try {
-      setLoading(true);
-      // Elimina el informe y desvincula de la orden
-      const result = await invoke<boolean>("rechazar_informe_borrador", {
-        informeId: informe.informe_id,
-        motivoEliminacion: motivo,
-        updatedBy: user.usuario_id,
-      });
-      if (result) {
-        success(
-          "Informe eliminado",
-          "El informe en borrador ha sido eliminado."
-        );
-        onInformeAdded(); // Refresca la lista
-        onOpenChange(false); // Cierra el diálogo
-      } else {
-        showError("Error", "No se pudo eliminar el informe en borrador.");
+
+const handleEliminarInformeBorrador = async (motivo: string) => {
+  if (!informe?.informe_id || !user) {
+    showError("Error de autenticación", "Usuario no autenticado");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    // 1. Eliminar el informe
+    const result = await invoke<boolean>("rechazar_informe_borrador", {
+      informeId: informe.informe_id,
+      motivoEliminacion: motivo,
+      updatedBy: user.usuario_id,
+    });
+
+    if (result) {
+      // 2. Cambiar el estado de la orden a "en_reparacion"
+      if (ordenTrabajoId) {
+        try {
+          await invoke("update_orden_trabajo", {
+            ordenId: ordenTrabajoId,
+            request: { estado: "en_reparacion" }, 
+            updatedBy: user.usuario_id,
+          });
+          console.log("✅ Estado cambiado a 'en_reparacion'");
+        } catch (error) {
+          console.error("Error cambiando estado:", error);
+        }
       }
-    } catch (error) {
-      console.error(error);
-      showError("Error", "Hubo un error al eliminar el informe.");
-    } finally {
-      setLoading(false);
+
+      success("Informe eliminado", "El informe ha sido eliminado y la orden volvió a 'En Reparación'.");
+      onInformeAdded();
+      onOpenChange(false);
+    } else {
+      showError("Error", "No se pudo eliminar el informe en borrador.");
     }
-  };
+  } catch (error) {
+    console.error(error);
+    showError("Error", "Hubo un error al eliminar el informe.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   const handleSubmitAndSendToClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1630,7 +1647,7 @@ export default function InformeFormDialog({
                     : "Enviar Informe a Cliente"}
                 </Button>
               )}
-              {isEditing && informe?.is_borrador && (
+              {isEditing && informe && (
                 <Button
                   type="button"
                   variant="destructive"
