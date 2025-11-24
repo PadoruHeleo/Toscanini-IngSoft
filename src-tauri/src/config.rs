@@ -22,6 +22,19 @@ const KEYRING_USERNAME: &str = "database";
 const EMBEDDED_ENV: &str = include_str!("../.env");
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AppConfig {
+    pub use_api: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            use_api: false,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatabaseConfig {
     pub host: String,
     pub port: u16,
