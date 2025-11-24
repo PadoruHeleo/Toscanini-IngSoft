@@ -1,0 +1,8 @@
+pub mod users;
+pub mod clientes;
+pub mod equipos;
+pub mod cotizacion;
+pub mod informe;
+pub mod ordenes_trabajo;
+pub mod terminos_condiciones;
+pub mod logs;
