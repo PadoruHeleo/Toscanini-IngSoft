@@ -86,7 +86,7 @@ fn build_order_by_clause(ordenamiento: &Option<String>) -> String {
 const BASE_SELECT: &str = "SELECT cliente_id, cliente_rut, cliente_nombre, cliente_correo, cliente_telefono, cliente_direccion, is_active, created_by, created_at FROM CLIENTE";
 
 
-#[tauri::command]
+
 pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
@@ -100,7 +100,7 @@ pub async fn get_clientes() -> Result<Vec<Cliente>, String> {
 }
 
 
-#[tauri::command]
+
 pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let cliente = sqlx::query_as::<_, Cliente>(
@@ -114,7 +114,7 @@ pub async fn get_cliente_by_id(cliente_id: i32) -> Result<Option<Cliente>, Strin
     Ok(cliente)
 }
 
-#[tauri::command]
+
 pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let cliente = sqlx::query_as::<_, Cliente>(
@@ -128,7 +128,7 @@ pub async fn get_cliente_by_rut(cliente_rut: String) -> Result<Option<Cliente>, 
     Ok(cliente)
 }
 
-#[tauri::command]
+
 pub async fn get_clientes_by_created_by(created_by: i32) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
@@ -142,7 +142,7 @@ pub async fn get_clientes_by_created_by(created_by: i32) -> Result<Vec<Cliente>,
     Ok(clientes)
 }
 
-#[tauri::command]
+
 pub async fn search_clientes(search_term: String) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let search_pattern = format!("%{}%", search_term);
@@ -160,7 +160,7 @@ pub async fn search_clientes(search_term: String) -> Result<Vec<Cliente>, String
     Ok(clientes)
 }
 
-#[tauri::command]
+
 pub async fn create_cliente(request: CreateClienteRequest) -> Result<Cliente, String> {
     let pool = get_db_pool_safe()?;
     
@@ -200,7 +200,7 @@ pub async fn create_cliente(request: CreateClienteRequest) -> Result<Cliente, St
         .ok_or_else(|| "Failed to retrieve created cliente".to_string())
 }
 
-#[tauri::command]
+
 pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, updated_by: i32) -> Result<Option<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -267,7 +267,7 @@ pub async fn update_cliente(cliente_id: i32, request: UpdateClienteRequest, upda
     get_cliente_by_id(cliente_id).await
 }
 
-#[tauri::command]
+
 pub async fn delete_cliente(request: DeleteClienteRequest) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
 
@@ -338,7 +338,7 @@ pub async fn delete_cliente(request: DeleteClienteRequest) -> Result<bool, Strin
 }
 
 // NUEVA FUNCIÓN: Reactivar cliente
-#[tauri::command]
+
 pub async fn reactivate_cliente(cliente_id: i32, reactivated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -387,7 +387,7 @@ pub async fn reactivate_cliente(cliente_id: i32, reactivated_by: i32) -> Result<
     Ok(was_reactivated)
 }
 
-#[tauri::command]
+
 pub async fn count_clientes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM CLIENTE WHERE is_active = 1")
@@ -399,7 +399,7 @@ pub async fn count_clientes() -> Result<i64, String> {
 }
 
 
-#[tauri::command]
+
 pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
     let clientes = sqlx::query_as::<_, Cliente>(
@@ -416,7 +416,7 @@ pub async fn get_clientes_with_pagination(offset: i64, limit: i64) -> Result<Vec
 
 
 // Unificar Filtros 
-#[tauri::command]
+
 pub async fn get_clientes_filtrados(filtros: FiltrosClientes) -> Result<Vec<Cliente>, String> {
     let pool = get_db_pool_safe()?;
 
@@ -521,7 +521,7 @@ struct RutResult {
     cliente_rut: Option<String>,
 }
 
-#[tauri::command]
+
 pub async fn get_ruts_clientes() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
 
@@ -546,7 +546,7 @@ struct CorreoResult {
     cliente_correo: Option<String>,
 }
 
-#[tauri::command]
+
 pub async fn get_correos_clientes() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
 
@@ -571,7 +571,7 @@ struct CiudadResult {
     cliente_direccion: Option<String>,
 }
 
-#[tauri::command]
+
 pub async fn get_ciudades_clientes() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
 

@@ -69,7 +69,7 @@ pub struct TerminoCotizacionRequest {
 }
 
 /// Obtener todos los términos y condiciones
-#[tauri::command]
+
 pub async fn get_terminos_condiciones() -> Result<Vec<TerminoCondicion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -87,7 +87,7 @@ pub async fn get_terminos_condiciones() -> Result<Vec<TerminoCondicion>, String>
 }
 
 /// Obtener términos y condiciones activos
-#[tauri::command]
+
 pub async fn get_terminos_condiciones_activos() -> Result<Vec<TerminoCondicion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -106,7 +106,7 @@ pub async fn get_terminos_condiciones_activos() -> Result<Vec<TerminoCondicion>,
 }
 
 /// Obtener términos y condiciones por tipo
-#[tauri::command]
+
 pub async fn get_terminos_condiciones_by_tipo(tipo: String) -> Result<Vec<TerminoCondicion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -126,7 +126,7 @@ pub async fn get_terminos_condiciones_by_tipo(tipo: String) -> Result<Vec<Termin
 }
 
 /// Obtener términos y condiciones por defecto para un tipo específico
-#[tauri::command]
+
 pub async fn get_terminos_condiciones_default(tipo: String) -> Result<Vec<TerminoCondicion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -147,7 +147,7 @@ pub async fn get_terminos_condiciones_default(tipo: String) -> Result<Vec<Termin
 }
 
 /// Obtener un término y condición por ID
-#[tauri::command]
+
 pub async fn get_termino_condicion_by_id(termino_id: i32) -> Result<Option<TerminoCondicion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -166,7 +166,7 @@ pub async fn get_termino_condicion_by_id(termino_id: i32) -> Result<Option<Termi
 }
 
 /// Crear un nuevo término y condición
-#[tauri::command]
+
 pub async fn create_termino_condicion(
     request: CreateTerminoCondicionRequest,
     created_by: i32
@@ -207,7 +207,7 @@ pub async fn create_termino_condicion(
 }
 
 /// Actualizar un término y condición
-#[tauri::command]
+
 pub async fn update_termino_condicion(
     termino_id: i32,
     request: UpdateTerminoCondicionRequest,
@@ -307,7 +307,7 @@ pub async fn update_termino_condicion(
 }
 
 /// Eliminar (desactivar) un término y condición
-#[tauri::command]
+
 pub async fn delete_termino_condicion(termino_id: i32, deleted_by: i32) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
     
@@ -344,7 +344,7 @@ pub async fn delete_termino_condicion(termino_id: i32, deleted_by: i32) -> Resul
 }
 
 /// Obtener términos aplicados a un informe específico
-#[tauri::command]
+
 pub async fn get_terminos_by_informe(informe_id: i32) -> Result<Vec<TerminoInforme>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -365,7 +365,7 @@ pub async fn get_terminos_by_informe(informe_id: i32) -> Result<Vec<TerminoInfor
 }
 
 /// Obtener términos aplicados a una cotización específica
-#[tauri::command]
+
 pub async fn get_terminos_by_cotizacion(cotizacion_id: i32) -> Result<Vec<TerminoCotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -386,7 +386,7 @@ pub async fn get_terminos_by_cotizacion(cotizacion_id: i32) -> Result<Vec<Termin
 }
 
 /// Aplicar términos y condiciones a un informe
-#[tauri::command]
+
 pub async fn apply_terminos_to_informe(
     informe_id: i32,
     terminos: Vec<TerminoInformeRequest>,
@@ -458,7 +458,7 @@ pub async fn apply_terminos_to_informe(
 }
 
 /// Aplicar términos y condiciones a una cotización
-#[tauri::command]
+
 pub async fn apply_terminos_to_cotizacion(
     cotizacion_id: i32,
     terminos: Vec<TerminoCotizacionRequest>,
@@ -530,7 +530,7 @@ pub async fn apply_terminos_to_cotizacion(
 }
 
 /// Aplicar términos por defecto a un informe
-#[tauri::command]
+
 pub async fn apply_default_terminos_to_informe(
     informe_id: i32,
     applied_by: i32
@@ -559,7 +559,7 @@ pub async fn apply_default_terminos_to_informe(
 }
 
 /// Aplicar términos por defecto a una cotización
-#[tauri::command]
+
 pub async fn apply_default_terminos_to_cotizacion(
     cotizacion_id: i32,
     applied_by: i32
@@ -588,7 +588,7 @@ pub async fn apply_default_terminos_to_cotizacion(
 }
 
 /// Reactivar un término y condición
-#[tauri::command]
+
 pub async fn reactivate_termino_condicion(termino_id: i32, reactivated_by: i32) -> Result<(), String> {
     let pool = get_db_pool_safe()?;
     
@@ -625,7 +625,7 @@ pub async fn reactivate_termino_condicion(termino_id: i32, reactivated_by: i32) 
 }
 
 /// Cambiar estado por defecto de un término
-#[tauri::command]
+
 pub async fn toggle_termino_default(
     termino_id: i32,
     is_default: bool,
@@ -666,7 +666,7 @@ pub async fn toggle_termino_default(
 // ==================== MÉTODOS DE RELACIONES ====================
 
 /// Crear relación entre término y condición e informe
-#[tauri::command]
+
 pub async fn create_termino_informe_relation(
     termino_id: i32,
     informe_id: i32,
@@ -707,7 +707,7 @@ pub async fn create_termino_informe_relation(
 }
 
 /// Crear relación entre término y condición y cotización
-#[tauri::command]
+
 pub async fn create_termino_cotizacion_relation(
     termino_id: i32,
     cotizacion_id: i32,
@@ -748,7 +748,7 @@ pub async fn create_termino_cotizacion_relation(
 }
 
 /// Actualizar relación término-informe (cambiar estado aplicado)
-#[tauri::command]
+
 pub async fn update_termino_informe_relation(
     termino_id: i32,
     informe_id: i32,
@@ -789,7 +789,7 @@ pub async fn update_termino_informe_relation(
 }
 
 /// Actualizar relación término-cotización (cambiar estado aplicado)
-#[tauri::command]
+
 pub async fn update_termino_cotizacion_relation(
     termino_id: i32,
     cotizacion_id: i32,
@@ -830,7 +830,7 @@ pub async fn update_termino_cotizacion_relation(
 }
 
 /// Eliminar relación término-informe
-#[tauri::command]
+
 pub async fn delete_termino_informe_relation(
     termino_id: i32,
     informe_id: i32,
@@ -865,7 +865,7 @@ pub async fn delete_termino_informe_relation(
 }
 
 /// Eliminar relación término-cotización
-#[tauri::command]
+
 pub async fn delete_termino_cotizacion_relation(
     termino_id: i32,
     cotizacion_id: i32,
@@ -900,7 +900,7 @@ pub async fn delete_termino_cotizacion_relation(
 }
 
 /// Obtener todos los informes que tienen un término específico aplicado
-#[tauri::command]
+
 pub async fn get_informes_by_termino(termino_id: i32) -> Result<Vec<TerminoInforme>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -921,7 +921,7 @@ pub async fn get_informes_by_termino(termino_id: i32) -> Result<Vec<TerminoInfor
 }
 
 /// Obtener todas las cotizaciones que tienen un término específico aplicado
-#[tauri::command]
+
 pub async fn get_cotizaciones_by_termino(termino_id: i32) -> Result<Vec<TerminoCotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -942,7 +942,7 @@ pub async fn get_cotizaciones_by_termino(termino_id: i32) -> Result<Vec<TerminoC
 }
 
 /// Verificar si un término está aplicado a un informe específico
-#[tauri::command]
+
 pub async fn check_termino_in_informe(
     termino_id: i32,
     informe_id: i32
@@ -962,7 +962,7 @@ pub async fn check_termino_in_informe(
 }
 
 /// Verificar si un término está aplicado a una cotización específica
-#[tauri::command]
+
 pub async fn check_termino_in_cotizacion(
     termino_id: i32,
     cotizacion_id: i32

@@ -87,7 +87,7 @@ pub struct PiezaInformeRequest {
 }
 
 /// Obtener todos los informes
-#[tauri::command]
+
 pub async fn get_informes() -> Result<Vec<Informe>, String> {
     let pool = get_db_pool_safe()?;
       let informes = sqlx::query_as::<_, Informe>(
@@ -106,7 +106,7 @@ pub async fn get_informes() -> Result<Vec<Informe>, String> {
 }
 
 /// Obtener informes con información detallada
-#[tauri::command]
+
 pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
       let informes = sqlx::query_as::<_, InformeDetallado>(
@@ -127,7 +127,7 @@ pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> 
 }
 
 /// Obtener un informe por ID
-#[tauri::command]
+
 pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, String> {
     println!("[DEBUG] get_informe_by_id: Recibido informe_id = {}", informe_id);
     let pool = get_db_pool_safe()?;
@@ -147,7 +147,7 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
 }
 
 /// Obtener un informe por código
-#[tauri::command]
+
 pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Informe>, String> {
     let pool = get_db_pool_safe()?;
       let informe = sqlx::query_as::<_, Informe>(
@@ -166,7 +166,7 @@ pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Info
 }
 
 /// Crear un nuevo informe
-#[tauri::command]
+
 pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, String> {
     let pool = get_db_pool_safe()?;
     
@@ -258,7 +258,7 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
 }
 
 /// Eliminar un informe en estado de borrador
-#[tauri::command]
+
 pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: String, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
 
@@ -290,7 +290,7 @@ pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: Stri
 }
 
 /// Actualizar un informe existente
-#[tauri::command]
+
 pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, updated_by: i32) -> Result<Option<Informe>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -416,7 +416,7 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
 }
 
 /// Eliminar un informe (eliminación lógica solo si fue enviado al cliente)
-#[tauri::command]
+
 pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -519,7 +519,7 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
 }
 
 /// Buscar informes por texto
-#[tauri::command]
+
 pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -543,7 +543,7 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
 }
 
 /// Contar total de informes
-#[tauri::command]
+
 pub async fn count_informes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
@@ -556,7 +556,7 @@ pub async fn count_informes() -> Result<i64, String> {
 }
 
 /// Obtener informes con paginación
-#[tauri::command]
+
 pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
       let informes = sqlx::query_as::<_, InformeDetallado>(
@@ -580,7 +580,7 @@ pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec
 }
 
 /// Obtener las piezas asociadas a un informe
-#[tauri::command]
+
 pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -600,7 +600,7 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
 }
 
 /// Enviar informe por email al cliente
-#[tauri::command]
+
 pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {
     use crate::commands::ordenes_trabajo::get_orden_trabajo_by_informe_id;
     use crate::commands::equipos::get_equipo_by_id;
@@ -745,7 +745,7 @@ pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<boo
     Ok(true)
 }
 
-#[tauri::command]
+
 pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, String> {
     let pool = get_db_pool_safe()?;
     let informes = sqlx::query_as::<_, Informe>(

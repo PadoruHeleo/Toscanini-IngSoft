@@ -93,7 +93,7 @@ pub struct Filtros {
 }
 
 /// Obtener todas las órdenes de trabajo
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo() -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
 
@@ -111,7 +111,7 @@ pub async fn get_ordenes_trabajo() -> Result<Vec<OrdenTrabajo>, String> {
 }
 
 /// Obtener una orden de trabajo por ID
-#[tauri::command]
+
 pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;    let orden = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
@@ -128,7 +128,7 @@ pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabaj
 }
 
 /// Obtener una orden de trabajo por código
-#[tauri::command]
+
 pub async fn get_orden_trabajo_by_codigo(orden_codigo: String) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;    let orden = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
@@ -145,7 +145,7 @@ pub async fn get_orden_trabajo_by_codigo(orden_codigo: String) -> Result<Option<
 }
 
 /// Obtener órdenes de trabajo por equipo
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_by_equipo(equipo_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
@@ -164,7 +164,7 @@ pub async fn get_ordenes_trabajo_by_equipo(equipo_id: i32) -> Result<Vec<OrdenTr
 }
 
 /// Obtener órdenes de trabajo por estado
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_by_estado(estado: String) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
@@ -183,7 +183,7 @@ pub async fn get_ordenes_trabajo_by_estado(estado: String) -> Result<Vec<OrdenTr
 }
 
 /// Obtener órdenes de trabajo por prioridad
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_by_prioridad(prioridad: String) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
@@ -202,7 +202,7 @@ pub async fn get_ordenes_trabajo_by_prioridad(prioridad: String) -> Result<Vec<O
 }
 
 /// Obtener órdenes de trabajo creadas por un usuario específico
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_by_usuario(usuario_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
@@ -221,7 +221,7 @@ pub async fn get_ordenes_trabajo_by_usuario(usuario_id: i32) -> Result<Vec<Orden
 }
 
 /// Obtener órdenes de trabajo con información detallada (con JOINs)
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_detalladas() -> Result<Vec<OrdenTrabajoDetallada>, String> {
     let pool = get_db_pool_safe()?;
 
@@ -251,7 +251,7 @@ pub async fn get_ordenes_trabajo_detalladas() -> Result<Vec<OrdenTrabajoDetallad
 }
 
 /// Obtener orden de trabajo detallada por ID
-#[tauri::command]
+
 pub async fn get_orden_trabajo_detallada_by_id(orden_id: i32) -> Result<Option<OrdenTrabajoDetallada>, String> {
     let pool = get_db_pool_safe()?;    let orden = sqlx::query_as::<_, OrdenTrabajoDetallada>(
         "SELECT 
@@ -280,7 +280,7 @@ pub async fn get_orden_trabajo_detallada_by_id(orden_id: i32) -> Result<Option<O
 }
 
 /// Crear una nueva orden de trabajo
-#[tauri::command]
+
 pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<OrdenTrabajo, String> {
     let pool = get_db_pool_safe()?;
     
@@ -350,7 +350,7 @@ pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<
 }
 
 /// Actualizar una orden de trabajo
-#[tauri::command]
+
 pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequest, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -470,7 +470,7 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
 }
 
 /// Cambiar el estado de una orden de trabajo
-#[tauri::command]
+
 pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -570,7 +570,7 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
 }
 
 /// Asignar cotización a una orden de trabajo
-#[tauri::command]
+
 pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -595,7 +595,7 @@ pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32,
 }
 
 /// Asignar informe a una orden de trabajo
-#[tauri::command]
+
 pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -635,7 +635,7 @@ pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updat
 }
 
 /// Eliminar una orden de trabajo
-#[tauri::command]
+
 pub async fn delete_orden_trabajo(orden_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -672,7 +672,7 @@ pub async fn delete_orden_trabajo(orden_id: i32, deleted_by: i32) -> Result<bool
 }
 
 /// Obtener estadísticas de órdenes de trabajo
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
     let pool = get_db_pool_safe()?;
     
@@ -733,7 +733,7 @@ pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
 }
 
 /// Buscar órdenes de trabajo por texto
-#[tauri::command]
+
 pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrabajoDetallada>, String> {
     let pool = get_db_pool_safe()?;
     let search_pattern = format!("%{}%", search_term);
@@ -771,7 +771,7 @@ pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrab
 }
 
 /// Enviar notificación de orden de trabajo por email
-#[tauri::command]
+
 pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Result<bool, String> {
     use crate::email::EmailService;
     use crate::commands::equipos::get_equipo_by_id;
@@ -821,7 +821,7 @@ pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Res
 }
 
 /// Obtener orden de trabajo por informe_id
-#[tauri::command]
+
 pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -841,7 +841,7 @@ pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<O
 }
 //Fltros Unificados
 /// Obtener órdenes de trabajo con filtros unificados
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<OrdenTrabajoDetallada>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -941,7 +941,7 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
         .await
         .map_err(|e| format!("Database error: {}", e))
 }
-#[tauri::command]
+
 pub async fn get_modelos_disponibles() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -954,7 +954,7 @@ pub async fn get_modelos_disponibles() -> Result<Vec<String>, String> {
     
     Ok(modelos)
 }
-#[tauri::command]
+
 pub async fn get_marcas_disponibles() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -967,7 +967,7 @@ pub async fn get_marcas_disponibles() -> Result<Vec<String>, String> {
     
     Ok(marcas)
 }
-#[tauri::command]
+
 pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -986,7 +986,7 @@ pub async fn get_clientes_disponibles() -> Result<Vec<String>, String> {
     Ok(clientes)
 }
 
-#[tauri::command]
+
 pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
@@ -1003,7 +1003,7 @@ pub async fn get_ordenes_trabajo_by_cliente(cliente_id: i32) -> Result<Vec<Orden
     Ok(ordenes)
 }
 
-#[tauri::command]
+
 pub async fn remove_cotizacion_from_ordenes(cotizacion_id: i32, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1030,7 +1030,7 @@ pub async fn remove_cotizacion_from_ordenes(cotizacion_id: i32, updated_by: i32)
     }
 }
 
-#[tauri::command]
+
 pub async fn remove_informe_from_ordenes(informe_id: i32, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     

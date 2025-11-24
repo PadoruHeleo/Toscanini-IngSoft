@@ -108,7 +108,7 @@ struct OrdenInfoRow {
 }
 
 /// Obtener todas las cotizaciones
-#[tauri::command]
+
 pub async fn get_cotizaciones() -> Result<Vec<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -127,7 +127,7 @@ pub async fn get_cotizaciones() -> Result<Vec<Cotizacion>, String> {
 }
 
 /// Obtener cotizaciones con información detallada
-#[tauri::command]
+
 pub async fn get_cotizaciones_detalladas() -> Result<Vec<CotizacionDetallada>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -148,7 +148,7 @@ pub async fn get_cotizaciones_detalladas() -> Result<Vec<CotizacionDetallada>, S
 }
 
 /// Obtener una cotización por ID
-#[tauri::command]
+
 pub async fn get_cotizacion_by_id(cotizacion_id: i32) -> Result<Option<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -167,7 +167,7 @@ pub async fn get_cotizacion_by_id(cotizacion_id: i32) -> Result<Option<Cotizacio
 }
 
 /// Obtener una cotización por código
-#[tauri::command]
+
 pub async fn get_cotizacion_by_codigo(cotizacion_codigo: String) -> Result<Option<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -186,7 +186,7 @@ pub async fn get_cotizacion_by_codigo(cotizacion_codigo: String) -> Result<Optio
 }
 
 /// Crear una nueva cotización
-#[tauri::command]
+
 pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotizacion, String> {
     let pool = get_db_pool_safe()?;
     // Generar código automático: COT-YYYY-XXXX
@@ -293,7 +293,7 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
 }
 
 /// Actualizar una cotización existente
-#[tauri::command]
+
 pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequest, updated_by: i32) -> Result<Option<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -445,7 +445,7 @@ pub async fn update_cotizacion(cotizacion_id: i32, request: UpdateCotizacionRequ
 }
 
 /// Eliminar una cotización (eliminación lógica solo si fue enviada al cliente)
-#[tauri::command]
+
 pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -547,7 +547,7 @@ pub async fn delete_cotizacion(cotizacion_id: i32, deleted_by: i32) -> Result<bo
 }
 
 /// Obtener todas las piezas
-#[tauri::command]
+
 pub async fn get_piezas() -> Result<Vec<Pieza>, String> {
     let pool = get_db_pool_safe()?;
     let piezas = sqlx::query_as::<_, Pieza>(
@@ -560,7 +560,7 @@ pub async fn get_piezas() -> Result<Vec<Pieza>, String> {
 }
 
 /// Obtener una pieza por ID
-#[tauri::command]
+
 pub async fn get_pieza_by_id(pieza_id: i32) -> Result<Option<Pieza>, String> {
     let pool = get_db_pool_safe()?;
     let pieza = sqlx::query_as::<_, Pieza>(
@@ -574,7 +574,7 @@ pub async fn get_pieza_by_id(pieza_id: i32) -> Result<Option<Pieza>, String> {
 }
 
 /// Crear una nueva pieza
-#[tauri::command]
+
 pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> {
     let pool = get_db_pool_safe()?;
     let result = sqlx::query(
@@ -616,7 +616,7 @@ pub struct UpdatePiezaRequest {
 }
 
 /// Actualizar una pieza existente
-#[tauri::command]
+
 pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<Option<Pieza>, String> {
     let pool = get_db_pool_safe()?;
     // Obtener datos previos para el log
@@ -668,7 +668,7 @@ pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<
 }
 
 /// Eliminar una pieza
-#[tauri::command]
+
 pub async fn delete_pieza(pieza_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     // Obtener datos previos para el log
@@ -703,7 +703,7 @@ pub async fn delete_pieza(pieza_id: i32) -> Result<bool, String> {
 }
 
 /// Buscar cotizaciones por texto
-#[tauri::command]
+
 pub async fn search_cotizaciones(search_term: String) -> Result<Vec<CotizacionDetallada>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -726,7 +726,7 @@ pub async fn search_cotizaciones(search_term: String) -> Result<Vec<CotizacionDe
 }
 
 /// Contar total de cotizaciones
-#[tauri::command]
+
 pub async fn count_cotizaciones() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
@@ -739,7 +739,7 @@ pub async fn count_cotizaciones() -> Result<i64, String> {
 }
 
 /// Obtener cotizaciones con paginación
-#[tauri::command]
+
 pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result<Vec<CotizacionDetallada>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -762,7 +762,7 @@ pub async fn get_cotizaciones_with_pagination(offset: i64, limit: i64) -> Result
 }
 
 /// Obtener las piezas asociadas a una cotización
-#[tauri::command]
+
 pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotizacion>, String> {
     let pool = get_db_pool_safe()?;
     let piezas = sqlx::query_as::<_, PiezaCotizacion>(
@@ -790,7 +790,7 @@ pub async fn get_piezas_cotizacion(cotizacion_id: i32) -> Result<Vec<PiezaCotiza
     Ok(piezas)
 }
 
-#[tauri::command]
+
 pub async fn get_cotizaciones_by_cliente(cliente_id: i32) -> Result<Vec<Cotizacion>, String> {
     let pool = get_db_pool_safe()?;
     let cotizaciones = sqlx::query_as::<_, Cotizacion>(
@@ -811,7 +811,7 @@ pub async fn get_cotizaciones_by_cliente(cliente_id: i32) -> Result<Vec<Cotizaci
 }
 
 /// Obtener todas las piezas con información de inventario
-#[tauri::command]
+
 pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
     let pool = get_db_pool_safe()?;
     let piezas = sqlx::query_as::<_, Pieza>(
@@ -826,7 +826,7 @@ pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
 }
 
 /// Actualizar el stock de una pieza
-#[tauri::command]
+
 pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -912,7 +912,7 @@ pub struct InventarioEquipoRequest {
 }
 
 // Funciones para inventario de equipos
-#[tauri::command]
+
 pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -932,7 +932,7 @@ pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
     Ok(equipos)
 }
 
-#[tauri::command]
+
 pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -974,7 +974,7 @@ pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Resul
     }
 }
 
-#[tauri::command]
+
 pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoRequest) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1017,7 +1017,7 @@ pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoR
     }
 }
 
-#[tauri::command]
+
 pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1057,7 +1057,7 @@ pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
     }
 }
 
-#[tauri::command]
+
 pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1131,7 +1131,7 @@ pub struct RegistrarSalidaRequest {
 }
 
 /// Registrar salida de equipo en tabla específica (NUEVA IMPLEMENTACIÓN)
-#[tauri::command]
+
 pub async fn registrar_salida_equipo_v2(request: RegistrarSalidaRequest) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1246,7 +1246,7 @@ pub async fn registrar_salida_equipo_v2(request: RegistrarSalidaRequest) -> Resu
 }
 
 /// Obtener historial completo de salidas
-#[tauri::command]
+
 pub async fn get_salidas_equipo() -> Result<Vec<SalidaEquipo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1271,7 +1271,7 @@ pub async fn get_salidas_equipo() -> Result<Vec<SalidaEquipo>, String> {
 }
 
 /// Verificar si una orden puede registrar salida (NUEVA VALIDACIÓN)
-#[tauri::command]
+
 pub async fn puede_registrar_salida_v2(orden_trabajo_id: i32) -> Result<(bool, String), String> {
     let pool = get_db_pool_safe()?;
     
@@ -1315,7 +1315,7 @@ pub async fn puede_registrar_salida_v2(orden_trabajo_id: i32) -> Result<(bool, S
 }
 
 /// Obtener salida específica por orden de trabajo
-#[tauri::command]
+
 pub async fn get_salida_by_orden(orden_trabajo_id: i32) -> Result<Option<SalidaEquipo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1341,7 +1341,7 @@ pub async fn get_salida_by_orden(orden_trabajo_id: i32) -> Result<Option<SalidaE
 }
 
 /// Actualizar las piezas de una cotización
-#[tauri::command]
+
 pub async fn update_cotizacion_piezas(
     cotizacion_id: i32,
     piezas: Vec<PiezaCotizacionRequest>,

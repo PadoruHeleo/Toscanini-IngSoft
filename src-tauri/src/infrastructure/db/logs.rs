@@ -52,7 +52,7 @@ pub struct LogFilters {
 }
 
 /// Crear un nuevo registro de auditoría
-#[tauri::command]
+
 pub async fn create_audit_log(request: CreateAuditLogRequest) -> Result<AuditLog, String> {
     let pool = get_db_pool_safe()?;
     
@@ -79,7 +79,7 @@ pub async fn create_audit_log(request: CreateAuditLogRequest) -> Result<AuditLog
 }
 
 /// Obtener un registro de auditoría por ID
-#[tauri::command]
+
 pub async fn get_audit_log_by_id(log_id: i32) -> Result<Option<AuditLog>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -97,7 +97,7 @@ pub async fn get_audit_log_by_id(log_id: i32) -> Result<Option<AuditLog>, String
 }
 
 /// Obtener todos los registros de auditoría con filtros opcionales
-#[tauri::command]
+
 pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogWithUser>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -196,7 +196,7 @@ pub async fn get_audit_logs(filters: Option<LogFilters>) -> Result<Vec<AuditLogW
 }
 
 /// Obtener registros de auditoría por usuario
-#[tauri::command]
+
 pub async fn get_audit_logs_by_user(usuario_id: i32, limit: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -222,7 +222,7 @@ pub async fn get_audit_logs_by_user(usuario_id: i32, limit: Option<i32>) -> Resu
 }
 
 /// Obtener registros de auditoría por entidad
-#[tauri::command]
+
 pub async fn get_audit_logs_by_entity(entidad_tabla: String, entidad_id: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -255,7 +255,7 @@ pub async fn get_audit_logs_by_entity(entidad_tabla: String, entidad_id: Option<
 }
 
 /// Eliminar registros de auditoría antiguos (cleanup)
-#[tauri::command]
+
 pub async fn cleanup_old_audit_logs(days_old: i32) -> Result<u64, String> {
     let pool = get_db_pool_safe()?;
     
@@ -271,7 +271,7 @@ pub async fn cleanup_old_audit_logs(days_old: i32) -> Result<u64, String> {
 }
 
 /// Contar total de registros de auditoría
-#[tauri::command]
+
 pub async fn count_audit_logs() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
@@ -306,7 +306,7 @@ pub async fn log_action(
 }
 
 /// Obtener estadísticas de actividad
-#[tauri::command]
+
 pub async fn get_audit_stats() -> Result<serde_json::Value, String> {
     let pool = get_db_pool_safe()?;
     

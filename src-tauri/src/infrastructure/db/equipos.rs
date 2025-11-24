@@ -94,7 +94,7 @@ pub struct FiltrosEquipos {
 }
 
 /// Obtener todos los equipos
-#[tauri::command]
+
 pub async fn get_equipos() -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipos = sqlx::query_as::<_, Equipo>(
@@ -110,7 +110,7 @@ pub async fn get_equipos() -> Result<Vec<Equipo>, String> {
 }
 
 /// Obtener un equipo por ID
-#[tauri::command]
+
 pub async fn get_equipo_by_id(equipo_id: i32) -> Result<Option<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipo = sqlx::query_as::<_, Equipo>(
@@ -127,7 +127,7 @@ pub async fn get_equipo_by_id(equipo_id: i32) -> Result<Option<Equipo>, String> 
 }
 
 /// Obtener un equipo por número de serie
-#[tauri::command]
+
 pub async fn get_equipo_by_numero_serie(numero_serie: String) -> Result<Option<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipo = sqlx::query_as::<_, Equipo>(
@@ -144,7 +144,7 @@ pub async fn get_equipo_by_numero_serie(numero_serie: String) -> Result<Option<E
 }
 
 /// Obtener equipos por cliente
-#[tauri::command]
+
 pub async fn get_equipos_by_cliente(cliente_id: i32) -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipos = sqlx::query_as::<_, Equipo>(
@@ -162,7 +162,7 @@ pub async fn get_equipos_by_cliente(cliente_id: i32) -> Result<Vec<Equipo>, Stri
 }
 
 /// Obtener equipos por tipo
-#[tauri::command]
+
 pub async fn get_equipos_by_tipo(equipo_tipo: String) -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipos = sqlx::query_as::<_, Equipo>(
@@ -180,7 +180,7 @@ pub async fn get_equipos_by_tipo(equipo_tipo: String) -> Result<Vec<Equipo>, Str
 }
 
 /// Obtener equipos por usuario que los creó
-#[tauri::command]
+
 pub async fn get_equipos_by_created_by(created_by: i32) -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipos = sqlx::query_as::<_, Equipo>(
@@ -198,7 +198,7 @@ pub async fn get_equipos_by_created_by(created_by: i32) -> Result<Vec<Equipo>, S
 }
 
 /// Buscar equipos por término de búsqueda
-#[tauri::command]
+
 pub async fn search_equipos(search_term: String) -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let search_pattern = format!("%{}%", search_term);
@@ -224,7 +224,7 @@ pub async fn search_equipos(search_term: String) -> Result<Vec<Equipo>, String> 
 }
 
 /// Crear un nuevo equipo
-#[tauri::command]
+
 pub async fn create_equipo(request: CreateEquipoRequest) -> Result<Equipo, String> {
     let pool = get_db_pool_safe()?;
     
@@ -285,7 +285,7 @@ pub async fn create_equipo(request: CreateEquipoRequest) -> Result<Equipo, Strin
 }
 
 /// Actualizar un equipo existente
-#[tauri::command]
+
 pub async fn update_equipo(equipo_id: i32, request: UpdateEquipoRequest, updated_by: i32) -> Result<Option<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -378,7 +378,7 @@ pub async fn update_equipo(equipo_id: i32, request: UpdateEquipoRequest, updated
 }
 
 /// Eliminar un equipo
-#[tauri::command]
+
 pub async fn delete_equipo(equipo_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -428,7 +428,7 @@ pub async fn delete_equipo(equipo_id: i32, deleted_by: i32) -> Result<bool, Stri
 }
 
 /// Contar total de equipos
-#[tauri::command]
+
 pub async fn count_equipos() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM EQUIPO")
@@ -440,7 +440,7 @@ pub async fn count_equipos() -> Result<i64, String> {
 }
 
 /// Obtener equipos con paginación
-#[tauri::command]
+
 pub async fn get_equipos_with_pagination(offset: i64, limit: i64) -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     let equipos = sqlx::query_as::<_, Equipo>(
@@ -459,7 +459,7 @@ pub async fn get_equipos_with_pagination(offset: i64, limit: i64) -> Result<Vec<
 }
 
 /// Obtener estadísticas de equipos por tipo
-#[tauri::command]
+
 pub async fn get_equipos_stats_by_tipo() -> Result<Vec<(String, i64)>, String> {
     let pool = get_db_pool_safe()?;
     let stats = sqlx::query_as::<_, (String, i64)>(
@@ -476,7 +476,7 @@ pub async fn get_equipos_stats_by_tipo() -> Result<Vec<(String, i64)>, String> {
 }
 
 /// Obtener equipos por rango de precios
-#[tauri::command]
+
 pub async fn get_equipos_by_price_range(min_price: Option<i32>, max_price: Option<i32>) -> Result<Vec<Equipo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -527,7 +527,7 @@ pub struct EquipoWithCliente {
 }
 
 /// Obtener equipos con información del cliente
-#[tauri::command]
+
 pub async fn get_equipos_with_cliente() -> Result<Vec<EquipoWithCliente>, String> {
     let pool = get_db_pool_safe()?;
     let equipos = sqlx::query_as::<_, EquipoWithCliente>(
@@ -546,7 +546,7 @@ pub async fn get_equipos_with_cliente() -> Result<Vec<EquipoWithCliente>, String
 }
 
 /// Cambiar el cliente de un equipo
-#[tauri::command]
+
 pub async fn transfer_equipo_to_cliente(equipo_id: i32, new_cliente_id: i32, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -597,7 +597,7 @@ pub async fn transfer_equipo_to_cliente(equipo_id: i32, new_cliente_id: i32, upd
 }
 
 /// Obtener marcas únicas de equipos
-#[tauri::command]
+
 pub async fn get_equipos_marcas() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     let marcas = sqlx::query_scalar::<_, String>(
@@ -614,7 +614,7 @@ pub async fn get_equipos_marcas() -> Result<Vec<String>, String> {
 }
 
 /// Obtener modelos únicos por marca
-#[tauri::command]
+
 pub async fn get_equipos_modelos_by_marca(marca: String) -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     let modelos = sqlx::query_scalar::<_, String>(
@@ -632,7 +632,7 @@ pub async fn get_equipos_modelos_by_marca(marca: String) -> Result<Vec<String>, 
 }
 
 /// Obtener ubicaciones únicas de equipos
-#[tauri::command]
+
 pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     let ubicaciones = sqlx::query_scalar::<_, String>(
@@ -649,7 +649,7 @@ pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
 }
 
 /// Registrar salida de equipo del inventario
-#[tauri::command]
+
 pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<SalidaEquipoResponse, String> {
     
     // Validar que el equipo existe
@@ -779,7 +779,7 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
 }
 
 /// Verificar si un equipo puede registrar salida
-#[tauri::command]
+
 pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, String), String> {
     // Verificar que el equipo existe
     let equipo = get_equipo_by_id(equipo_id).await?;
@@ -838,7 +838,7 @@ pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, Stri
 }
 
 /// Verificar si un equipo está actualmente en el sistema (no ha salido)
-#[tauri::command]
+
 pub async fn equipo_esta_en_sistema(equipo_id: i32) -> Result<(bool, String), String> {
     // Verificar que el equipo existe
     let equipo = get_equipo_by_id(equipo_id).await?;
@@ -893,7 +893,7 @@ pub async fn equipo_esta_en_sistema(equipo_id: i32) -> Result<(bool, String), St
 }
 
 /// Obtener equipos que están actualmente en el sistema
-#[tauri::command]
+
 pub async fn get_equipos_en_sistema() -> Result<Vec<Equipo>, String> {
     let todos_equipos = get_equipos().await?;
     let mut equipos_en_sistema = Vec::new();
@@ -909,7 +909,7 @@ pub async fn get_equipos_en_sistema() -> Result<Vec<Equipo>, String> {
 }
 
 /// Obtener equipos que han salido del sistema
-#[tauri::command]
+
 pub async fn get_equipos_fuera_sistema() -> Result<Vec<Equipo>, String> {
     let todos_equipos = get_equipos().await?;
     let mut equipos_fuera_sistema = Vec::new();
@@ -925,7 +925,7 @@ pub async fn get_equipos_fuera_sistema() -> Result<Vec<Equipo>, String> {
 }
 
 /// Obtener estadísticas de equipos en/fuera del sistema
-#[tauri::command]
+
 pub async fn get_estadisticas_equipos_sistema() -> Result<serde_json::Value, String> {
     let todos_equipos = get_equipos().await?;
     let mut en_sistema = 0;
@@ -974,7 +974,7 @@ fn get_motivo_display(motivo: &str) -> &str {
 }
 
 /// Obtener equipos con estado de última orden de trabajo y filtros avanzados
-#[tauri::command]
+
 pub async fn get_equipos_filtrados(filtros: FiltrosEquipos) -> Result<Vec<EquipoConEstado>, String> {
     let pool = get_db_pool_safe()?;
 
@@ -1135,7 +1135,7 @@ pub async fn get_equipos_filtrados(filtros: FiltrosEquipos) -> Result<Vec<Equipo
 }
 
 /// Obtener equipos con estado (versión simplificada para compatibilidad)
-#[tauri::command]
+
 pub async fn get_equipos_con_estado() -> Result<Vec<EquipoConEstado>, String> {
     let filtros = FiltrosEquipos {
         fecha_inicio: None,
@@ -1156,7 +1156,7 @@ pub async fn get_equipos_con_estado() -> Result<Vec<EquipoConEstado>, String> {
 }
 
 /// Obtener todos los clientes únicos que tienen equipos
-#[tauri::command]
+
 pub async fn get_clientes_con_equipos() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1175,7 +1175,7 @@ pub async fn get_clientes_con_equipos() -> Result<Vec<String>, String> {
 }
 
 /// Obtener todos los tipos únicos de equipos
-#[tauri::command]
+
 pub async fn get_tipos_equipos() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1193,7 +1193,7 @@ pub async fn get_tipos_equipos() -> Result<Vec<String>, String> {
 }
 
 /// Obtener todos los estados únicos de órdenes de trabajo
-#[tauri::command]
+
 pub async fn get_estados_ordenes_trabajo() -> Result<Vec<String>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -1211,7 +1211,7 @@ pub async fn get_estados_ordenes_trabajo() -> Result<Vec<String>, String> {
 }
 
 /// Obtener estadísticas de equipos por estado de orden de trabajo
-#[tauri::command]
+
 pub async fn get_estadisticas_equipos_por_estado() -> Result<Vec<(String, i64)>, String> {
     let pool = get_db_pool_safe()?;
     

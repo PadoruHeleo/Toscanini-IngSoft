@@ -83,7 +83,7 @@ pub struct ChangePhoneRequest {
     pub password: String, // Requiere contraseña actual para confirmar
 }
 
-#[tauri::command]
+
 pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
     let pool = get_db_pool_safe()?;
             let usuarios = sqlx::query_as::<_, Usuario>(
@@ -96,7 +96,7 @@ pub async fn get_usuarios() -> Result<Vec<Usuario>, String> {
     Ok(usuarios)
 }
 
-#[tauri::command]
+
 pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
             let usuario = sqlx::query_as::<_, Usuario>(
@@ -110,7 +110,7 @@ pub async fn get_usuario_by_id(usuario_id: i32) -> Result<Option<Usuario>, Strin
     Ok(usuario)
 }
 
-#[tauri::command]
+
 pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
             let usuario = sqlx::query_as::<_, Usuario>(
@@ -124,7 +124,7 @@ pub async fn get_usuario_by_rut(usuario_rut: String) -> Result<Option<Usuario>, 
     Ok(usuario)
 }
 
-#[tauri::command]
+
 pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, String> {
     let pool = get_db_pool_safe()?;
     
@@ -163,7 +163,7 @@ pub async fn create_usuario(request: CreateUsuarioRequest) -> Result<Usuario, St
         .ok_or_else(|| "Failed to retrieve created usuario".to_string())
 }
 
-#[tauri::command]
+
 pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -228,7 +228,7 @@ pub async fn update_usuario(usuario_id: i32, request: UpdateUsuarioRequest) -> R
     get_usuario_by_id(usuario_id).await
 }
 
-#[tauri::command]
+
 pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -263,7 +263,7 @@ pub async fn delete_usuario(usuario_id: i32) -> Result<bool, String> {
     Ok(was_deleted)
 }
 
-#[tauri::command]
+
 pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: String) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -369,7 +369,7 @@ pub async fn authenticate_usuario(usuario_correo: String, usuario_contrasena: St
     }
 }
 
-#[tauri::command]
+
 pub async fn create_admin_user() -> Result<Usuario, String> {
     let pool = get_db_pool_safe()?;
       // Verificar si ya existe un usuario admin
@@ -460,7 +460,7 @@ pub async fn create_admin_user() -> Result<Usuario, String> {
     })
 }
 
-#[tauri::command]
+
 pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Result<String, String> {
     println!("🔄 Iniciando proceso de recuperación de contraseña para: {}", request.usuario_correo);
     
@@ -583,7 +583,7 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     Ok("Código de recuperación enviado a tu correo electrónico. Revisa tu bandeja de entrada.".to_string())
 }
 
-#[tauri::command]
+
 pub async fn verify_reset_code(reset_code: String) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -615,7 +615,7 @@ pub async fn verify_reset_code(reset_code: String) -> Result<bool, String> {
     }
 }
 
-#[tauri::command]
+
 pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<String, String> {
     let pool = get_db_pool_safe()?;
     
@@ -682,7 +682,7 @@ pub async fn reset_password_with_code(request: ResetPasswordRequest) -> Result<S
     Ok("Contraseña cambiada exitosamente".to_string())
 }
 
-#[tauri::command]
+
 pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
     let pool = get_db_pool_safe()?;
       let result = sqlx::query(
@@ -707,7 +707,7 @@ pub async fn cleanup_expired_reset_codes() -> Result<u64, String> {
     Ok(deleted_count)
 }
 
-#[tauri::command]
+
 pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -764,7 +764,7 @@ pub async fn validate_session(session_token: String) -> Result<Option<Usuario>, 
     }
 }
 
-#[tauri::command]
+
 pub async fn logout_user(session_token: String) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -793,7 +793,7 @@ pub async fn logout_user(session_token: String) -> Result<bool, String> {
     Ok(was_logged_out)
 }
 
-#[tauri::command]
+
 pub async fn cleanup_expired_sessions() -> Result<u64, String> {
     let pool = get_db_pool_safe()?;
     
@@ -819,7 +819,7 @@ pub async fn cleanup_expired_sessions() -> Result<u64, String> {
     Ok(cleaned_count)
 }
 
-#[tauri::command]
+
 pub async fn change_user_password(usuario_id: i32, request: ChangePasswordRequest) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -880,7 +880,7 @@ pub async fn change_user_password(usuario_id: i32, request: ChangePasswordReques
     Ok(success)
 }
 
-#[tauri::command]
+
 pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -956,7 +956,7 @@ pub async fn change_user_email(usuario_id: i32, request: ChangeEmailRequest) -> 
     }
 }
 
-#[tauri::command]
+
 pub async fn verify_email_in_use(correo: String) -> bool {
     let pool = get_db_pool_safe().unwrap();
     
@@ -973,7 +973,7 @@ pub async fn verify_email_in_use(correo: String) -> bool {
     }
 }
 
-#[tauri::command]
+
 pub fn verify_email(email: String) -> bool {
     // Verifica que tenga un '@' y un '.' después del '@'
     let parts: Vec<&str> = email.split('@').collect();
@@ -991,7 +991,7 @@ pub fn verify_email(email: String) -> bool {
     true
 }
 
-#[tauri::command]
+
 pub async fn send_password_email(
     to_email: &str,
     user_name: &str,
@@ -1001,7 +1001,7 @@ pub async fn send_password_email(
     service.send_password_email(to_email, user_name, temp_password).await
 }
 
-#[tauri::command]
+
 pub async fn verify_rut_in_use(rut: String) -> bool {
     let pool = get_db_pool_safe().unwrap();
 
@@ -1018,7 +1018,7 @@ pub async fn verify_rut_in_use(rut: String) -> bool {
     }
 }
 
-#[tauri::command]
+
 pub fn verify_phone(phone: String) -> bool {
     if phone.len() > 12 {
         return false;
@@ -1036,7 +1036,7 @@ pub fn verify_phone(phone: String) -> bool {
     true
 }
 
-#[tauri::command]
+
 pub async fn change_user_phone(usuario_id: i32, request: ChangePhoneRequest) -> Result<Option<Usuario>, String> {
     let pool = get_db_pool_safe()?;
     
