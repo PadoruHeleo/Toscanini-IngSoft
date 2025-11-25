@@ -7,105 +7,17 @@ use chrono::{DateTime, Utc};
 use chrono::Datelike;
 use sqlx::Row;
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct Cotizacion {
-    pub cotizacion_id: i32,
-    pub cotizacion_codigo: Option<String>,
-    pub costo_revision: Option<i32>,
-    pub costo_reparacion: Option<i32>,
-    pub costo_total: Option<i32>,
-    pub is_aprobada: Option<bool>,
-    pub is_borrador: Option<bool>,
-    pub informe: String,
-    pub created_by: Option<i32>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct Pieza {
-    pub pieza_id: i32,
-    pub pieza_nombre: Option<String>,
-    pub pieza_marca: Option<String>,
-    pub pieza_desc: Option<String>,
-    pub pieza_precio: Option<i32>,
-    pub pieza_stock: Option<i32>,
-    pub created_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct PiezaCotizacion {
-    pub pieza_id: i32,
-    pub cotizacion_id: i32,
-    pub cantidad: Option<i32>,
-    // Campos adicionales para JOINs
-    pub pieza_nombre: Option<String>,
-    pub pieza_marca: Option<String>,
-    pub pieza_desc: Option<String>,
-    pub pieza_precio: Option<i32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct CotizacionDetallada {
-    pub cotizacion_id: i32,
-    pub cotizacion_codigo: Option<String>,
-    pub costo_revision: Option<i32>,
-    pub costo_reparacion: Option<i32>,
-    pub costo_total: Option<i32>,
-    pub is_aprobada: Option<bool>,
-    pub is_borrador: Option<bool>,
-    pub informe: String,
-    pub created_by: Option<i32>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub created_by_nombre: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateCotizacionRequest {
-    // pub cotizacion_codigo: String, // Eliminar este campo
-    pub costo_revision: Option<i32>,
-    pub costo_reparacion: Option<i32>,
-    pub costo_total: Option<i32>,
-    pub is_aprobada: Option<bool>,
-    pub is_borrador: Option<bool>,
-    pub informe: String,
-    pub created_by: i32,
-    pub piezas: Option<Vec<PiezaCotizacionRequest>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateCotizacionRequest {
-    pub cotizacion_codigo: Option<String>,
-    pub costo_revision: Option<i32>,
-    pub costo_reparacion: Option<i32>,
-    pub costo_total: Option<i32>,
-    pub is_aprobada: Option<bool>,
-    pub is_borrador: Option<bool>,
-    pub informe: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreatePiezaRequest {
-    pub pieza_nombre: String,
-    pub pieza_marca: Option<String>,
-    pub pieza_desc: Option<String>,
-    pub pieza_precio: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PiezaCotizacionRequest {
-    pub pieza_id: i32,
-    pub cantidad: i32,
-}
-
-#[derive(Debug)]
-struct OrdenInfoRow {
-    // orden_id: i32,  // Campo no utilizado
-    orden_codigo: Option<String>,
-    estado: String,
-    // equipo_nombre: Option<String>,  // Campo no utilizado
-    // cliente_nombre: Option<String>,  // Campo no utilizado
-}
+use crate::models::cotizacion::{
+    Cotizacion, 
+    Pieza, 
+    PiezaCotizacion, 
+    CotizacionDetallada, 
+    CreateCotizacionRequest, 
+    UpdateCotizacionRequest, 
+    CreatePiezaRequest, 
+    PiezaCotizacionRequest,
+    OrdenInfoRow
+};
 
 /// Obtener todas las cotizaciones
 #[tauri::command]
@@ -1163,11 +1075,8 @@ pub async fn registrar_salida_equipo_v2(request: RegistrarSalidaRequest) -> Resu
 
     // Crear una estructura para usar en el resto del código
     let orden = OrdenInfoRow {
-        // orden_id,  // Campo no utilizado
         orden_codigo,
         estado,
-        // equipo_nombre,  // Campo no utilizado
-        // cliente_nombre,  // Campo no utilizado
     };
     
     // Estados que permiten salida

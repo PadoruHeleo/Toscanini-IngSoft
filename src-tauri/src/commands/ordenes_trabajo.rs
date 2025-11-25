@@ -1,96 +1,14 @@
-use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
-use chrono::{DateTime, Utc};
 use chrono::Datelike;
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct OrdenTrabajo {
-    pub orden_id: i32,
-    pub orden_codigo: Option<String>,
-    pub orden_desc: Option<String>,
-    pub prioridad: Option<String>,
-    pub estado: Option<String>,
-    pub has_garantia: Option<bool>,
-    pub equipo_id: Option<i32>,
-    pub created_by: Option<i32>,
-    pub cotizacion_id: Option<i32>,
-    pub informe_id: Option<i32>,
-    pub pre_informe: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub finished_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateOrdenTrabajoRequest {
-    // orden_codigo se genera automáticamente
-    pub orden_desc: String,
-    pub prioridad: String, // 'baja', 'media', 'alta'
-    pub estado: String, // 'pendiente', 'en_proceso', 'completado', 'cancelado'
-    pub has_garantia: bool,
-    pub equipo_id: i32,
-    pub created_by: i32,
-    pub pre_informe: String,
-    pub cotizacion_id: Option<i32>,
-    pub informe_id: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateOrdenTrabajoRequest {
-    pub orden_codigo: Option<String>,
-    pub orden_desc: Option<String>,
-    pub prioridad: Option<String>,
-    pub estado: Option<String>,
-    pub has_garantia: Option<bool>,
-    pub equipo_id: Option<i32>,
-    pub cotizacion_id: Option<i32>,
-    pub informe_id: Option<i32>,
-    pub pre_informe: Option<String>,
-    pub finished_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct OrdenTrabajoDetallada {
-    pub orden_id: i32,
-    pub orden_codigo: Option<String>,
-    pub orden_desc: Option<String>,
-    pub prioridad: Option<String>,
-    pub estado: Option<String>,
-    pub has_garantia: Option<bool>,
-    pub equipo_id: Option<i32>,
-    pub created_by: Option<i32>,
-    pub cotizacion_id: Option<i32>,
-    pub informe_id: Option<i32>,
-    pub pre_informe: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub finished_at: Option<DateTime<Utc>>,
-    // Información del equipo
-    pub numero_serie: Option<String>,
-    pub equipo_marca: Option<String>,
-    pub equipo_modelo: Option<String>,
-    pub equipo_tipo: Option<String>,
-    // Información del cliente (a través del equipo)
-    pub cliente_id: Option<i32>,
-    pub cliente_nombre: Option<String>,
-    // Información del usuario que creó la orden
-    pub creador_nombre: Option<String>,
-    // Información de cotización
-    pub cotizacion_codigo: Option<String>,
-    pub costo_total: Option<i32>,
-    // Información de informe
-    pub informe_codigo: Option<String>,
-}
-#[derive(Debug, Deserialize)]
-pub struct Filtros {
-    pub fecha_inicio: Option<String>,
-    pub fecha_fin: Option<String>,
-    pub marcas: Option<Vec<String>>,
-    pub modelos: Option<Vec<String>>, 
-    pub prioridades: Option<Vec<String>>,
-    pub clientes: Option<Vec<String>>,
-    pub estados: Option<Vec<String>>, // ← NUEVO
-}
+use crate::models::ordenes_trabajo::{
+    OrdenTrabajo,
+    CreateOrdenTrabajoRequest,
+    UpdateOrdenTrabajoRequest,
+    OrdenTrabajoDetallada,
+    Filtros
+};
 
 /// Obtener todas las órdenes de trabajo
 #[tauri::command]

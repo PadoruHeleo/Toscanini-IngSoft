@@ -2,6 +2,10 @@ use mail_builder::MessageBuilder;
 use mail_send::{SmtpClientBuilder, Credentials};
 use std::env;
 use chrono_tz::America::Santiago;
+use crate::models::informe::{Informe, PiezaInforme};
+use crate::models::ordenes_trabajo::OrdenTrabajo;
+use crate::models::equipos::Equipo;
+use crate::models::cotizacion::Cotizacion;
 
 pub struct EmailService {
     smtp_host: String,
@@ -190,9 +194,9 @@ impl EmailService {
         &self, 
         to_email: &str, 
         client_name: &str, 
-        informe: &crate::commands::informe::Informe,
-        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
-        piezas: &[crate::commands::informe::PiezaInforme]
+        informe: &Informe,
+        orden_trabajo: &OrdenTrabajo,
+        piezas: &[PiezaInforme]
     ) -> Result<(), String> {
         let subject = format!("Informe Técnico {} - Toscanini", 
             informe.informe_codigo.as_deref().unwrap_or("N/A"));
@@ -337,8 +341,8 @@ impl EmailService {
 
     pub async fn send_orden_trabajo_notification(
         &self, 
-        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
-        equipo: &crate::commands::equipos::Equipo,
+        orden_trabajo: &OrdenTrabajo,
+        equipo: &Equipo,
         cliente_nombre: &str
     ) -> Result<String, String> {
         // Verificar el entorno de ejecución
@@ -503,8 +507,8 @@ impl EmailService {
         &self,
         cliente_email: &str,
         cliente_nombre: &str,
-        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
-        equipo: &crate::commands::equipos::Equipo,
+        orden_trabajo: &OrdenTrabajo,
+        equipo: &Equipo,
     ) -> Result<(), String> {
         let subject = format!(
             "Orden de Trabajo Creada - Toscanini (Código: {})",
@@ -628,9 +632,9 @@ impl EmailService {
         &self,
         cliente_email: &str,
         cliente_nombre: &str,
-        cotizacion: &crate::commands::cotizacion::Cotizacion,
-        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
-        equipo: &crate::commands::equipos::Equipo,
+        cotizacion: &Cotizacion,
+        orden_trabajo: &OrdenTrabajo,
+        equipo: &Equipo,
         pdf_bytes: &[u8],
     ) -> Result<(), String> {
         // Nombre del archivo PDF
@@ -733,9 +737,9 @@ impl EmailService {
         &self,
         cliente_email: &str,
         cliente_nombre: &str,
-        informe: &crate::commands::informe::Informe,
-        orden_trabajo: &crate::commands::ordenes_trabajo::OrdenTrabajo,
-        equipo: &crate::commands::equipos::Equipo,
+        informe: &Informe,
+        orden_trabajo: &OrdenTrabajo,
+        equipo: &Equipo,
         pdf_bytes: &[u8],
     ) -> Result<(), String> {
         // Nombre del archivo PDF
@@ -1019,18 +1023,18 @@ pub async fn send_cotizacion_email(cotizacion_id: i32, sent_by: i32) -> Result<S
 
     // Después de enviar exitosamente, actualizar el estado de la cotización
     let _ = update_cotizacion(
-        cotizacion_id,
-        crate::commands::cotizacion::UpdateCotizacionRequest {
-            cotizacion_codigo: None,
-            costo_revision: None,
-            costo_reparacion: None,
-            costo_total: None,
-            is_aprobada: None,
-            is_borrador: Some(false), // Marcar como enviada (no borrador)
-            informe: None,
-        },
-        sent_by,
-    ).await.map_err(|e| format!("Error actualizando estado de cotización: {}", e))?;
+    cotizacion_id,
+    crate::models::cotizacion::UpdateCotizacionRequest {
+        cotizacion_codigo: None,
+        costo_revision: None,
+        costo_reparacion: None,
+        costo_total: None,
+        is_aprobada: None,
+        is_borrador: Some(false),
+        informe: None,
+    },
+    sent_by,
+).await.map_err(|e| format!("Error actualizando estado de cotización: {}", e))?;
 
     println!("✅ Cotización marcada como enviada");
 

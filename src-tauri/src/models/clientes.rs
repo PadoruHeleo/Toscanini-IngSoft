@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Cliente {
     pub cliente_id: i32,
     pub cliente_rut: Option<String>,
@@ -15,7 +15,7 @@ pub struct Cliente {
     pub created_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct CreateClienteRequest {
     pub cliente_rut: String,
     pub cliente_nombre: String,
@@ -25,7 +25,7 @@ pub struct CreateClienteRequest {
     pub created_by: i32,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct UpdateClienteRequest {
     pub cliente_rut: Option<String>,
     pub cliente_nombre: Option<String>,
@@ -34,7 +34,7 @@ pub struct UpdateClienteRequest {
     pub cliente_direccion: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct FiltrosClientes {
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
@@ -46,25 +46,28 @@ pub struct FiltrosClientes {
     pub ordenamiento: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DeleteClienteRequest {
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Cotizacion {
+    pub cotizacion_id: i32,
     pub cliente_id: i32,
-    pub deleted_by: i32,
-    pub motivo: Option<String>,
+    pub fecha: Option<DateTime<Utc>>,
+    pub total: Option<f64>,
+    pub estado: Option<String>,
 }
 
-// Structs auxiliares para resultados de queries (Distincts)
-#[derive(Debug, FromRow)]
-pub struct RutResult {
-    pub cliente_rut: Option<String>,
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct OrdenTrabajo {
+    pub orden_id: i32,
+    pub cliente_id: i32,
+    pub fecha_inicio: Option<DateTime<Utc>>,
+    pub fecha_fin: Option<DateTime<Utc>>,
+    pub estado: Option<String>,
+    pub descripcion: Option<String>,
 }
 
-#[derive(Debug, FromRow)]
-pub struct CorreoResult {
-    pub cliente_correo: Option<String>,
-}
-
-#[derive(Debug, FromRow)]
-pub struct CiudadResult {
-    pub cliente_direccion: Option<String>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeleteClienteRequest {
+    pub cliente_id: i32,           // ID del cliente a inactivar
+    pub deleted_by: i32,           // ID del usuario que elimina
+    pub motivo: Option<String>,    // Motivo de inactivación
 }
