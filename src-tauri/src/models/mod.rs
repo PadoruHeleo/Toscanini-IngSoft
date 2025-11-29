@@ -5,3 +5,4 @@ pub mod cotizacion;
 pub mod informe;
 pub mod ordenes_trabajo;
 pub mod terminos_condiciones;
+pub mod logs;
