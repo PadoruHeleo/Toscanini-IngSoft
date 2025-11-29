@@ -17,7 +17,7 @@ pub struct Usuario {
     pub session_token: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateUsuarioRequest {
     pub usuario_rut: String,
     pub usuario_nombre: String,
@@ -28,7 +28,7 @@ pub struct CreateUsuarioRequest {
     pub is_active: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateUsuarioRequest {
     pub usuario_rut: Option<String>,
     pub usuario_nombre: Option<String>,
@@ -48,30 +48,30 @@ pub struct PasswordReset {
     pub used: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RequestPasswordResetRequest {
     pub usuario_correo: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ResetPasswordRequest {
     pub reset_code: String,
     pub nueva_contrasena: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ChangePasswordRequest {
     pub current_password: String,
     pub new_password: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ChangeEmailRequest {
     pub new_email: String,
     pub password: String, // Requiere contraseña actual para confirmar
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ChangePhoneRequest {
     pub new_phone: String,
     pub password: String, // Requiere contraseña actual para confirmar
