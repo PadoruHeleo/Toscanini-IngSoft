@@ -1,22 +1,24 @@
-use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
 use crate::commands::terminos_condiciones::apply_default_terminos_to_cotizacion;
-use chrono::{DateTime, Utc};
 use chrono::Datelike;
 use sqlx::Row;
 
 use crate::models::cotizacion::{
     Cotizacion, 
     Pieza, 
-    PiezaCotizacion, 
+    PiezaCotizacion,
     CotizacionDetallada, 
     CreateCotizacionRequest, 
     UpdateCotizacionRequest, 
     CreatePiezaRequest, 
     PiezaCotizacionRequest,
-    OrdenInfoRow
+    OrdenInfoRow,
+    UpdatePiezaRequest,
+    InventarioEquipo,
+    InventarioEquipoRequest,
+    SalidaEquipo,
+    RegistrarSalidaRequest
 };
 
 /// Obtener todas las cotizaciones
@@ -45,7 +47,7 @@ pub async fn get_cotizaciones_detalladas() -> Result<Vec<CotizacionDetallada>, S
     
     let cotizaciones = sqlx::query_as::<_, CotizacionDetallada>(
         "SELECT c.cotizacion_id, c.cotizacion_codigo, c.costo_revision, c.costo_reparacion,
-                c.costo_total, c.is_aprobada, c.is_borrador, c.created_by, c.created_at,
+                c.costo_total, c.is_aprobada, c.is_borrador, c.informe, c.created_by, c.created_at,
                 u.usuario_nombre as created_by_nombre
          FROM COTIZACION c
          LEFT JOIN USUARIO u ON c.created_by = u.usuario_id
@@ -519,14 +521,6 @@ pub async fn create_pieza(request: CreatePiezaRequest) -> Result<Pieza, String> 
     Ok(pieza)
 }
 
-#[derive(Debug, Deserialize)]
-pub struct UpdatePiezaRequest {
-    pub pieza_nombre: Option<String>,
-    pub pieza_marca: Option<String>,
-    pub pieza_desc: Option<String>,
-    pub pieza_precio: Option<i32>,
-}
-
 /// Actualizar una pieza existente
 #[tauri::command]
 pub async fn update_pieza(pieza_id: i32, request: UpdatePiezaRequest) -> Result<Option<Pieza>, String> {
@@ -785,44 +779,6 @@ pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> R
     }
 }
 
-// Estructuras para inventario de equipos
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct InventarioEquipo {
-    pub inventario_equipo_id: i32,
-    pub equipo_codigo: Option<String>,
-    pub equipo_nombre: Option<String>,
-    pub equipo_marca: Option<String>,
-    pub equipo_modelo: Option<String>,
-    pub equipo_tipo: Option<String>,
-    pub equipo_descripcion: Option<String>,
-    pub equipo_precio: Option<i32>,
-    pub equipo_stock: Option<i32>,
-    pub equipo_estado: Option<String>,
-    pub equipo_ubicacion: Option<String>,
-    pub fecha_adquisicion: Option<String>,
-    pub proveedor: Option<String>,
-    pub numero_serie: Option<String>,
-    pub garantia_vencimiento: Option<String>,
-    pub observaciones: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InventarioEquipoRequest {
-    pub equipo_codigo: String,
-    pub equipo_nombre: String,
-    pub equipo_marca: Option<String>,
-    pub equipo_modelo: Option<String>,
-    pub equipo_tipo: String,
-    pub equipo_descripcion: Option<String>,
-    pub equipo_precio: Option<i32>,
-    pub equipo_stock: Option<i32>,
-    pub equipo_ubicacion: Option<String>,
-    pub proveedor: Option<String>,
-    pub numero_serie: Option<String>,
-    pub observaciones: Option<String>,
-}
-
 // Funciones para inventario de equipos
 #[tauri::command]
 pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
@@ -1012,34 +968,6 @@ pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo:
     } else {
         Ok(false)
     }
-}
-
-// ===============================
-// STRUCTS Y COMANDOS PARA SALIDAS DE EQUIPOS
-// ===============================
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct SalidaEquipo {
-    pub salida_id: i32,
-    pub orden_trabajo_id: i32,
-    pub motivo_salida: String,
-    pub fecha_salida: Option<DateTime<Utc>>,
-    pub usuario_id: Option<i32>,
-    pub observaciones: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
-    // Campos adicionales para JOINs
-    pub orden_codigo: Option<String>,
-    pub equipo_nombre: Option<String>,
-    pub cliente_nombre: Option<String>,
-    pub usuario_nombre: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RegistrarSalidaRequest {
-    pub orden_trabajo_id: i32,
-    pub motivo_salida: String,
-    pub observaciones: Option<String>,
-    pub usuario_id: i32,
 }
 
 /// Registrar salida de equipo en tabla específica (NUEVA IMPLEMENTACIÓN)
@@ -1268,38 +1196,23 @@ pub async fn update_cotizacion_piezas(
         .bind(cotizacion_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| format!("Database error deleting existing parts: {}", e))?;
-    
-    println!("✅ Piezas existentes eliminadas");
-    
+        .map_err(|e| format!("Database error deleting old parts: {}", e))?;
+        
     // Insertar las nuevas piezas
-    if !piezas.is_empty() {
-        for (idx, pieza) in piezas.iter().enumerate() {
-            let cantidad = if pieza.cantidad <= 0 { 1 } else { pieza.cantidad };
-            println!("  Insertando pieza {}: pieza_id={}, cantidad={}", idx + 1, pieza.pieza_id, cantidad);
-            
-            sqlx::query(
-                "INSERT INTO PIEZAS_COTIZACION (pieza_id, cotizacion_id, cantidad) VALUES (?, ?, ?)"
-            )
-            .bind(pieza.pieza_id)
-            .bind(cotizacion_id)
-            .bind(cantidad)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                let error_msg = format!("Database error adding part {} (pieza_id={}, cantidad={}): {}", 
-                    idx + 1, pieza.pieza_id, cantidad, e);
-                println!("❌ {}", error_msg);
-                error_msg
-            })?;
-        }
-        println!("✅ Todas las piezas insertadas correctamente");
-    } else {
-        println!("⚠️ No se proporcionaron piezas, solo se eliminaron las existentes");
+    for (idx, pieza) in piezas.iter().enumerate() {
+        // Asegurar que la cantidad sea al menos 1
+        let cantidad = if pieza.cantidad <= 0 { 1 } else { pieza.cantidad };
+        
+        sqlx::query(
+            "INSERT INTO PIEZAS_COTIZACION (pieza_id, cotizacion_id, cantidad) VALUES (?, ?, ?)"
+        )
+        .bind(pieza.pieza_id)
+        .bind(cotizacion_id)
+        .bind(cantidad)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("Database error adding part {}: {}", idx + 1, e))?;
     }
-    
-    // Confirmar transacción
-    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
     
     // Registrar la acción en el log de auditoría
     let _ = log_action(
@@ -1308,8 +1221,11 @@ pub async fn update_cotizacion_piezas(
         "COTIZACION",
         Some(cotizacion_id),
         None,
-        Some(&format!("Actualizadas {} piezas", piezas.len()))
+        Some(&format!("Actualizadas piezas de cotización. Total: {}", piezas.len()))
     ).await;
+    
+    // Confirmar transacción
+    tx.commit().await.map_err(|e| format!("Database error committing transaction: {}", e))?;
     
     Ok(true)
 }
