@@ -48,7 +48,7 @@ pub struct InformeDetallado {
     pub tecnico_responsable: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateInformeRequest {
     // informe_codigo se genera automáticamente
     pub informe_acciones: String,
@@ -63,7 +63,7 @@ pub struct CreateInformeRequest {
     pub tecnico_responsable: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateInformeRequest {
     pub informe_codigo: Option<String>,
     pub informe_acciones: Option<String>,
@@ -76,7 +76,7 @@ pub struct UpdateInformeRequest {
     pub tecnico_responsable: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PiezaInformeRequest {
     pub pieza_id: i32,
     pub cantidad: i32,
