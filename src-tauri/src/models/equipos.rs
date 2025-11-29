@@ -16,7 +16,7 @@ pub struct Equipo {
     pub created_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateEquipoRequest {
     pub numero_serie: String,
     pub equipo_marca: String,
@@ -28,7 +28,7 @@ pub struct CreateEquipoRequest {
     pub created_by: i32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateEquipoRequest {
     pub numero_serie: Option<String>,
     pub equipo_marca: Option<String>,
@@ -75,7 +75,7 @@ pub struct EquipoConEstado {
     pub fecha_ultima_orden: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FiltrosEquipos {
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
@@ -89,4 +89,10 @@ pub struct FiltrosEquipos {
     pub ordenamiento: Option<String>,
     pub precio_min: Option<i32>,
     pub precio_max: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DeleteEquipoRequest {
+    pub equipo_id: i32,
+    pub deleted_by: i32,
 }
