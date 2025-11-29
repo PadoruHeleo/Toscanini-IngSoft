@@ -6,6 +6,7 @@ use crate::models::informe::{Informe, PiezaInforme};
 use crate::models::ordenes_trabajo::OrdenTrabajo;
 use crate::models::equipos::Equipo;
 use crate::models::cotizacion::Cotizacion;
+use crate::infrastructure::db::users as db_users;
 
 pub struct EmailService {
     smtp_host: String,
@@ -356,7 +357,7 @@ impl EmailService {
             println!("📧 En producción se enviaría a los administradores y técnicos de la BD");
             
             // Obtener emails para logging (sin enviar)
-            let db_emails = crate::commands::users::get_admin_and_tech_emails().await.unwrap_or_default();
+            let db_emails = db_users::get_admin_and_tech_emails().await.unwrap_or_default();
             println!("📋 Emails que recibirían en producción: {:?}", db_emails);
             
             (
@@ -366,17 +367,17 @@ impl EmailService {
             )
         } else {
             // En producción: obtener emails reales de la base de datos
-            let notification_emails = crate::commands::users::get_admin_and_tech_emails().await?;
+            let db_emails = db_users::get_admin_and_tech_emails().await.unwrap_or_default();
             
-            if notification_emails.is_empty() {
+            if db_emails.is_empty() {
                 return Err("No hay administradores o técnicos con email configurado para enviar notificaciones".to_string());
             }
             
             (
-                notification_emails.clone(),
+                db_emails.clone(),
                 format!("Notificación de orden {} enviada a {} administradores y técnicos", 
                     orden_trabajo.orden_codigo.as_deref().unwrap_or("N/A"), 
-                    notification_emails.len())
+                    db_emails.len())
             )
         };
         
