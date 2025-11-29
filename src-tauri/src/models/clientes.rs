@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
 pub struct Cliente {
     pub cliente_id: i32,
     pub cliente_rut: Option<String>,
@@ -15,7 +15,7 @@ pub struct Cliente {
     pub created_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateClienteRequest {
     pub cliente_rut: String,
     pub cliente_nombre: String,
@@ -25,7 +25,7 @@ pub struct CreateClienteRequest {
     pub created_by: i32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateClienteRequest {
     pub cliente_rut: Option<String>,
     pub cliente_nombre: Option<String>,
@@ -34,7 +34,7 @@ pub struct UpdateClienteRequest {
     pub cliente_direccion: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FiltrosClientes {
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
