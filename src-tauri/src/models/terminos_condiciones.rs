@@ -36,7 +36,7 @@ pub struct TerminoCotizacion {
     pub termino_descripcion: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTerminoCondicionRequest {
     pub termino_nombre: String,
     pub termino_descripcion: String,
@@ -44,7 +44,7 @@ pub struct CreateTerminoCondicionRequest {
     pub is_default: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateTerminoCondicionRequest {
     pub termino_nombre: Option<String>,
     pub termino_descripcion: Option<String>,
