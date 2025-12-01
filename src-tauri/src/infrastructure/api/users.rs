@@ -3,7 +3,7 @@ use crate::models::users::{
     RequestPasswordResetRequest, ResetPasswordRequest, 
     ChangePasswordRequest, ChangeEmailRequest, ChangePhoneRequest
 };
-use crate::infrastructure::api::client::get_http_client;
+use crate::infrastructure::api::client::{get_http_client, get_api_key};
 use serde_json::json;
 
 fn get_base_url() -> Result<(reqwest::Client, String), String> {
@@ -74,7 +74,12 @@ pub async fn authenticate_usuario(correo: String, contrasena: String) -> Result<
     let url = format!("{}/login", base_url);
     let body = json!({ "usuario_correo": correo, "usuario_contrasena": contrasena });
     
-    let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
+    let response = client.post(&url)
+        .header("x-api-key", get_api_key())
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if response.status() == reqwest::StatusCode::UNAUTHORIZED || response.status() == reqwest::StatusCode::NOT_FOUND {
         return Err("Credenciales inválidas o usuario no encontrado".to_string());

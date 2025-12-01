@@ -5,8 +5,12 @@ use std::env;
 const DEFAULT_API_URL: &str = "http://localhost:3000/api";
 const DEFAULT_API_TOKEN: &str = "mi_secreto_super_seguro_123";
 
+pub fn get_api_key() -> String {
+    env::var("API_TOKEN").unwrap_or_else(|_| DEFAULT_API_TOKEN.to_string())
+}
+
 pub fn get_http_client() -> Result<(Client, String), String> {
-    let api_token = env::var("API_TOKEN").unwrap_or_else(|_| DEFAULT_API_TOKEN.to_string());
+    let api_token = get_api_key();
     
     println!("🔑 API_TOKEN leído: {}", api_token);
     
