@@ -23,6 +23,16 @@ incompatible-rust-versions = "fallback"
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+[profile.dev]
+incremental = true     # Compilación incremental
+codegen-units = 256    # Divide el trabajo en muchas unidades pequeñas
+debug = 0              # CERO info de debug (crítico para este error)
+strip = "debuginfo"    # Elimina símbolos de debug del binario final
+split-debuginfo = "unpacked"
+
 [build-dependencies]
 tauri-build = { version = "2.0.1", features = [] }
 
