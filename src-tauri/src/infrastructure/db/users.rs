@@ -488,7 +488,10 @@ pub async fn request_password_reset(request: RequestPasswordResetRequest) -> Res
     
     // Enviar correo electrónico
     println!("📧 Intentando inicializar servicio de email...");
-    let email_service = EmailService::new()
+    let email_config = crate::config::load_email_config()
+        .ok_or_else(|| "Configuración de email no encontrada".to_string())?;
+        
+    let email_service = EmailService::new(&email_config)
         .map_err(|e| {
             eprintln!("❌ Error inicializando servicio de email: {}", e);
             format!("Error del servicio de email: {}", e)
@@ -932,8 +935,10 @@ pub async fn send_password_email(
     user_name: &str,
     temp_password: &str,
 ) -> Result<(), String> {
-    let service: EmailService = EmailService::new()?;
-    service.send_password_email(to_email, user_name, temp_password).await
+    let email_config = crate::config::load_email_config()
+        .ok_or_else(|| "Configuración de email no encontrada".to_string())?;
+    let service = EmailService::new(&email_config)?;
+    service.send_password_email(to_email, user_name, temp_password).await.map(|_| ())
 }
 
 

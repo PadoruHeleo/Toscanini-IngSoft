@@ -53,13 +53,13 @@ pub struct UpdateTerminoCondicionRequest {
     pub is_default: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TerminoInformeRequest {
     pub termino_id: i32,
     pub aplicado: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TerminoCotizacionRequest {
     pub termino_id: i32,
     pub aplicado: Option<bool>,

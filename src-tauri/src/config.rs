@@ -21,17 +21,39 @@ const KEYRING_USERNAME: &str = "database";
 #[cfg(not(debug_assertions))]
 const EMBEDDED_ENV: &str = include_str!("../.env");
 
+use crate::models::email::EmailConfig;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppConfig {
     pub use_api: bool,
+    pub email_config: Option<EmailConfig>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             use_api: false,
+            email_config: None,
         }
     }
+}
+
+pub fn load_email_config() -> Option<EmailConfig> {
+    let host = std::env::var("SMTP_HOST").ok()?;
+    let port = std::env::var("SMTP_PORT").ok()?.parse().ok()?;
+    let user = std::env::var("SMTP_USER").ok()?;
+    let pass = std::env::var("SMTP_PASS").ok()?;
+    let from = std::env::var("SMTP_FROM").ok()?;
+    let name = std::env::var("SMTP_NAME").unwrap_or_else(|_| "Toscanini".to_string());
+
+    Some(EmailConfig {
+        smtp_server: host,
+        smtp_port: port,
+        smtp_user: user,
+        smtp_password: pass,
+        sender_email: from,
+        sender_name: name,
+    })
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

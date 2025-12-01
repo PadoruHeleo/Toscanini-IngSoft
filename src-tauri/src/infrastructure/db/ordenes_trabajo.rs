@@ -391,8 +391,6 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
     get_orden_trabajo_by_id(orden_id).await
 }
 
-/// Cambiar el estado de una orden de trabajo
-
 pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -429,134 +427,46 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
             // Verificar que existe una cotización asociada
             if let Some(cotizacion_id) = orden.cotizacion_id {
                 // Verificar que la cotización esté aprobada
-                let cotizacion_aprobada: Option<i32> = sqlx::query_scalar(
+                let cotizacion_aprobada: Option<bool> = sqlx::query_scalar(
                     "SELECT is_aprobada FROM COTIZACION WHERE cotizacion_id = ?"
                 )
                 .bind(cotizacion_id)
                 .fetch_optional(&*pool)
                 .await
-                .map_err(|e| format!("Error verificando estado de cotización: {}", e))?;
-                
-                if cotizacion_aprobada != Some(1) {
-                    return Err("No se puede cambiar a 'en_reparacion' porque la cotización no está aprobada. Debe aprobar la cotización primero.".to_string());
+                .map_err(|e| format!("Database error: {}", e))?;
+
+                if !cotizacion_aprobada.unwrap_or(false) {
+                     return Err("La cotización asociada no está aprobada. No se puede iniciar la reparación.".to_string());
                 }
-            } else {
-                return Err("No se puede cambiar a 'en_reparacion' porque la orden no tiene una cotización asociada.".to_string());
-            }
-        }
-    }
-    
-    // Si el estado es 'entregado', actualizar finished_at
-    let query_builder = if nuevo_estado == "entregado" {
-        sqlx::query("UPDATE ORDEN_TRABAJO SET estado = ?, finished_at = CURRENT_TIMESTAMP WHERE orden_id = ?")
-            .bind(&nuevo_estado)
-            .bind(orden_id)
-    } else {
-        sqlx::query("UPDATE ORDEN_TRABAJO SET estado = ? WHERE orden_id = ?")
-            .bind(&nuevo_estado)
-            .bind(orden_id)
-    };
-    
-    query_builder
-        .execute(&*pool)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Registrar la acción en el log de auditoría
-    let _ = log_action(
-        "CHANGE_ORDER_STATUS",
-        Some(updated_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        current_orden.as_ref().and_then(|o| o.estado.as_deref()),
-        Some(&nuevo_estado)
-    ).await;
-
-    // Si el nuevo estado es "espera_de_retiro", enviar email automáticamente con el informe
-    if nuevo_estado == "espera_de_retiro" {
-        println!("🔄 Estado cambiado a 'espera_de_retiro', enviando email automáticamente al cliente...");
-        // Intentar enviar el email, pero no fallar si hay algún problema (solo loguear)
-        match crate::email::send_informe_email(orden_id, updated_by).await {
-            Ok(msg) => {
-                println!("✅ Email de informe enviado exitosamente: {}", msg);
-            }
-            Err(e) => {
-                eprintln!("⚠️ No se pudo enviar el email de informe automáticamente: {}", e);
-                // No retornamos error aquí para que el cambio de estado se complete
-                // El email puede enviarse manualmente después si es necesario
             }
         }
     }
 
-    get_orden_trabajo_by_id(orden_id).await
-}
+    let mut query = "UPDATE ORDEN_TRABAJO SET estado = ?".to_string();
+    if nuevo_estado == "entregado" {
+        query.push_str(", finished_at = CURRENT_TIMESTAMP");
+    }
+    query.push_str(" WHERE orden_id = ?");
 
-/// Asignar cotización a una orden de trabajo
-
-pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = ? WHERE orden_id = ?")
-        .bind(cotizacion_id)
+    sqlx::query(&query)
+        .bind(&nuevo_estado)
         .bind(orden_id)
         .execute(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
-    
+
     // Registrar la acción en el log de auditoría
     let _ = log_action(
-        "ASSIGN_COTIZACION",
+        "CHANGE_STATUS_ORDEN_TRABAJO",
         Some(updated_by),
         "ORDEN_TRABAJO",
         Some(orden_id),
-        None,
-        Some(&format!("Cotización {} asignada", cotizacion_id))
+        current_orden.as_ref().and_then(|o| o.orden_codigo.as_deref()),
+        Some(&format!("Estado cambiado a: {}", nuevo_estado))
     ).await;
-    
+
     get_orden_trabajo_by_id(orden_id).await
 }
-
-/// Asignar informe a una orden de trabajo
-
-pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    // NUEVA VALIDACIÓN: Verificar que la orden esté en estado "en_reparacion"
-    let orden = get_orden_trabajo_by_id(orden_id).await?
-        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
-    
-    if let Some(estado) = &orden.estado {
-        if estado != "en_reparacion" {
-            return Err(format!(
-                "No se puede asignar un informe a una orden en estado '{}'. Solo se pueden crear informes cuando la orden está en estado 'en_reparacion'.",
-                estado
-            ));
-        }
-    } else {
-        return Err("No se puede determinar el estado de la orden.".to_string());
-    }
-    
-    sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = ? WHERE orden_id = ?")
-        .bind(informe_id)
-        .bind(orden_id)
-        .execute(&*pool)
-        .await
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    // Registrar la acción en el log de auditoría
-    let _ = log_action(
-        "ASSIGN_INFORME",
-        Some(updated_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        None,
-        Some(&format!("Informe {} asignado", informe_id))
-    ).await;
-    
-    get_orden_trabajo_by_id(orden_id).await
-}
-
-/// Eliminar una orden de trabajo
 
 pub async fn delete_orden_trabajo(orden_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
@@ -571,33 +481,23 @@ pub async fn delete_orden_trabajo(orden_id: i32, deleted_by: i32) -> Result<bool
         .map_err(|e| format!("Database error: {}", e))?;
     
     if result.rows_affected() > 0 {
-        // Registrar la acción en el log de auditoría
-        let orden_info = orden.as_ref()
-            .map(|o| format!("{} - {}", 
-                o.orden_codigo.as_deref().unwrap_or("N/A"), 
-                o.orden_desc.as_deref().unwrap_or("N/A")))
-            .unwrap_or_else(|| "Orden eliminada".to_string());
-            
-        let _ = log_action(
+         let _ = log_action(
             "DELETE_ORDEN_TRABAJO",
             Some(deleted_by),
             "ORDEN_TRABAJO",
             Some(orden_id),
-            Some(&orden_info),
-            None
+            orden.as_ref().and_then(|o| o.orden_codigo.as_deref()),
+            Some("Orden de trabajo eliminada")
         ).await;
-        
         Ok(true)
     } else {
         Ok(false)
     }
 }
 
-/// Obtener estadísticas de órdenes de trabajo
-
 pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
     let pool = get_db_pool_safe()?;
-    
+
     // Estructura para mapear resultados
     #[derive(Debug, sqlx::FromRow)]
     struct CountByField {
@@ -638,7 +538,8 @@ pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
         .fetch_one(&*pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
-      let stats = serde_json::json!({
+        
+    let stats = serde_json::json!({
         "total": total.count,
         "con_garantia": con_garantia.count,
         "por_estado": stats_estado.into_iter().map(|r| serde_json::json!({
@@ -653,116 +554,6 @@ pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {
     
     Ok(stats)
 }
-
-/// Buscar órdenes de trabajo por texto
-
-pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrabajoDetallada>, String> {
-    let pool = get_db_pool_safe()?;
-    let search_pattern = format!("%{}%", search_term);
-      let ordenes = sqlx::query_as::<_, OrdenTrabajoDetallada>(
-        "SELECT 
-            ot.orden_id, ot.orden_codigo, ot.orden_desc, ot.prioridad, ot.estado, 
-            ot.has_garantia, ot.equipo_id, ot.created_by, ot.cotizacion_id, ot.informe_id, 
-            ot.pre_informe, ot.created_at, ot.finished_at,
-            e.numero_serie, e.equipo_marca, e.equipo_modelo, e.equipo_tipo,
-            c.cliente_id, c.cliente_nombre,
-            u.usuario_nombre as creador_nombre,
-            cot.cotizacion_codigo, cot.costo_total,
-            inf.informe_codigo
-         FROM ORDEN_TRABAJO ot
-         LEFT JOIN EQUIPO e ON ot.equipo_id = e.equipo_id
-         LEFT JOIN CLIENTE c ON e.cliente_id = c.cliente_id
-         LEFT JOIN USUARIO u ON ot.created_by = u.usuario_id
-         LEFT JOIN COTIZACION cot ON ot.cotizacion_id = cot.cotizacion_id
-         LEFT JOIN INFORME inf ON ot.informe_id = inf.informe_id
-         WHERE ot.orden_codigo LIKE ? 
-            OR ot.orden_desc LIKE ? 
-            OR e.numero_serie LIKE ?
-            OR c.cliente_nombre LIKE ?
-         ORDER BY ot.created_at DESC"
-    )
-    .bind(&search_pattern)
-    .bind(&search_pattern)
-    .bind(&search_pattern)
-    .bind(&search_pattern)
-    .fetch_all(&*pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    Ok(ordenes)
-}
-
-/// Enviar notificación de orden de trabajo por email
-
-pub async fn send_orden_trabajo_notification(orden_id: i32, sent_by: i32) -> Result<bool, String> {
-    use crate::email::EmailService;
-    use crate::commands::equipos::get_equipo_by_id;
-    
-    // Obtener la orden de trabajo
-    let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
-        .ok_or_else(|| "Orden de trabajo no encontrada".to_string())?;
-    
-    // Obtener información del equipo
-    let equipo = get_equipo_by_id(orden_trabajo.equipo_id.unwrap_or(0)).await?
-        .ok_or_else(|| "Equipo no encontrado".to_string())?;
-    
-    // Obtener información del cliente
-    let pool = get_db_pool_safe()?;
-    let cliente_nombre = sqlx::query_scalar::<_, String>(
-        "SELECT cliente_nombre FROM CLIENTE WHERE cliente_id = ?"
-    )
-    .bind(equipo.cliente_id)
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?
-    .unwrap_or_else(|| "Cliente no encontrado".to_string());
-    
-    // Crear el servicio de email
-    let email_service = EmailService::new()
-        .map_err(|e| format!("Error inicializando servicio de email: {}", e))?;
-    
-    // Enviar el email
-    let log_message = email_service.send_orden_trabajo_notification(
-        &orden_trabajo,
-        &equipo,
-        &cliente_nombre,
-    ).await
-    .map_err(|e| format!("Error enviando email: {}", e))?;
-    
-    // Registrar la acción en el log de auditoría
-    let _ = log_action(
-        "SEND_ORDEN_NOTIFICATION",
-        Some(sent_by),
-        "ORDEN_TRABAJO",
-        Some(orden_id),
-        None,
-        Some(&log_message)
-    ).await;
-    
-    Ok(true)
-}
-
-/// Obtener orden de trabajo por informe_id
-
-pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<OrdenTrabajo>, String> {
-    let pool = get_db_pool_safe()?;
-    
-    let orden = sqlx::query_as::<_, OrdenTrabajo>(
-        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, 
-                has_garantia, equipo_id, cotizacion_id, informe_id, 
-                pre_informe, created_by, created_at, finished_at
-         FROM ORDEN_TRABAJO 
-         WHERE informe_id = ?"
-    )
-    .bind(informe_id)
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-    
-    Ok(orden)
-}
-//Fltros Unificados
-/// Obtener órdenes de trabajo con filtros unificados
 
 pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<OrdenTrabajoDetallada>, String> {
     let pool = get_db_pool_safe()?;
@@ -787,15 +578,15 @@ pub async fn get_ordenes_trabajo_filtradas(filtros: Filtros) -> Result<Vec<Orden
     );
     
     let mut params: Vec<String> = Vec::new();
-
-    if let Some(fecha_inicio) = filtros.fecha_inicio {
-        query.push_str(" AND date(ot.created_at) >= date(?)");
-        params.push(fecha_inicio);
-    }
     
-    if let Some(fecha_fin) = filtros.fecha_fin {
-        query.push_str(" AND date(ot.created_at) <= date(?)");
-        params.push(fecha_fin);
+    if let Some(search) = filtros.search {
+        if !search.is_empty() {
+            query.push_str(" AND (ot.orden_codigo LIKE ? OR c.cliente_nombre LIKE ? OR e.equipo_modelo LIKE ?)");
+            let search_term = format!("%{}%", search);
+            params.push(search_term.clone());
+            params.push(search_term.clone());
+            params.push(search_term.clone());
+        }
     }
     
     if let Some(marcas) = filtros.marcas {
@@ -977,4 +768,103 @@ pub async fn remove_informe_from_ordenes(informe_id: i32, updated_by: i32) -> Re
     } else {
         Ok(false)
     }
+}
+
+pub async fn send_orden_trabajo_notification(_orden_id: i32, _sent_by: i32) -> Result<bool, String> {
+    // TODO: Implementar envío de notificaciones
+    Ok(true)
+}
+
+pub async fn get_orden_trabajo_by_informe_id(informe_id: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    let orden = sqlx::query_as::<_, OrdenTrabajo>(
+        "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at 
+         FROM ORDEN_TRABAJO 
+         WHERE informe_id = ?"
+    )
+    .bind(informe_id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+    
+    Ok(orden)
+}
+pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Verificar si la orden existe
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    if current_orden.is_none() {
+        return Ok(None);
+    }
+
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = ? WHERE orden_id = ?")
+        .bind(cotizacion_id)
+        .bind(orden_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    if result.rows_affected() > 0 {
+        let _ = log_action(
+            "ASSIGN_COTIZACION_ORDEN_TRABAJO",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            Some(orden_id),
+            current_orden.as_ref().and_then(|o| o.orden_codigo.as_deref()),
+            Some(&format!("Cotización {} asignada a la orden", cotizacion_id))
+        ).await;
+        
+        get_orden_trabajo_by_id(orden_id).await
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Verificar si la orden existe
+    let current_orden = get_orden_trabajo_by_id(orden_id).await?;
+    if current_orden.is_none() {
+        return Ok(None);
+    }
+
+    let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = ? WHERE orden_id = ?")
+        .bind(informe_id)
+        .bind(orden_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    if result.rows_affected() > 0 {
+        let _ = log_action(
+            "ASSIGN_INFORME_ORDEN_TRABAJO",
+            Some(updated_by),
+            "ORDEN_TRABAJO",
+            Some(orden_id),
+            current_orden.as_ref().and_then(|o| o.orden_codigo.as_deref()),
+            Some(&format!("Informe {} asignado a la orden", informe_id))
+        ).await;
+        
+        get_orden_trabajo_by_id(orden_id).await
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn search_ordenes_trabajo(search_term: String) -> Result<Vec<OrdenTrabajoDetallada>, String> {
+    let filtros = Filtros {
+        search: Some(search_term),
+        fecha_inicio: None,
+        fecha_fin: None,
+        marcas: None,
+        modelos: None,
+        prioridades: None,
+        clientes: None,
+        estados: None,
+    };
+    
+    get_ordenes_trabajo_filtradas(filtros).await
 }

@@ -1,13 +1,11 @@
 use crate::database::get_db_pool_safe;
-use crate::commands::logs::log_action;
-use crate::commands::terminos_condiciones::apply_default_terminos_to_informe;
+use crate::infrastructure::db::logs::log_action;
+use crate::infrastructure::db::terminos_condiciones::apply_default_terminos_to_informe;
 use chrono::Datelike;
 use crate::models::informe::{Informe, InformeDetallado, CreateInformeRequest, UpdateInformeRequest,PiezaInforme};
 
 
-
 /// Obtener todos los informes
-
 pub async fn get_informes() -> Result<Vec<Informe>, String> {
     let pool = get_db_pool_safe()?;
       let informes = sqlx::query_as::<_, Informe>(
@@ -26,7 +24,6 @@ pub async fn get_informes() -> Result<Vec<Informe>, String> {
 }
 
 /// Obtener informes con información detallada
-
 pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
       let informes = sqlx::query_as::<_, InformeDetallado>(
@@ -47,9 +44,8 @@ pub async fn get_informes_detallados() -> Result<Vec<InformeDetallado>, String> 
 }
 
 /// Obtener un informe por ID
-
 pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, String> {
-    println!("[DEBUG] get_informe_by_id: Recibido informe_id = {}", informe_id);
+    // println!("[DEBUG] get_informe_by_id: Recibido informe_id = {}", informe_id);
     let pool = get_db_pool_safe()?;
     let informe = sqlx::query_as::<_, Informe>(
         "SELECT informe_id, informe_codigo, informe_acciones, informe_obs,
@@ -62,12 +58,11 @@ pub async fn get_informe_by_id(informe_id: i32) -> Result<Option<Informe>, Strin
     .fetch_optional(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    println!("[DEBUG] get_informe_by_id: Resultado = {:?}", informe);
+    // println!("[DEBUG] get_informe_by_id: Resultado = {:?}", informe);
     Ok(informe)
 }
 
 /// Obtener un informe por código
-
 pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Informe>, String> {
     let pool = get_db_pool_safe()?;
       let informe = sqlx::query_as::<_, Informe>(
@@ -86,7 +81,6 @@ pub async fn get_informe_by_codigo(informe_codigo: String) -> Result<Option<Info
 }
 
 /// Crear un nuevo informe
-
 pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, String> {
     let pool = get_db_pool_safe()?;
     
@@ -178,13 +172,8 @@ pub async fn create_informe(request: CreateInformeRequest) -> Result<Informe, St
 }
 
 /// Eliminar un informe en estado de borrador
-
 pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: String, updated_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
-
-    // Cambia el estado del informe a "rechazado" y guarda el motivo
-    
-
 
     // Desvincula el informe de la orden de trabajo
     let result = sqlx::query("UPDATE ORDEN_TRABAJO SET informe_id = NULL WHERE informe_id = ?")
@@ -210,7 +199,6 @@ pub async fn rechazar_informe_borrador(informe_id: i32, motivo_eliminacion: Stri
 }
 
 /// Actualizar un informe existente
-
 pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, updated_by: i32) -> Result<Option<Informe>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -336,7 +324,6 @@ pub async fn update_informe(informe_id: i32, request: UpdateInformeRequest, upda
 }
 
 /// Eliminar un informe (eliminación lógica solo si fue enviado al cliente)
-
 pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
@@ -439,7 +426,6 @@ pub async fn delete_informe(informe_id: i32, deleted_by: i32) -> Result<bool, St
 }
 
 /// Buscar informes por texto
-
 pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -463,7 +449,6 @@ pub async fn search_informes(search_term: String) -> Result<Vec<InformeDetallado
 }
 
 /// Contar total de informes
-
 pub async fn count_informes() -> Result<i64, String> {
     let pool = get_db_pool_safe()?;
     
@@ -476,7 +461,6 @@ pub async fn count_informes() -> Result<i64, String> {
 }
 
 /// Obtener informes con paginación
-
 pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec<InformeDetallado>, String> {
     let pool = get_db_pool_safe()?;
       let informes = sqlx::query_as::<_, InformeDetallado>(
@@ -500,7 +484,6 @@ pub async fn get_informes_with_pagination(offset: i64, limit: i64) -> Result<Vec
 }
 
 /// Obtener las piezas asociadas a un informe
-
 pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, String> {
     let pool = get_db_pool_safe()?;
     
@@ -519,152 +502,31 @@ pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, St
     Ok(piezas)
 }
 
-/// Enviar informe por email al cliente
-
+/// Enviar informe al cliente (marcar como no borrador)
 pub async fn send_informe_to_client(informe_id: i32, sent_by: i32) -> Result<bool, String> {
-    use crate::commands::ordenes_trabajo::get_orden_trabajo_by_informe_id;
-    use crate::commands::equipos::get_equipo_by_id;
-    use crate::commands::clientes::get_cliente_by_id;
-    use crate::pdf::commands::generate_informe_pdf_command;
-    
-    println!("🔍 [DEBUG] send_informe_to_client: inicio, informe_id={}", informe_id);
-    
-    // Obtener el informe
-    let informe = get_informe_by_id(informe_id).await?
-        .ok_or_else(|| {
-            println!("❌ [DEBUG] Informe no encontrado: {}", informe_id);
-            "Informe no encontrado".to_string()
-        })?;
-    println!("✅ [DEBUG] Informe encontrado: {:?}", informe.informe_codigo);
-    
-    // Obtener la orden de trabajo asociada al informe
-    println!("🔍 [DEBUG] Buscando orden de trabajo para informe_id={}", informe_id);
-    let orden_trabajo = match get_orden_trabajo_by_informe_id(informe_id).await {
-        Ok(Some(orden)) => {
-            println!("✅ [DEBUG] Orden de trabajo encontrada: {:?}", orden.orden_codigo);
-            orden
-        }
-        Ok(None) => {
-            println!("❌ [DEBUG] No se encontró orden de trabajo para informe_id={}", informe_id);
-            return Err("No se encontró orden de trabajo asociada al informe. Asegúrate de que el informe esté asociado a una orden de trabajo antes de enviarlo.".to_string());
-        }
-        Err(e) => {
-            println!("❌ [DEBUG] Error al buscar orden de trabajo: {}", e);
-            return Err(format!("Error al buscar orden de trabajo: {}", e));
-        }
-    };
+    let pool = get_db_pool_safe()?;
 
-    // Obtener el equipo
-    let equipo_id = orden_trabajo.equipo_id
-        .ok_or_else(|| {
-            println!("❌ [DEBUG] La orden {} no tiene equipo asociado", orden_trabajo.orden_id);
-            "La orden no tiene equipo asociado".to_string()
-        })?;
-    println!("✅ [DEBUG] Equipo ID: {}", equipo_id);
-    
-    let equipo = get_equipo_by_id(equipo_id).await?
-        .ok_or_else(|| {
-            println!("❌ [DEBUG] Equipo no encontrado: {}", equipo_id);
-            "Equipo no encontrado".to_string()
-        })?;
-    
-    // Obtener el cliente
-    let cliente_id = equipo.cliente_id
-        .ok_or_else(|| {
-            println!("❌ [DEBUG] El equipo {} no tiene cliente asociado", equipo_id);
-            "El equipo no tiene cliente asociado".to_string()
-        })?;
-    println!("✅ [DEBUG] Cliente ID: {}", cliente_id);
-    
-    let cliente = get_cliente_by_id(cliente_id).await?
-        .ok_or_else(|| {
-            println!("❌ [DEBUG] Cliente no encontrado: {}", cliente_id);
-            "Cliente no encontrado".to_string()
-        })?;
-    
-    // Verificar email del cliente
-    if cliente.cliente_correo.is_none() || cliente.cliente_correo.as_ref().unwrap().trim().is_empty() {
-        println!("❌ [DEBUG] Cliente {} no tiene email configurado", cliente_id);
-        return Err("El cliente no tiene email configurado".to_string());
+    let result = sqlx::query("UPDATE INFORME SET is_borrador = ? WHERE informe_id = ?")
+        .bind(false)
+        .bind(informe_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    if result.rows_affected() > 0 {
+        let _ = log_action(
+            "SEND_INFORME",
+            Some(sent_by),
+            "INFORME",
+            Some(informe_id),
+            Some("Informe enviado al cliente"),
+            None
+        ).await;
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    println!("✅ [DEBUG] Email del cliente: {}", cliente.cliente_correo.as_ref().unwrap());
-    
-    // Generar el PDF del informe
-    println!("📄 [DEBUG] Generando PDF de informe {}...", informe_id);
-    let pdf_bytes = match generate_informe_pdf_command(informe_id).await {
-        Ok(bytes) => {
-            println!("✅ [DEBUG] PDF generado exitosamente ({} bytes)", bytes.len());
-            bytes
-        }
-        Err(e) => {
-            println!("❌ [DEBUG] Error generando PDF: {}", e);
-            return Err(format!("Error generando PDF del informe: {}", e));
-        }
-    };
-    
-    // Obtener el email del cliente (clonar para evitar problemas de borrow)
-    let cliente_email = cliente.cliente_correo
-        .clone()
-        .ok_or_else(|| "El cliente no tiene email configurado".to_string())?;
-    
-    // Verificar RESEND_API_KEY
-    use std::env;
-    match env::var("RESEND_API_KEY") {
-        Ok(_) => println!("✅ [DEBUG] RESEND_API_KEY encontrada"),
-        Err(_) => {
-            println!("❌ [DEBUG] RESEND_API_KEY no encontrada");
-            return Err("RESEND_API_KEY no configurada en las variables de entorno".to_string());
-        }
-    }
-    
-    // Crear el servicio de email
-    let email_service = match crate::email::EmailService::new() {
-        Ok(service) => {
-            println!("✅ [DEBUG] EmailService inicializado");
-            service
-        }
-        Err(e) => {
-            println!("❌ [DEBUG] Error inicializando EmailService: {}", e);
-            return Err(format!("Error inicializando servicio de email: {}", e));
-        }
-    };
-    
-    // Enviar el email con PDF
-    println!("📧 [DEBUG] Enviando email de informe con PDF a {}...", cliente_email);
-    match email_service.send_informe_email_with_pdf(
-        &cliente_email,
-        &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
-        &informe,
-        &orden_trabajo,
-        &equipo,
-        &pdf_bytes,
-    ).await {
-        Ok(_) => {
-            println!("✅ [DEBUG] Email enviado exitosamente");
-        }
-        Err(e) => {
-            println!("❌ [DEBUG] Error enviando email: {}", e);
-            return Err(format!("Error enviando email: {}", e));
-        }
-    }
-    
-    // Registrar la acción en el log de auditoría
-    let _ = log_action(
-        "SEND_INFORME",
-        Some(sent_by),
-        "INFORME",
-        Some(informe_id),
-        None,
-        Some(&format!("Informe {} enviado a {} con PDF adjunto", 
-            informe.informe_codigo.as_deref().unwrap_or("N/A"),
-            cliente_email
-        ))
-    ).await;
-    
-    println!("✅ [DEBUG] send_informe_to_client completado exitosamente");
-    Ok(true)
 }
-
 
 pub async fn get_informes_by_cliente(cliente_id: i32) -> Result<Vec<Informe>, String> {
     let pool = get_db_pool_safe()?;

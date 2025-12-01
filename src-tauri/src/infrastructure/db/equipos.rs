@@ -1,8 +1,5 @@
-use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use crate::database::get_db_pool_safe;
 use crate::commands::logs::log_action;
-use chrono::{DateTime, Utc};
 
 use crate::models::equipos::{
     Equipo, 
@@ -11,7 +8,8 @@ use crate::models::equipos::{
     RegistrarSalidaRequest, 
     SalidaEquipoResponse, 
     EquipoConEstado, 
-    FiltrosEquipos
+    FiltrosEquipos,
+    EquipoWithCliente
 };
 
 
@@ -431,22 +429,7 @@ pub async fn get_equipos_by_price_range(min_price: Option<i32>, max_price: Optio
     Ok(equipos)
 }
 
-/// Obtener resumen de un equipo con información del cliente
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct EquipoWithCliente {
-    pub equipo_id: i32,
-    pub numero_serie: Option<String>,
-    pub equipo_marca: Option<String>,
-    pub equipo_modelo: Option<String>,
-    pub equipo_tipo: Option<String>,
-    pub equipo_precio: Option<i32>,
-    pub equipo_ubicacion: Option<String>,
-    pub cliente_id: Option<i32>,
-    pub cliente_nombre: Option<String>,
-    pub cliente_correo: Option<String>,
-    pub created_by: Option<i32>,
-    pub created_at: Option<DateTime<Utc>>,
-}
+
 
 /// Obtener equipos con información del cliente
 
@@ -595,10 +578,10 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
     
     // Obtener orden de trabajo asociada si existe
     let orden_trabajo = if let Some(orden_id) = request.orden_trabajo_id {
-        crate::commands::ordenes_trabajo::get_orden_trabajo_by_id(orden_id).await?
+        crate::infrastructure::db::ordenes_trabajo::get_orden_trabajo_by_id(orden_id).await?
     } else {
         // Buscar orden de trabajo por equipo_id
-        let ordenes = crate::commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo(request.equipo_id).await?;
+        let ordenes = crate::infrastructure::db::ordenes_trabajo::get_ordenes_trabajo_by_equipo(request.equipo_id).await?;
         ordenes.into_iter().find(|o| {
             matches!(o.estado.as_deref(), Some("espera_de_retiro") | Some("entregado") | Some("abandonado") | Some("equipo_no_reparable"))
         })
@@ -647,7 +630,7 @@ pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<
         
         // Solo actualizar si el estado es diferente
         if estado_anterior != nuevo_estado {
-            let _ = crate::commands::ordenes_trabajo::cambiar_estado_orden_trabajo(
+            let _ = crate::infrastructure::db::ordenes_trabajo::cambiar_estado_orden_trabajo(
                 orden.orden_id,
                 nuevo_estado.to_string(),
                 request.usuario_id
@@ -710,7 +693,7 @@ pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, Stri
     }
     
     // Buscar órdenes de trabajo asociadas
-    let ordenes = crate::commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo(equipo_id).await?;
+    let ordenes = crate::infrastructure::db::ordenes_trabajo::get_ordenes_trabajo_by_equipo(equipo_id).await?;
     
     // Si no hay órdenes, se puede registrar salida directa
     if ordenes.is_empty() {
@@ -769,7 +752,7 @@ pub async fn equipo_esta_en_sistema(equipo_id: i32) -> Result<(bool, String), St
     }
     
     // Buscar órdenes de trabajo asociadas
-    let ordenes = crate::commands::ordenes_trabajo::get_ordenes_trabajo_by_equipo(equipo_id).await?;
+    let ordenes = crate::infrastructure::db::ordenes_trabajo::get_ordenes_trabajo_by_equipo(equipo_id).await?;
     
     // Si no hay órdenes, el equipo está en el sistema
     if ordenes.is_empty() {

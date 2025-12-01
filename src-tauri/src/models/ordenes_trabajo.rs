@@ -76,13 +76,13 @@ pub struct OrdenTrabajoDetallada {
     pub creador_nombre: Option<String>,
     // Información de cotización
     pub cotizacion_codigo: Option<String>,
-    pub costo_total: Option<i32>,
-    // Información de informe
-    pub informe_codigo: Option<String>,
+    #[sqlx(skip)]
+    pub estados: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Filtros {
+    pub search: Option<String>,
     pub fecha_inicio: Option<String>,
     pub fecha_fin: Option<String>,
     pub marcas: Option<Vec<String>>,

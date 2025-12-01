@@ -7,7 +7,7 @@ use crate::models::clientes::{
     // Importamos los structs auxiliares para las listas
     // Asegúrate de que estén definidos y sean públicos en models/clientes.rs
 };
-use crate::commands::clientes::get_http_client;
+use crate::infrastructure::api::client::get_http_client;
 use serde_json::json;
 
 // Helper para construir la URL base

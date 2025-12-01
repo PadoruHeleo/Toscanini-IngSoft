@@ -1,4 +1,4 @@
-use crate::commands::clientes::get_http_client;
+use crate::infrastructure::api::client::get_http_client;
 use crate::models::cotizacion::{
     Cotizacion,
     CotizacionDetallada,
@@ -298,7 +298,7 @@ pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
     response.json::<Vec<InventarioEquipo>>().await.map_err(|e| e.to_string())
 }
 
-pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Result<bool, String> {
+pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Result<InventarioEquipo, String> {
     let (client, url) = get_base_url("inventario-equipos")?;
     
     let response = client.post(&url)
@@ -311,10 +311,10 @@ pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Resul
         return Err(response.text().await.unwrap_or_default());
     }
     
-    Ok(true)
+    response.json::<InventarioEquipo>().await.map_err(|e| e.to_string())
 }
 
-pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoRequest) -> Result<bool, String> {
+pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoRequest) -> Result<InventarioEquipo, String> {
     let (client, base_url) = get_base_url("inventario-equipos")?;
     let url = format!("{}/{}", base_url, equipo_id);
     
@@ -328,7 +328,7 @@ pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoR
         return Err(response.text().await.unwrap_or_default());
     }
     
-    Ok(true)
+    response.json::<InventarioEquipo>().await.map_err(|e| e.to_string())
 }
 
 pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
@@ -453,4 +453,14 @@ pub async fn update_cotizacion_piezas(cotizacion_id: i32, piezas: Vec<PiezaCotiz
     }
     
     Ok(true)
+}
+
+// Stubs for missing functions
+
+pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
+    Err("Not implemented via API yet".to_string())
+}
+
+pub async fn update_pieza_stock(_pieza_id: i32, _cantidad: i32, _tipo: String) -> Result<bool, String> {
+    Err("Not implemented via API yet".to_string())
 }

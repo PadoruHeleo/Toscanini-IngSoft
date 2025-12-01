@@ -38,6 +38,7 @@ pub struct PiezaCotizacion {
     pub pieza_marca: Option<String>,
     pub pieza_desc: Option<String>,
     pub pieza_precio: Option<i32>,
+    pub pieza_stock: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
@@ -57,7 +58,6 @@ pub struct CotizacionDetallada {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateCotizacionRequest {
-    // pub cotizacion_codigo: String, // Eliminar este campo
     pub costo_revision: Option<i32>,
     pub costo_reparacion: Option<i32>,
     pub costo_total: Option<i32>,
@@ -77,6 +77,7 @@ pub struct UpdateCotizacionRequest {
     pub is_aprobada: Option<bool>,
     pub is_borrador: Option<bool>,
     pub informe: Option<String>,
+    pub piezas: Option<Vec<PiezaCotizacionRequest>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -109,39 +110,25 @@ pub struct UpdatePiezaRequest {
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct InventarioEquipo {
-    pub inventario_equipo_id: i32,
-    pub equipo_codigo: Option<String>,
-    pub equipo_nombre: Option<String>,
+    pub equipo_id: i32,
+    pub equipo_tipo: Option<String>,
     pub equipo_marca: Option<String>,
     pub equipo_modelo: Option<String>,
-    pub equipo_tipo: Option<String>,
-    pub equipo_descripcion: Option<String>,
-    pub equipo_precio: Option<i32>,
-    pub equipo_stock: Option<i32>,
+    pub numero_serie: Option<String>,
     pub equipo_estado: Option<String>,
     pub equipo_ubicacion: Option<String>,
-    pub fecha_adquisicion: Option<String>,
-    pub proveedor: Option<String>,
-    pub numero_serie: Option<String>,
-    pub garantia_vencimiento: Option<String>,
-    pub observaciones: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InventarioEquipoRequest {
-    pub equipo_codigo: String,
-    pub equipo_nombre: String,
+    pub equipo_tipo: Option<String>,
     pub equipo_marca: Option<String>,
     pub equipo_modelo: Option<String>,
-    pub equipo_tipo: String,
-    pub equipo_descripcion: Option<String>,
-    pub equipo_precio: Option<i32>,
-    pub equipo_stock: Option<i32>,
-    pub equipo_ubicacion: Option<String>,
-    pub proveedor: Option<String>,
     pub numero_serie: Option<String>,
-    pub observaciones: Option<String>,
+    pub equipo_estado: Option<String>,
+    pub equipo_ubicacion: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]

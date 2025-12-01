@@ -96,3 +96,19 @@ pub struct DeleteEquipoRequest {
     pub equipo_id: i32,
     pub deleted_by: i32,
 }
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct EquipoWithCliente {
+    pub equipo_id: i32,
+    pub numero_serie: Option<String>,
+    pub equipo_marca: Option<String>,
+    pub equipo_modelo: Option<String>,
+    pub equipo_tipo: Option<String>,
+    pub equipo_precio: Option<i32>,
+    pub equipo_ubicacion: Option<String>,
+    pub cliente_id: Option<i32>,
+    pub cliente_nombre: Option<String>,
+    pub cliente_correo: Option<String>,
+    pub created_by: Option<i32>,
+    pub created_at: Option<DateTime<Utc>>,
+}
