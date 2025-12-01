@@ -11,8 +11,28 @@ fn get_base_url() -> Result<(reqwest::Client, String), String> {
 
 pub async fn get_ordenes_trabajo() -> Result<Vec<OrdenTrabajo>, String> {
     let (client, base_url) = get_base_url()?;
-    let response = client.get(&base_url).send().await.map_err(|e| e.to_string())?;
-    response.json::<Vec<OrdenTrabajo>>().await.map_err(|e| e.to_string())
+    println!("🔍 Llamando a: {}", base_url);
+    let response = client.get(&base_url).send().await.map_err(|e| {
+        let error_msg = format!("Error de conexión: {}", e);
+        println!("❌ {}", error_msg);
+        error_msg
+    })?;
+    
+    let status = response.status();
+    println!("📊 Status code: {}", status);
+    
+    if !status.is_success() {
+        let error_body = response.text().await.unwrap_or_else(|_| "No se pudo leer el cuerpo del error".to_string());
+        let error_msg = format!("Error API ({}): {}", status, error_body);
+        println!("❌ {}", error_msg);
+        return Err(error_msg);
+    }
+    
+    response.json::<Vec<OrdenTrabajo>>().await.map_err(|e| {
+        let error_msg = format!("Error parseando JSON: {}", e);
+        println!("❌ {}", error_msg);
+        error_msg
+    })
 }
 
 pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabajo>, String> {

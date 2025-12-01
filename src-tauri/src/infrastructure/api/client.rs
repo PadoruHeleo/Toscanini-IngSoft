@@ -11,9 +11,7 @@ pub fn get_api_key() -> String {
 
 pub fn get_http_client() -> Result<(Client, String), String> {
     let api_token = get_api_key();
-    
-    println!("🔑 API_TOKEN leído: {}", api_token);
-    
+     
     let mut headers = header::HeaderMap::new();
     let mut api_key_header_val = header::HeaderValue::from_str(&api_token)
         .map_err(|e| format!("Error en header x-api-key: {}", e))?;
