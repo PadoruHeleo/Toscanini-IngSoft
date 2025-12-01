@@ -1,7 +1,7 @@
 use crate::database::get_db_pool_safe;
 use crate::utils::{hash_password, verify_password};
 use crate::commands::logs::log_action;
-use crate::email::EmailService;
+use crate::infrastructure::db::email::EmailService;
 use chrono::{ Utc, Duration};
 use uuid::Uuid;
 use sqlx::Row;

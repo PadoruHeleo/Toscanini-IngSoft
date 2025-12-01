@@ -1,7 +1,7 @@
 pub mod commands;
 pub mod database;
 pub mod utils;
-pub mod email;
+
 pub mod config;
 pub mod pdf;
 pub mod ssh_tunnel;
@@ -21,33 +21,45 @@ pub fn run() {
     // Cargar variables de entorno desde .env (tiene prioridad en debug, fallback en release)
     dotenv::dotenv().ok();
     
-    // Crear runtime de Tokio que se mantenga vivo
-    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    // Cargar AppConfig para determinar el modo de operación
+    let app_config = config::AppConfig::default();
     
-    // Inicializar la base de datos
-    rt.block_on(async {
-        if let Err(e) = init_database().await {
-            eprintln!("Warning: Failed to initialize database: {}", e);
-        }
+    // Solo inicializar DB/SSH si NO estamos en modo API
+    if !app_config.use_api {
+        println!("🔌 Inicializando en modo DATABASE (local)...");
         
-        // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
-        start_auto_reconnect_task();
+        // Crear runtime de Tokio que se mantenga vivo
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         
-        // Iniciar verificación periódica cada 60 segundos (incluso cuando está conectada)
-        start_periodic_connection_check(10);
-    });
-    
-    // Mantener el runtime vivo usando spawn_blocking
-    std::thread::spawn(move || {
+        // Inicializar la base de datos
         rt.block_on(async {
-            // Mantener el runtime corriendo indefinidamente
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            if let Err(e) = init_database().await {
+                eprintln!("Warning: Failed to initialize database: {}", e);
             }
+            
+            // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
+            start_auto_reconnect_task();
+            
+            // Iniciar verificación periódica cada 10 segundos
+            start_periodic_connection_check(10);
         });
-    });
+        
+        // Mantener el runtime vivo usando spawn_blocking
+        std::thread::spawn(move || {
+            rt.block_on(async {
+                // Mantener el runtime corriendo indefinidamente
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+                }
+            });
+        });
+    } else {
+        println!("🌐 Inicializando en modo API-ONLY (sin base de datos local)...");
+        println!("   Las consultas se realizarán mediante llamadas a la API remota");
+    }
     
     tauri::Builder::default()
+        .manage(app_config)  // Hacer AppConfig disponible para todos los comandos
         .plugin(tauri_plugin_opener::init())        
         .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
@@ -223,10 +235,10 @@ pub fn run() {
             commands::config::test_database_connection,
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
-            email::send_orden_trabajo_cliente,
-            email::send_cotizacion_email,
-            email::send_informe_email,
-            email::test_email_send,
+            commands::email::send_orden_trabajo_cliente,
+            commands::email::send_cotizacion_email,
+            commands::email::send_informe_email,
+            commands::email::test_email_send,
             pdf::commands::generate_cotizacion_pdf_command,
             pdf::commands::generate_informe_pdf_command,
             pdf::commands::generate_orden_trabajo_pdf_command,

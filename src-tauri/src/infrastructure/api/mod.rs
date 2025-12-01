@@ -7,3 +7,4 @@ pub mod ordenes_trabajo;
 pub mod terminos_condiciones;
 pub mod logs;
 pub mod client;
+pub mod email;

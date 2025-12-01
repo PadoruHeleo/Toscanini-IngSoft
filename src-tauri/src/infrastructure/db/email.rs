@@ -1,9 +1,7 @@
-use crate::config::AppConfig;
 use crate::models::email::EmailConfig;
 use lettre::message::{header, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
-use tauri::State;
 use crate::models::ordenes_trabajo::OrdenTrabajo;
 use crate::models::cotizacion::Cotizacion;
 use crate::models::informe::Informe;
@@ -78,10 +76,14 @@ impl EmailService {
     }
     
     // Método interno para enviar el email
-    async fn send_email_internal(&self, to: &str, subject: &str, html_content: &str, attachment: Option<(&[u8], &str)>) -> Result<(), String> {
+    pub async fn send_email_internal(&self, to: &str, subject: &str, html_content: &str, attachment: Option<(&[u8], &str)>) -> Result<(), String> {
         let email = self.build_email(to, subject, html_content, attachment)?;
         
         // Enviar email (bloqueante, pero ejecutado en contexto async)
+        // Note: lettre's send is synchronous unless using AsyncSmtpTransport. 
+        // Here we are using SmtpTransport which is sync. 
+        // Ideally we should wrap this in spawn_blocking or use async transport.
+        // For now keeping as is to match original code.
         match self.mailer.send(&email) {
             Ok(_) => Ok(()),
             Err(e) => Err(format!("Error enviando email SMTP: {}", e)),
@@ -320,20 +322,12 @@ impl EmailService {
     }
 }
 
-// --- COMANDOS TAURI ---
+// --- Public Functions for DB Impl ---
 
-#[tauri::command]
-pub async fn send_test_email(state: State<'_, AppConfig>, to_email: String) -> Result<String, String> {
-    println!("📧 [test_email_send] Iniciando prueba de envío de correo a: {}", to_email);
+pub async fn send_test_email(config: &EmailConfig, to_email: String) -> Result<String, String> {
+    println!("📧 [db_impl] Iniciando prueba de envío de correo a: {}", to_email);
     
-    let email_config = state.email_config.as_ref().ok_or("Configuración de email no encontrada")?;
-    
-    let email_service = EmailService::new(email_config)
-        .map_err(|e| {
-            let error_msg = format!("Error al inicializar servicio de email: {}", e);
-            println!("❌ [test_email_send] {}", error_msg);
-            error_msg
-        })?;
+    let email_service = EmailService::new(config)?;
     
     let html_content = r#"
     <!DOCTYPE html>
@@ -372,18 +366,14 @@ pub async fn send_test_email(state: State<'_, AppConfig>, to_email: String) -> R
         None,
     ).await.map_err(|e| {
         let error_msg = format!("Error enviando correo de prueba: {}", e);
-        println!("❌ [test_email_send] {}", error_msg);
+        println!("❌ [db_impl] {}", error_msg);
         error_msg
     })?;
-    
-    println!("✅ [test_email_send] Correo de prueba enviado exitosamente a: {}", to_email);
     
     Ok(format!("Correo de prueba enviado exitosamente a {}", to_email))
 }
 
-/// Comando de Tauri para enviar email de orden de trabajo al cliente
-#[tauri::command]
-pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
+pub async fn send_orden_trabajo_cliente(config: &EmailConfig, orden_id: i32) -> Result<String, String> {
     use crate::infrastructure::db::ordenes_trabajo::get_orden_trabajo_by_id;
     use crate::infrastructure::db::equipos::get_equipo_by_id;
     use crate::infrastructure::db::clientes::get_cliente_by_id;
@@ -409,9 +399,7 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
     }
 
     // Crear el servicio de email
-    let email_config = state.email_config.as_ref().ok_or("Configuración de email no encontrada")?;
-    let email_service = EmailService::new(email_config)
-        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+    let email_service = EmailService::new(config)?;
 
     // Enviar el email
     email_service.send_orden_trabajo_cliente(
@@ -424,10 +412,7 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
     Ok("Email enviado exitosamente".to_string())
 }
 
-/// Comando de Tauri para enviar email de cotización con PDF al cliente
-/// También actualiza el estado de la cotización y la orden después de enviar exitosamente
-#[tauri::command]
-pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i32, sent_by: i32) -> Result<String, String> {
+pub async fn send_cotizacion_email(config: &EmailConfig, cotizacion_id: i32, sent_by: i32) -> Result<String, String> {
     use crate::infrastructure::db::cotizacion::{get_cotizacion_by_id, update_cotizacion};
     use crate::infrastructure::db::ordenes_trabajo::{get_orden_trabajo_by_id, cambiar_estado_orden_trabajo};
     use crate::infrastructure::db::equipos::get_equipo_by_id;
@@ -439,10 +424,8 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
     let cotizacion = get_cotizacion_by_id(cotizacion_id).await?
         .ok_or_else(|| "Cotización no encontrada".to_string())?;
 
-    // Generar el PDF (permite borradores, los actualizaremos después)
-    println!("📄 Generando PDF de cotización {}...", cotizacion_id);
+    // Generar el PDF
     let pdf_bytes = generate_cotizacion_pdf_command(cotizacion_id).await?;
-    println!("✅ PDF generado exitosamente ({} bytes)", pdf_bytes.len());
 
     // Buscar la orden de trabajo asociada
     let pool = get_db_pool_safe()?;
@@ -476,12 +459,9 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
     }
 
     // Crear el servicio de email
-    let email_config = state.email_config.as_ref().ok_or("Configuración de email no encontrada")?;
-    let email_service = EmailService::new(email_config)
-        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+    let email_service = EmailService::new(config)?;
 
     // Enviar el email con PDF
-    println!("📧 Enviando email de cotización con PDF a {}...", cliente.cliente_correo.as_ref().unwrap());
     email_service.send_cotizacion_email_with_pdf(
         &cliente.cliente_correo.unwrap(),
         &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
@@ -491,9 +471,7 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
         &pdf_bytes,
     ).await?;
 
-    println!("✅ Email enviado exitosamente. Actualizando estados...");
-
-    // Después de enviar exitosamente, actualizar el estado de la cotización
+    // Actualizar estados
     let _ = update_cotizacion(
         cotizacion_id,
         crate::models::cotizacion::UpdateCotizacionRequest {
@@ -509,9 +487,6 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
         sent_by,
     ).await.map_err(|e| format!("Error actualizando estado de cotización: {}", e))?;
 
-    println!("✅ Cotización marcada como enviada");
-
-    // Cambiar el estado de la orden a "cotizacion_enviada" si está en "recibido"
     if let Some(estado_actual) = &orden_trabajo.estado {
         if estado_actual == "recibido" {
             let _ = cambiar_estado_orden_trabajo(
@@ -519,17 +494,13 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
                 "cotizacion_enviada".to_string(),
                 sent_by,
             ).await.map_err(|e| format!("Error actualizando estado de orden: {}", e))?;
-            println!("✅ Estado de orden cambiado a 'cotizacion_enviada'");
         }
     }
 
     Ok("Email de cotización con PDF enviado exitosamente y estados actualizados".to_string())
 }
 
-/// Comando de Tauri para enviar email de informe con PDF al cliente cuando el equipo está listo para retiro
-/// Se ejecuta automáticamente cuando la orden cambia a "espera_de_retiro"
-#[tauri::command]
-pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
+pub async fn send_informe_email(config: &EmailConfig, orden_id: i32, _sent_by: i32) -> Result<String, String> {
     use crate::infrastructure::db::ordenes_trabajo::get_orden_trabajo_by_id;
     use crate::infrastructure::db::informe::get_informe_by_id;
     use crate::infrastructure::db::equipos::get_equipo_by_id;
@@ -549,9 +520,7 @@ pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sen
         .ok_or_else(|| "Informe no encontrado".to_string())?;
 
     // Generar el PDF del informe
-    println!("📄 Generando PDF de informe {}...", informe_id);
     let pdf_bytes = generate_informe_pdf_command(informe_id).await?;
-    println!("✅ PDF generado exitosamente ({} bytes)", pdf_bytes.len());
 
     // Obtener el equipo
     let equipo_id = orden_trabajo.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
@@ -569,12 +538,9 @@ pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sen
     }
 
     // Crear el servicio de email
-    let email_config = state.email_config.as_ref().ok_or("Configuración de email no encontrada")?;
-    let email_service = EmailService::new(email_config)
-        .map_err(|e| format!("Error al inicializar servicio de email: {}", e))?;
+    let email_service = EmailService::new(config)?;
 
     // Enviar el email con PDF
-    println!("📧 Enviando email de informe con PDF a {}...", cliente.cliente_correo.as_ref().unwrap());
     email_service.send_informe_email_with_pdf(
         &cliente.cliente_correo.unwrap(),
         &cliente.cliente_nombre.unwrap_or_else(|| "Cliente".to_string()),
@@ -584,66 +550,5 @@ pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sen
         &pdf_bytes,
     ).await?;
 
-    println!("✅ Email de informe enviado exitosamente");
-
     Ok("Email de informe con PDF enviado exitosamente al cliente".to_string())
-}
-
-#[tauri::command]
-pub async fn test_email_send(state: State<'_, AppConfig>, to_email: String) -> Result<String, String> {
-    println!("📧 [test_email_send] Iniciando prueba de envío de correo a: {}", to_email);
-    
-    let email_config = state.email_config.as_ref().ok_or("Configuración de email no encontrada")?;
-    
-    let email_service = EmailService::new(email_config)
-        .map_err(|e| {
-            let error_msg = format!("Error al inicializar servicio de email: {}", e);
-            println!("❌ [test_email_send] {}", error_msg);
-            error_msg
-        })?;
-    
-    let html_content = r#"
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-            .header { background-color: #4a90e2; color: white; padding: 10px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { padding: 20px; }
-            .footer { margin-top: 20px; font-size: 12px; color: #777; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h2>Prueba de Correo</h2>
-            </div>
-            <div class="content">
-                <p>Hola,</p>
-                <p>Este es un correo de prueba enviado desde el sistema <strong>Toscanini</strong>.</p>
-                <p>Si estás leyendo esto, la configuración SMTP está funcionando correctamente. ✅</p>
-            </div>
-            <div class="footer">
-                <p>Enviado automáticamente por el sistema Toscanini.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    "#;
-
-    email_service.send_email_internal(
-        &to_email,
-        "🧪 Correo de Prueba - Sistema Toscanini",
-        html_content,
-        None,
-    ).await.map_err(|e| {
-        let error_msg = format!("Error enviando correo de prueba: {}", e);
-        println!("❌ [test_email_send] {}", error_msg);
-        error_msg
-    })?;
-    
-    println!("✅ [test_email_send] Correo de prueba enviado exitosamente a: {}", to_email);
-    
-    Ok(format!("Correo de prueba enviado exitosamente a {}", to_email))
 }

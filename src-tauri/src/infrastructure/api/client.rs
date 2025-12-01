@@ -3,15 +3,20 @@ use reqwest::header;
 use std::env;
 
 const DEFAULT_API_URL: &str = "http://localhost:3000/api";
-const API_TOKEN: &str = "mi_secreto_super_seguro_123";
+const DEFAULT_API_TOKEN: &str = "mi_secreto_super_seguro_123";
 
 pub fn get_http_client() -> Result<(Client, String), String> {
+    let api_token = env::var("API_TOKEN").unwrap_or_else(|_| DEFAULT_API_TOKEN.to_string());
+    
+    println!("🔑 API_TOKEN leído: {}", api_token);
+    
     let mut headers = header::HeaderMap::new();
-    let auth_value = format!("Bearer {}", API_TOKEN);
-    let mut auth_header_val = header::HeaderValue::from_str(&auth_value)
-        .map_err(|e| format!("Error en header auth: {}", e))?;
-    auth_header_val.set_sensitive(true);
-    headers.insert(header::AUTHORIZATION, auth_header_val);
+    let mut api_key_header_val = header::HeaderValue::from_str(&api_token)
+        .map_err(|e| format!("Error en header x-api-key: {}", e))?;
+    api_key_header_val.set_sensitive(true);
+    headers.insert(header::HeaderName::from_static("x-api-key"), api_key_header_val);
+    
+    println!("📋 Headers configurados: {:?}", headers);
 
     let client = Client::builder()
         .default_headers(headers)

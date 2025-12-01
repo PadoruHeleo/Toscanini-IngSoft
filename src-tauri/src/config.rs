@@ -32,8 +32,11 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            use_api: false,
-            email_config: None,
+            use_api: std::env::var("USE_API")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(false),
+            email_config: load_email_config(),
         }
     }
 }

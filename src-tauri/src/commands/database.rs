@@ -1,4 +1,6 @@
 use crate::database::{get_database_status as get_db_status, check_database_connection as check_db_connection};
+use crate::config::AppConfig;
+use tauri::State;
 use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
@@ -12,49 +14,77 @@ pub struct DatabaseStatusResponse {
 }
 
 #[tauri::command]
-pub async fn get_database_status() -> DatabaseStatusResponse {
+pub async fn get_database_status(state: State<'_, AppConfig>) -> Result<DatabaseStatusResponse, String> {
+    if state.use_api {
+        return Ok(DatabaseStatusResponse {
+            is_connected: false,
+            error_message: Some("Base de datos no disponible en modo API".to_string()),
+            last_check: Some(chrono::Utc::now().to_rfc3339()),
+        });
+    }
+    
     let status = get_db_status();
-    DatabaseStatusResponse {
+    Ok(DatabaseStatusResponse {
         is_connected: status.is_connected,
         error_message: status.error_message,
         last_check: status.last_check.map(|dt| dt.to_rfc3339()),
-    }
+    })
 }
 
 #[tauri::command]
-pub async fn check_database_connection() -> DatabaseStatusResponse {
+pub async fn check_database_connection(state: State<'_, AppConfig>) -> Result<DatabaseStatusResponse, String> {
+    if state.use_api {
+        return Ok(DatabaseStatusResponse {
+            is_connected: false,
+            error_message: Some("Operación no disponible en modo API".to_string()),
+            last_check: Some(chrono::Utc::now().to_rfc3339()),
+        });
+    }
+    
     let is_connected = check_db_connection().await;
     let status = get_db_status();
-    DatabaseStatusResponse {
+    Ok(DatabaseStatusResponse {
         is_connected,
         error_message: status.error_message,
         last_check: status.last_check.map(|dt| dt.to_rfc3339()),
-    }
+    })
 }
 
 #[tauri::command]
-pub async fn retry_database_connection() -> DatabaseStatusResponse {
+pub async fn retry_database_connection(state: State<'_, AppConfig>) -> Result<DatabaseStatusResponse, String> {
+    if state.use_api {
+        return Ok(DatabaseStatusResponse {
+            is_connected: false,
+            error_message: Some("Operación no disponible en modo API".to_string()),
+            last_check: Some(chrono::Utc::now().to_rfc3339()),
+        });
+    }
+    
     match crate::database::retry_database_connection().await {
         Ok(_) => {
             let status = get_db_status();
-            DatabaseStatusResponse {
+            Ok(DatabaseStatusResponse {
                 is_connected: true,
                 error_message: None,
                 last_check: status.last_check.map(|dt| dt.to_rfc3339()),
-            }
+            })
         }
         Err(e) => {
-            DatabaseStatusResponse {
+            Ok(DatabaseStatusResponse {
                 is_connected: false,
                 error_message: Some(e.to_string()),
                 last_check: Some(chrono::Utc::now().to_rfc3339()),
-            }
+            })
         }
     }
 }
 
 #[tauri::command]
-pub async fn force_run_migrations() -> Result<String, String> {
+pub async fn force_run_migrations(state: State<'_, AppConfig>) -> Result<String, String> {
+    if state.use_api {
+        return Err("Operación no disponible en modo API".to_string());
+    }
+    
     let pool = crate::database::get_db_pool_safe()?;
     
     match sqlx::migrate!("./migrations").run(&*pool).await {
@@ -64,7 +94,11 @@ pub async fn force_run_migrations() -> Result<String, String> {
 }
 
 #[tauri::command]  
-pub async fn insert_test_data() -> Result<String, String> {
+pub async fn insert_test_data(state: State<'_, AppConfig>) -> Result<String, String> {
+    if state.use_api {
+        return Err("Operación no disponible en modo API".to_string());
+    }
+    
     let pool = crate::database::get_db_pool_safe()?;
     
     // Verificar conteos de tablas
@@ -93,7 +127,11 @@ pub async fn insert_test_data() -> Result<String, String> {
 }
 
 #[tauri::command]  
-pub async fn check_equipo_ids() -> Result<String, String> {
+pub async fn check_equipo_ids(state: State<'_, AppConfig>) -> Result<String, String> {
+    if state.use_api {
+        return Err("Operación no disponible en modo API".to_string());
+    }
+    
     let pool = crate::database::get_db_pool_safe()?;
     
     let equipos: Vec<(i32, String)> = sqlx::query_as("SELECT equipo_id, numero_serie FROM EQUIPO ORDER BY equipo_id LIMIT 10")
@@ -101,9 +139,9 @@ pub async fn check_equipo_ids() -> Result<String, String> {
         .await
         .map_err(|e| format!("Error consultando equipos: {}", e))?;
     
-    let mut result = String::from("Equipos disponibles:\n");
+    let mut result = String::from("Equipos disponibles:\\n");
     for (id, serie) in equipos {
-        result.push_str(&format!("ID: {}, Serie: {}\n", id, serie));
+        result.push_str(&format!("ID: {}, Serie: {}\\n", id, serie));
     }
     
     Ok(result)
