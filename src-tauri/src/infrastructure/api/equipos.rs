@@ -32,8 +32,8 @@ pub async fn get_equipos_by_cliente(cliente_id: i32) -> Result<Vec<Equipo>, Stri
 
 pub async fn search_equipos(search_term: String) -> Result<Vec<Equipo>, String> {
     let (client, base_url) = get_base_url()?;
-    let url = format!("{}/search", base_url);
-    let response = client.get(&url).query(&[("q", search_term)]).send().await.map_err(|e| e.to_string())?;
+    let url = format!("{}/search/query", base_url);
+    let response = client.get(&url).query(&[("term", search_term)]).send().await.map_err(|e| e.to_string())?;
     response.json::<Vec<Equipo>>().await.map_err(|e| e.to_string())
 }
 
@@ -51,14 +51,19 @@ pub async fn update_equipo(equipo_id: i32, request: UpdateEquipoRequest, _update
     response.json::<Option<Equipo>>().await.map_err(|e| e.to_string())
 }
 
-pub async fn delete_equipo(equipo_id: i32, _deleted_by: i32) -> Result<bool, String> {
+pub async fn delete_equipo(equipo_id: i32, deleted_by: i32) -> Result<bool, String> {
     let (client, base_url) = get_base_url()?;
-    let url = format!("{}/{}", base_url, equipo_id);
-    let response = client.delete(&url).send().await.map_err(|e| e.to_string())?;
+    let url = format!("{}/delete", base_url);
+    let body = serde_json::json!({
+        "equipo_id": equipo_id,
+        "deleted_by": deleted_by,
+        "motivo": "Eliminado desde aplicación de escritorio"
+    });
+    let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
     Ok(response.status().is_success())
 }
 
-// Stubs for missing functions
+// Implementations for missing functions
 
 pub async fn get_equipo_by_numero_serie(_numero_serie: String) -> Result<Option<Equipo>, String> {
     Err("Not implemented via API yet".to_string())
@@ -97,7 +102,10 @@ pub async fn transfer_equipo_to_cliente(_equipo_id: i32, _new_cliente_id: i32, _
 }
 
 pub async fn get_equipos_marcas() -> Result<Vec<String>, String> {
-    Err("Not implemented via API yet".to_string())
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/list/marcas", base_url);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    response.json::<Vec<String>>().await.map_err(|e| e.to_string())
 }
 
 pub async fn get_equipos_modelos_by_marca(_marca: String) -> Result<Vec<String>, String> {
@@ -105,7 +113,10 @@ pub async fn get_equipos_modelos_by_marca(_marca: String) -> Result<Vec<String>,
 }
 
 pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
-    Err("Not implemented via API yet".to_string())
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/list/ubicaciones", base_url);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    response.json::<Vec<String>>().await.map_err(|e| e.to_string())
 }
 
 pub async fn registrar_salida_equipo(_request: RegistrarSalidaRequest) -> Result<SalidaEquipoResponse, String> {
@@ -120,8 +131,11 @@ pub async fn equipo_esta_en_sistema(_equipo_id: i32) -> Result<(bool, String), S
     Err("Not implemented via API yet".to_string())
 }
 
-pub async fn get_equipos_filtrados(_filtros: FiltrosEquipos) -> Result<Vec<EquipoConEstado>, String> {
-    Err("Not implemented via API yet".to_string())
+pub async fn get_equipos_filtrados(filtros: FiltrosEquipos) -> Result<Vec<EquipoConEstado>, String> {
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/filter", base_url);
+    let response = client.post(&url).json(&filtros).send().await.map_err(|e| e.to_string())?;
+    response.json::<Vec<EquipoConEstado>>().await.map_err(|e| e.to_string())
 }
 
 pub async fn get_equipos_en_sistema() -> Result<Vec<Equipo>, String> {
@@ -137,7 +151,21 @@ pub async fn get_estadisticas_equipos_sistema() -> Result<serde_json::Value, Str
 }
 
 pub async fn get_equipos_con_estado() -> Result<Vec<EquipoConEstado>, String> {
-    Err("Not implemented via API yet".to_string())
+    let filtros = FiltrosEquipos {
+        fecha_inicio: None,
+        fecha_fin: None,
+        marcas: None,
+        modelos: None,
+        tipos: None,
+        clientes: None,
+        ubicaciones: None,
+        estados_orden: None,
+        search: None,
+        ordenamiento: Some("fecha_desc".to_string()),
+        precio_min: None,
+        precio_max: None,
+    };
+    get_equipos_filtrados(filtros).await
 }
 
 pub async fn get_clientes_con_equipos() -> Result<Vec<String>, String> {
@@ -145,13 +173,22 @@ pub async fn get_clientes_con_equipos() -> Result<Vec<String>, String> {
 }
 
 pub async fn get_tipos_equipos() -> Result<Vec<String>, String> {
-    Err("Not implemented via API yet".to_string())
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/list/tipos", base_url);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    response.json::<Vec<String>>().await.map_err(|e| e.to_string())
 }
 
 pub async fn get_estados_ordenes_trabajo() -> Result<Vec<String>, String> {
-    Err("Not implemented via API yet".to_string())
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/list/estados-ot", base_url);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    response.json::<Vec<String>>().await.map_err(|e| e.to_string())
 }
 
 pub async fn get_estadisticas_equipos_por_estado() -> Result<Vec<(String, i64)>, String> {
-    Err("Not implemented via API yet".to_string())
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/stats/por-estado", base_url);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    response.json::<Vec<(String, i64)>>().await.map_err(|e| e.to_string())
 }

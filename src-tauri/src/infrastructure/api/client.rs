@@ -17,8 +17,6 @@ pub fn get_http_client() -> Result<(Client, String), String> {
         .map_err(|e| format!("Error en header x-api-key: {}", e))?;
     api_key_header_val.set_sensitive(true);
     headers.insert(header::HeaderName::from_static("x-api-key"), api_key_header_val);
-    
-    println!("📋 Headers configurados: {:?}", headers);
 
     let client = Client::builder()
         .default_headers(headers)
