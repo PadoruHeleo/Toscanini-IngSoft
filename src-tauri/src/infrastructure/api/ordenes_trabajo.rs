@@ -61,11 +61,6 @@ pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequ
 pub async fn delete_orden_trabajo(orden_id: i32, _deleted_by: i32) -> Result<bool, String> {
     let (client, base_url) = get_base_url()?;
     let url = format!("{}/delete", base_url);
-    // La API espera un POST a /delete para borrado lógico según otros archivos, 
-    // pero el mapping dice POST /delete.
-    // Sin embargo, en el código original de API mapping dice POST /delete.
-    // Vamos a intentar DELETE directo si el endpoint lo soporta, o POST a /delete.
-    // Revisando API_MAPPING_ORDEN_TRABAJO.md: POST /delete
     
     let body = serde_json::json!({
         "orden_id": orden_id,
@@ -181,7 +176,7 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
     let url = format!("{}/{}/estado", base_url, orden_id);
     
     let body = serde_json::json!({
-        "estado": nuevo_estado,
+        "nuevo_estado": nuevo_estado,
         "updated_by": updated_by
     });
 
@@ -194,26 +189,28 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
     response.json::<Option<OrdenTrabajo>>().await.map_err(|e| e.to_string())
 }
 
-pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32, _updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let (client, base_url) = get_base_url()?;
     let url = format!("{}/associate/cotizacion", base_url);
     
     let body = serde_json::json!({
         "orden_id": orden_id,
-        "cotizacion_id": cotizacion_id
+        "cotizacion_id": cotizacion_id,
+        "updated_by": updated_by
     });
     
     let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
     response.json::<Option<OrdenTrabajo>>().await.map_err(|e| e.to_string())
 }
 
-pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, _updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
+pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let (client, base_url) = get_base_url()?;
     let url = format!("{}/associate/informe", base_url);
     
     let body = serde_json::json!({
         "orden_id": orden_id,
-        "informe_id": informe_id
+        "informe_id": informe_id,
+        "updated_by": updated_by
     });
     
     let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
@@ -388,4 +385,16 @@ pub async fn remove_informe_from_ordenes(informe_id: i32, _updated_by: i32) -> R
     } else {
         Ok(false)
     }
+}
+
+pub async fn get_orden_trabajo_pdf_data(orden_id: i32) -> Result<serde_json::Value, String> {
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/{}/pdf-data", base_url, orden_id);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Error API: {}", response.status()));
+    }
+    
+    response.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
