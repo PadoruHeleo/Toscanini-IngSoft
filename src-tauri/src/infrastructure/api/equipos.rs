@@ -212,20 +212,61 @@ pub async fn get_equipos_ubicaciones() -> Result<Vec<String>, String> {
     response.json::<Vec<String>>().await.map_err(|e| e.to_string())
 }
 
-pub async fn registrar_salida_equipo(_request: RegistrarSalidaRequest) -> Result<SalidaEquipoResponse, String> {
-    // No hay endpoint específico para esto en la API Node.js proporcionada.
-    // Se asume que esto implicaría actualizar el estado o ubicación, o crear un registro en otra tabla.
-    // Por ahora retornamos error o simulamos éxito si es solo lógico.
-    Err("Not implemented via API yet".to_string())
+pub async fn registrar_salida_equipo(request: RegistrarSalidaRequest) -> Result<SalidaEquipoResponse, String> {
+    let (client, api_url) = get_http_client()?;
+    let url = format!("{}/salidas-equipos", api_url);
+
+    // Validar que tenemos orden_trabajo_id
+    let orden_id = request.orden_trabajo_id
+        .ok_or_else(|| "Se requiere un ID de Orden de Trabajo para registrar la salida".to_string())?;
+
+    let body = serde_json::json!({
+        "orden_trabajo_id": orden_id,
+        "motivo_salida": request.motivo_salida,
+        "usuario_id": request.usuario_id,
+        "observaciones": request.observaciones
+    });
+
+    let response = client.post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        let error_msg = response.text().await.unwrap_or_default();
+        return Err(error_msg);
+    }
+
+    Ok(SalidaEquipoResponse {
+        success: true,
+        message: "Salida registrada correctamente".to_string(),
+        nuevo_estado: Some("Entregado".to_string()),
+    })
 }
 
-pub async fn puede_registrar_salida_equipo(_equipo_id: i32) -> Result<(bool, String), String> {
-     // Lógica de negocio que debería estar en backend o validarse aquí
-     Ok((true, "Puede registrar salida".to_string()))
+pub async fn puede_registrar_salida_equipo(equipo_id: i32) -> Result<(bool, String), String> {
+    let (en_sistema, msg) = equipo_esta_en_sistema(equipo_id).await?;
+    if !en_sistema {
+        return Ok((false, msg));
+    }
+    Ok((true, "Equipo en sistema, listo para salida".to_string()))
 }
 
-pub async fn equipo_esta_en_sistema(_equipo_id: i32) -> Result<(bool, String), String> {
-    Ok((true, "Equipo en sistema".to_string()))
+pub async fn equipo_esta_en_sistema(equipo_id: i32) -> Result<(bool, String), String> {
+    let equipo_opt = get_equipo_by_id(equipo_id).await?;
+    
+    match equipo_opt {
+        Some(equipo) => {
+            let ubicacion = equipo.equipo_ubicacion.unwrap_or_default().to_lowercase();
+            if ubicacion.contains("cliente") || ubicacion.contains("entregado") {
+                Ok((false, "El equipo ya fue entregado o está con el cliente".to_string()))
+            } else {
+                Ok((true, "Equipo en taller/inventario".to_string()))
+            }
+        },
+        None => Ok((false, "Equipo no encontrado".to_string()))
+    }
 }
 
 pub async fn get_equipos_filtrados(filtros: FiltrosEquipos) -> Result<Vec<EquipoConEstado>, String> {
