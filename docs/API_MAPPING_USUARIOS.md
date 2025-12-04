@@ -1,91 +1,130 @@
 # Documentación de Mapeo API vs Rust (Usuarios)
 
-Este documento detalla la relación entre los endpoints de la API REST (Express) y las funciones originales implementadas en el backend de Rust (`users.rs`).
-
-El objetivo de esta API es actuar como una capa de acceso a datos, delegando la lógica de negocio compleja a la aplicación cliente, pero manteniendo la integridad de la base de datos y la auditoría.
+Este documento detalla la relación entre los endpoints de la API REST y las funciones originales de `users.rs`.
 
 ## 📌 Base URL
 
-Todas las rutas listadas a continuación tienen el prefijo configurado en tu `index.js` (ejemplo: `/api/usuarios`).
+Prefijo: **`/api/usuarios`**
 
 ---
 
-## 1. CRUD de Usuarios
+## 1. CRUD Usuarios
 
-Gestión básica de la entidad Usuario.
+| Endpoint (Express)  | Función Original (Rust) | Descripción                       |
+| :------------------ | :---------------------- | :-------------------------------- |
+| **GET** `/`         | `get_usuarios`          | Obtiene todos los usuarios.       |
+| **GET** `/:id`      | `get_usuario_by_id`     | Obtiene un usuario por ID.        |
+| **GET** `/rut/:rut` | `get_usuario_by_rut`    | Obtiene un usuario por RUT.       |
+| **POST** `/`        | `create_usuario`        | Crea un nuevo usuario.            |
+| **PUT** `/:id`      | `update_usuario`        | Actualiza datos de un usuario.    |
+| **DELETE** `/:id`   | `delete_usuario`        | Elimina un usuario (Soft Delete). |
 
-| Método     | Endpoint (Express) | Función Original (Rust) | Descripción                                      |
-| :--------- | :----------------- | :---------------------- | :----------------------------------------------- |
-| **GET**    | `/`                | `get_usuarios`          | Obtiene la lista de todos los usuarios.          |
-| **GET**    | `/:id`             | `get_usuario_by_id`     | Obtiene un usuario específico por su ID.         |
-| **GET**    | `/rut/:rut`        | `get_usuario_by_rut`    | Obtiene un usuario buscando por su RUT.          |
-| **POST**   | `/`                | `create_usuario`        | Crea un nuevo usuario y registra auditoría.      |
-| **PUT**    | `/:id`             | `update_usuario`        | Actualiza datos parciales de un usuario.         |
-| **DELETE** | `/:id`             | `delete_usuario`        | Realiza un borrado lógico (`is_active = false`). |
+### Detalles de Endpoints
 
----
+#### **GET** `/`
 
-## 2. Autenticación y Sesiones
+- **Parámetros:** Ninguno.
+- **Respuesta:** `Array<Usuario>`
+  - `usuario_id`, `usuario_rut`, `usuario_nombre`, `usuario_correo`, `usuario_rol`, `is_active`, `last_login_at`.
 
-Manejo de acceso y validación de tokens.
+#### **GET** `/:id`
 
-| Método   | Endpoint (Express)  | Función Original (Rust)    | Descripción                                      |
-| :------- | :------------------ | :------------------------- | :----------------------------------------------- |
-| **POST** | `/login`            | `authenticate_usuario`     | Verifica credenciales y genera `session_token`.  |
-| **POST** | `/validate-session` | `validate_session`         | Verifica si un token es válido y no ha expirado. |
-| **POST** | `/cleanup/sessions` | `cleanup_expired_sessions` | Limpia tokens de sesiones vencidas.              |
+- **Parámetros:** `id` (URL param).
+- **Respuesta:** `Usuario` o `null`.
 
----
+#### **POST** `/`
 
-## 3. Validaciones
+- **Body:**
+  - `usuario_rut`
+  - `usuario_nombre`
+  - `usuario_correo`
+  - `usuario_contrasena` (Texto plano, se hashea en servidor)
+  - `usuario_telefono`
+  - `usuario_rol` ('admin', 'tecnico', 'recepcion')
+- **Respuesta:** `Usuario` (Objeto creado).
 
-Endpoints rápidos para validaciones en tiempo real (formularios).
+#### **PUT** `/:id`
 
-| Método  | Endpoint (Express)     | Función Original (Rust) | Descripción                                  |
-| :------ | :--------------------- | :---------------------- | :------------------------------------------- |
-| **GET** | `/rut/:rut/exists`     | `verify_rut_in_use`     | Retorna `true/false` si el RUT ya existe.    |
-| **GET** | `/email/:email/exists` | `verify_email_in_use`   | Retorna `true/false` si el correo ya existe. |
+- **Parámetros:** `id` (URL param).
+- **Body:**
+  - `usuario_rut`, `usuario_nombre`, `usuario_correo`, `usuario_telefono`, `usuario_rol` (Opcionales)
+- **Respuesta:** `Usuario` (Objeto actualizado).
 
----
+#### **DELETE** `/:id`
 
-## 4. Gestión de Cuenta
-
-Modificaciones sensibles del perfil de usuario.
-
-| Método  | Endpoint (Express) | Función Original (Rust) | Descripción                                    |
-| :------ | :----------------- | :---------------------- | :--------------------------------------------- |
-| **PUT** | `/phone/:id`       | `change_user_phone`     | Actualiza el teléfono.                         |
-| **PUT** | `/:id/email`       | `change_user_email`     | Actualiza el correo (valida unicidad).         |
-| **PUT** | `/:id/password`    | `change_user_password`  | Actualiza la contraseña (recibe hash o texto). |
-
----
-
-## 5. Recuperación de Contraseña
-
-Flujo completo de "Olvidé mi contraseña".
-
-| Método     | Endpoint (Express)        | Función Original (Rust)       | Descripción                                        |
-| :--------- | :------------------------ | :---------------------------- | :------------------------------------------------- |
-| **POST**   | `/password-reset/request` | `request_password_reset`      | Genera código de recuperación (simulado/guardado). |
-| **POST**   | `/password-reset/verify`  | `verify_reset_code`           | Valida si el código ingresado es correcto.         |
-| **POST**   | `/password-reset/confirm` | `reset_password_with_code`    | Cambia la contraseña usando el código validado.    |
-| **DELETE** | `/cleanup/reset-codes`    | `cleanup_expired_reset_codes` | Elimina códigos de recuperación viejos.            |
+- **Parámetros:** `id` (URL param).
+- **Respuesta:** `{ success: true, message: "..." }`
 
 ---
 
-## 6. Utilidades y Configuración
+## 2. Autenticación y Sesión
 
-Herramientas administrativas y de sistema.
+| Endpoint (Express)           | Función Original (Rust) | Descripción                     |
+| :--------------------------- | :---------------------- | :------------------------------ |
+| **POST** `/login`            | `authenticate_usuario`  | Inicia sesión y devuelve token. |
+| **POST** `/validate-session` | `validate_session`      | Valida un token de sesión.      |
 
-| Método   | Endpoint (Express)   | Función Original (Rust)     | Descripción                                             |
-| :------- | :------------------- | :-------------------------- | :------------------------------------------------------ |
-| **GET**  | `/admin-tech-emails` | `get_admin_and_tech_emails` | Lista correos de admins y técnicos para notificaciones. |
-| **POST** | `/setup/admin`       | `create_admin_user`         | Script inicial para crear el primer admin si no existe. |
+### Detalles de Endpoints
+
+#### **POST** `/login`
+
+- **Body:**
+  - `usuario_correo`
+  - `usuario_contrasena`
+- **Respuesta:** `Usuario` (Incluye `session_token` y `session_expires_at`).
+
+#### **POST** `/validate-session`
+
+- **Body:**
+  - `session_token`
+- **Respuesta:** `Usuario` (Si es válido) o `null`.
 
 ---
 
-## ⚠️ Notas de Implementación
+## 3. Gestión de Cuenta y Utilidades
 
-1. **Contraseñas:** A diferencia de Rust, donde `hash_password` ocurre en el backend, esta API está diseñada para recibir las contraseñas ya procesadas o delegar la encriptación, actuando principalmente como interfaz de base de datos.
-2. **Auditoría:** Todas las acciones de escritura (`POST`, `PUT`, `DELETE`) ejecutan automáticamente la función `logAction` (equivalente a `log_action` de Rust) para mantener la trazabilidad en la tabla `AUDIT_LOG`.
-3. **Tipos de Datos:** Se asegura que los booleanos (`is_active`, `used`) se devuelvan siempre como `true/false` y no como `1/0` para mantener compatibilidad con el frontend existente.
+| Endpoint (Express)             | Función Original (Rust)     | Descripción                         |
+| :----------------------------- | :-------------------------- | :---------------------------------- |
+| **GET** `/rut/:rut/exists`     | `verify_rut_in_use`         | Verifica si un RUT ya existe.       |
+| **GET** `/email/:email/exists` | `verify_email_in_use`       | Verifica si un Email ya existe.     |
+| **PUT** `/phone/:id`           | `change_user_phone`         | Cambia el teléfono de un usuario.   |
+| **PUT** `/:id/email`           | `change_user_email`         | Cambia el email de un usuario.      |
+| **PUT** `/:id/password`        | `change_user_password`      | Cambia la contraseña de un usuario. |
+| **GET** `/admin-tech-emails`   | `get_admin_and_tech_emails` | Lista emails de admins y técnicos.  |
+
+### Detalles de Endpoints
+
+#### **GET** `/rut/:rut/exists`
+
+- **Parámetros:** `rut` (URL param).
+- **Respuesta:** `{ exists: boolean }`
+
+#### **PUT** `/:id/password`
+
+- **Parámetros:** `id` (URL param).
+- **Body:**
+  - `new_password` (Ya hasheada o texto plano según implementación frontend, API espera el valor final a guardar o lo hashea si es texto plano. _Nota: Controller actual guarda directo, asumir hasheado o ajustar controller_).
+- **Respuesta:** `{ success: true }`
+
+---
+
+## 4. Recuperación de Contraseña
+
+| Endpoint (Express)                 | Función Original (Rust)       | Descripción                      |
+| :--------------------------------- | :---------------------------- | :------------------------------- |
+| **POST** `/password-reset/request` | `request_password_reset`      | Solicita código de recuperación. |
+| **POST** `/password-reset/verify`  | `verify_reset_code`           | Verifica código de recuperación. |
+| **POST** `/password-reset/confirm` | `reset_password_with_code`    | Cambia contraseña usando código. |
+| **DELETE** `/cleanup/reset-codes`  | `cleanup_expired_reset_codes` | Limpia códigos expirados.        |
+
+### Detalles de Endpoints
+
+#### **POST** `/password-reset/request`
+
+- **Body:** `usuario_correo`.
+- **Respuesta:** `{ success: true, message: "..." }`
+
+#### **POST** `/password-reset/confirm`
+
+- **Body:** `usuario_correo`, `reset_code`, `new_password`.
+- **Respuesta:** `{ success: true }`

@@ -1,83 +1,110 @@
 # Documentación de Mapeo API vs Rust (Clientes)
 
-Este documento detalla la relación entre los endpoints de la API REST (Express) y las funciones originales implementadas en el backend de Rust (`clientes.rs`).
-
-La nueva API centraliza la lógica de validación de duplicados, verificación de dependencias (equipos asociados) y el registro de auditoría.
+Este documento detalla la relación entre los endpoints de la API REST y las funciones originales de `clientes.rs`.
 
 ## 📌 Base URL
 
-Todas las rutas listadas a continuación tienen el prefijo configurado en tu router: `/api/clientes`
+Prefijo: **`/api/clientes`**
 
 ---
 
-## 1. CRUD y Consultas Básicas
+## 1. CRUD Clientes
 
-Operaciones fundamentales sobre la entidad Cliente.
+| Endpoint (Express)     | Función Original (Rust) | Descripción                         |
+| :--------------------- | :---------------------- | :---------------------------------- |
+| **GET** `/`            | `get_clientes`          | Obtiene todos los clientes activos. |
+| **GET** `/:id`         | `get_cliente_by_id`     | Obtiene un cliente por su ID.       |
+| **GET** `/rut/:rut`    | `get_cliente_by_rut`    | Obtiene un cliente por su RUT.      |
+| **POST** `/`           | `create_cliente`        | Crea un nuevo cliente.              |
+| **PUT** `/:id`         | `update_cliente`        | Actualiza datos de un cliente.      |
+| **POST** `/delete`     | `delete_cliente`        | Inactiva un cliente (Soft Delete).  |
+| **POST** `/reactivate` | `reactivate_cliente`    | Reactiva un cliente eliminado.      |
 
-| Método   | Endpoint (Express) | Función Original (Rust) | Descripción                                                                |
-| :------- | :----------------- | :---------------------- | :------------------------------------------------------------------------- |
-| **GET**  | `/`                | `get_clientes`          | Obtiene todos los clientes activos ordenados por nombre.                   |
-| **GET**  | `/:id`             | `get_cliente_by_id`     | Busca un cliente específico por su ID.                                     |
-| **GET**  | `/rut/:rut`        | `get_cliente_by_rut`    | Busca un cliente específico por su RUT.                                    |
-| **POST** | `/`                | `create_cliente`        | Crea un cliente nuevo. Valida que el RUT no exista previamente.            |
-| **PUT**  | `/:id`             | `update_cliente`        | Actualiza datos parciales. Valida que el RUT no pertenezca a otro cliente. |
+### Detalles de Endpoints
+
+#### **GET** `/`
+
+- **Parámetros:** Ninguno.
+- **Respuesta:** `Array<Cliente>`
+  - `cliente_id`, `cliente_rut`, `cliente_nombre`, `cliente_correo`, `cliente_telefono`, `cliente_direccion`, `is_active`, `created_at`.
+
+#### **GET** `/:id`
+
+- **Parámetros:** `id` (URL param).
+- **Respuesta:** `Cliente` o `null`.
+
+#### **POST** `/`
+
+- **Body:**
+  - `cliente_rut` (Requerido)
+  - `cliente_nombre` (Requerido)
+  - `cliente_correo`
+  - `cliente_telefono`
+  - `cliente_direccion`
+  - `created_by` (ID usuario)
+- **Respuesta:** `Cliente` (Objeto creado).
+
+#### **PUT** `/:id`
+
+- **Parámetros:** `id` (URL param).
+- **Body:**
+  - `cliente_rut`, `cliente_nombre`, `cliente_correo`, `cliente_telefono`, `cliente_direccion` (Opcionales)
+  - `updated_by` (ID usuario)
+- **Respuesta:** `Cliente` (Objeto actualizado).
+
+#### **POST** `/delete`
+
+- **Body:**
+  - `cliente_id`
+  - `deleted_by`
+  - `motivo`
+- **Respuesta:** `{ success: true }`
+
+#### **POST** `/reactivate`
+
+- **Body:**
+  - `cliente_id`
+  - `reactivated_by`
+- **Respuesta:** `{ success: true }`
 
 ---
 
-## 2. Gestión de Estado (Borrado Lógico)
+## 2. Búsqueda y Filtros
 
-Manejo de la activación e inactivación de clientes.
+| Endpoint (Express)      | Función Original (Rust)  | Descripción                   |
+| :---------------------- | :----------------------- | :---------------------------- |
+| **GET** `/search/query` | `search_clientes`        | Búsqueda simple por texto.    |
+| **POST** `/filter`      | `get_clientes_filtrados` | Filtros avanzados combinados. |
 
-| Método   | Endpoint (Express) | Función Original (Rust) | Descripción                                                                                                    |
-| :------- | :----------------- | :---------------------- | :------------------------------------------------------------------------------------------------------------- |
-| **POST** | `/delete`          | `delete_cliente`        | Inactiva un cliente. **Requiere Body** con `motivo`. Valida que no tenga equipos asociados antes de inactivar. |
-| **POST** | `/reactivate`      | `reactivate_cliente`    | Reactiva un cliente previamente eliminado (soft delete).                                                       |
+### Detalles de Endpoints
 
-> **Nota sobre el Delete:** Se usa `POST` en lugar de `DELETE` para la ruta `/delete` porque la operación requiere un cuerpo JSON (`body`) con el `motivo` de la eliminación y el ID del usuario que elimina (`deleted_by`), lo cual es más estándar enviar en un POST.
+#### **GET** `/search/query`
 
----
+- **Query Params:** `term` (Texto a buscar).
+- **Respuesta:** `Array<Cliente>` (Coincidencias en nombre, rut o correo).
 
-## 3. Búsqueda y Filtros Avanzados
+#### **POST** `/filter`
 
-Herramientas para listados complejos y buscadores.
-
-| Método   | Endpoint (Express) | Función Original (Rust)  | Descripción                                                                                        |
-| :------- | :----------------- | :----------------------- | :------------------------------------------------------------------------------------------------- |
-| **GET**  | `/search/query`    | `search_clientes`        | Búsqueda simple de texto (nombre, rut, correo). Usa query param `?term=...`.                       |
-| **POST** | `/filter`          | `get_clientes_filtrados` | Filtro maestro unificado. Recibe un JSON con fechas, estados, arrays de ruts/correos, ciudad, etc. |
-
----
-
-## 4. Listas Auxiliares (Filtros)
-
-Endpoints que devuelven listas de valores únicos (`DISTINCT`) para poblar los selectores de filtros en el Frontend.
-
-| Método  | Endpoint (Express) | Función Original (Rust) | Descripción                                     |
-| :------ | :----------------- | :---------------------- | :---------------------------------------------- |
-| **GET** | `/list/ruts`       | `get_ruts_clientes`     | Lista de todos los RUTs únicos registrados.     |
-| **GET** | `/list/emails`     | `get_correos_clientes`  | Lista de todos los correos únicos registrados.  |
-| **GET** | `/list/ciudades`   | `get_ciudades_clientes` | Lista de todas las direcciones/ciudades únicas. |
+- **Body:**
+  - `fecha_inicio`, `fecha_fin` (Strings fecha)
+  - `correo`, `rut`, `ciudad`, `estado` (Arrays de strings/booleanos)
+  - `search` (Texto)
+  - `ordenamiento` ("asc" | "desc")
+- **Respuesta:** `Array<Cliente>`
 
 ---
 
-## ⚠️ Diferencias de Implementación y Notas
+## 3. Listas Auxiliares (Filtros)
 
-1. **Tipos de Datos:**
+| Endpoint (Express)       | Función Original (Rust) | Descripción              |
+| :----------------------- | :---------------------- | :----------------------- |
+| **GET** `/list/ruts`     | `get_ruts_clientes`     | Lista única de RUTs.     |
+| **GET** `/list/emails`   | `get_correos_clientes`  | Lista única de Correos.  |
+| **GET** `/list/ciudades` | `get_ciudades_clientes` | Lista única de Ciudades. |
 
-   - **Rust/SQL:** El campo `is_active` suele ser `1` o `0`.
-   - **API Node:** Convierte automáticamente `is_active` a `true` o `false` (Booleano) en la respuesta JSON.
+### Detalles de Endpoints
 
-2. **Auditoría Automática:**
+#### **GET** `/list/*`
 
-   - Todas las rutas de escritura (`create`, `update`, `delete`, `reactivate`) ejecutan internamente `logAction` para insertar en la tabla `AUDIT_LOG`, replicando la lógica exacta de Rust (incluyendo el registro de valores previos y nuevos en las actualizaciones).
-
-3. **Validaciones:**
-
-   - La API maneja internamente las validaciones de negocio:
-     - No crear/actualizar si el RUT ya existe.
-     - No eliminar si el cliente tiene equipos registrados (devuelve error 400).
-
-4. **Funciones no migradas como endpoints directos:**
-   - `get_clientes_by_created_by`: Esta funcionalidad se absorbe dentro de los filtros generales o no se expuso directamente por redundancia.
-   - `count_clientes`: No se expuso un endpoint dedicado; se puede obtener la longitud del array en `get_clientes` o usar los metadatos de la respuesta si se implementa paginación futura.
-   - `get_clientes_with_pagination`: La lógica de paginación se integró parcialmente en la estructura, pero el endpoint principal `/filter` permite flexibilidad similar.
+- **Parámetros:** Ninguno.
+- **Respuesta:** `Array<String>` (Lista de valores únicos para dropdowns).

@@ -3,50 +3,98 @@
 Este documento detalla la relación entre los endpoints de la API REST y las funciones originales de `ordenes_trabajo.rs`.
 
 ## 📌 Base URL
-Prefijo: **`/api/ordenes`**
+
+Prefijo: **`/api/ordenes-trabajo`**
 
 ---
 
-## 1. CRUD Orden
+## 1. CRUD Órdenes
 
-| Endpoint (Express) | Función Original (Rust) | Descripción |
-| :--- | :--- | :--- |
-| **GET** `/` | `get_ordenes_trabajo` | Listado completo de órdenes activas. |
-| **GET** `/:id` | `get_orden_trabajo_by_id` | Detalle de una orden. |
-| **POST** `/` | `create_orden_trabajo` | Crea orden. **Genera código** `OT-YYYY-NNN`. Valida equipo activo. |
-| **PUT** `/:id` | `update_orden_trabajo` | Actualiza datos (descripción, prioridad, garantía). |
-| **POST** `/delete` | `delete_orden_trabajo` | Borrado lógico. |
+| Endpoint (Express)    | Función Original (Rust)       | Descripción                        |
+| :-------------------- | :---------------------------- | :--------------------------------- |
+| **GET** `/`           | `get_ordenes_trabajo`         | Obtiene todas las órdenes activas. |
+| **GET** `/:id`        | `get_orden_trabajo_by_id`     | Obtiene una orden por su ID.       |
+| **POST** `/`          | `create_orden_trabajo`        | Crea una nueva orden.              |
+| **PUT** `/:id`        | `update_orden_trabajo`        | Actualiza datos generales.         |
+| **PUT** `/:id/estado` | `update_orden_trabajo_estado` | Actualiza solo el estado.          |
+| **POST** `/delete`    | `delete_orden_trabajo`        | Elimina una orden (Soft Delete).   |
+
+### Detalles de Endpoints
+
+#### **GET** `/`
+
+- **Parámetros:** Ninguno.
+- **Respuesta:** `Array<OrdenTrabajo>`
+  - `orden_id`, `orden_codigo`, `orden_desc`, `prioridad`, `estado`, `has_garantia`, `equipo_id`, `created_at`, `finished_at`.
+
+#### **GET** `/:id`
+
+- **Parámetros:** `id` (URL param).
+- **Respuesta:** `OrdenTrabajo` o `null`.
+
+#### **POST** `/`
+
+- **Body:**
+  - `orden_desc`
+  - `prioridad`
+  - `estado`
+  - `has_garantia` (Booleano)
+  - `equipo_id`
+  - `created_by`
+  - `pre_informe`
+- **Respuesta:** `OrdenTrabajo` (Objeto creado).
+
+#### **PUT** `/:id`
+
+- **Parámetros:** `id` (URL param).
+- **Body:**
+  - `orden_desc`, `prioridad`, `has_garantia`, `pre_informe` (Opcionales)
+  - `updated_by`
+- **Respuesta:** `OrdenTrabajo` (Objeto actualizado).
+
+#### **PUT** `/:id/estado`
+
+- **Parámetros:** `id` (URL param).
+- **Body:**
+  - `nuevo_estado` (String)
+  - `updated_by`
+- **Respuesta:** `{ success: true, nuevo_estado }`
+
+#### **POST** `/delete`
+
+- **Body:**
+  - `orden_id`
+  - `deleted_by`
+- **Respuesta:** `{ success: true }`
 
 ---
 
-## 2. Gestión de Estado
+## 2. Consultas Relacionales y Asociaciones
 
-| Endpoint (Express) | Función Original (Rust) | Descripción |
-| :--- | :--- | :--- |
-| **PATCH** `/:id/estado` | `update_orden_trabajo_estado` | Actualiza el estado. Si es 'Entregado', fija `finished_at`. |
+| Endpoint (Express)               | Función Original (Rust)         | Descripción                        |
+| :------------------------------- | :------------------------------ | :--------------------------------- |
+| **GET** `/cliente/:clienteId`    | `get_ordenes_by_cliente`        | Órdenes de un cliente.             |
+| **GET** `/equipo/:equipoId`      | `get_ordenes_by_equipo`         | Órdenes de un equipo.              |
+| **POST** `/associate-cotizacion` | `associate_cotizacion_to_orden` | Vincula una cotización a la orden. |
+| **POST** `/associate-informe`    | `associate_informe_to_orden`    | Vincula un informe a la orden.     |
+| **GET** `/:id/pdf-data`          | `get_orden_trabajo_pdf_data`    | Datos para ficha de ingreso (PDF). |
 
----
+### Detalles de Endpoints
 
-## 3. Asociaciones
+#### **GET** `/cliente/:clienteId`
 
-| Endpoint (Express) | Función Original (Rust) | Descripción |
-| :--- | :--- | :--- |
-| **POST** `/associate/cotizacion` | `associate_cotizacion_to_orden` | Vincula una ID de cotización a la orden. |
-| **POST** `/associate/informe` | `associate_informe_to_orden` | Vincula una ID de informe a la orden. |
+- **Parámetros:** `clienteId` (URL param).
+- **Respuesta:** `Array<OrdenTrabajo>`.
 
----
+#### **POST** `/associate-cotizacion`
 
-## 4. Consultas Relacionales y PDF
+- **Body:**
+  - `orden_id`
+  - `cotizacion_id`
+  - `updated_by`
+- **Respuesta:** `{ success: true }`
 
-| Endpoint (Express) | Función Original (Rust) | Descripción |
-| :--- | :--- | :--- |
-| **GET** `/cliente/:id` | `get_ordenes_trabajo_by_cliente` | Historial de órdenes de un cliente. |
-| **GET** `/equipo/:id` | `get_ordenes_trabajo_by_equipo` | Historial de órdenes de un equipo. |
-| **GET** `/:id/pdf-data` | `get_orden_trabajo_pdf_data` | Datos completos para generar Ficha de Ingreso (PDF). |
+#### **GET** `/:id/pdf-data`
 
----
-
-## ⚠️ Notas Técnicas
-
-1. **Validación de Negocio:** La API impide crear una nueva orden (`POST /`) si el equipo seleccionado ya tiene una orden en estado pendiente o en proceso (`activeOrders`). Esto evita duplicidad operativa.
-2. **Generación de Código:** El código `OT-202X-XXX` se genera calculando el conteo de órdenes del año en curso dentro de una transacción para evitar colisiones.
+- **Parámetros:** `id` (URL param).
+- **Respuesta:** `OrdenTrabajoPdfData` (Incluye Cliente, Equipo y Recepcionista).
