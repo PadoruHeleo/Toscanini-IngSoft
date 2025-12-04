@@ -210,30 +210,187 @@ impl EmailService {
 
     // Enviar orden de trabajo al cliente (implementación real)
     pub async fn send_orden_trabajo_cliente(&self, to_email: &str, cliente_nombre: &str, orden: &OrdenTrabajo, equipo: &Equipo) -> Result<(), String> {
-        let subject = format!("Orden de Trabajo - {}", orden.orden_codigo.as_deref().unwrap_or("???"));
+        let subject = format!("Nueva Orden de Trabajo - {}", orden.orden_codigo.as_deref().unwrap_or("???"));
         
+        // Formatear fecha
+        let fecha_creacion = orden.created_at
+            .map(|d| d.format("%d/%m/%Y %H:%M").to_string())
+            .unwrap_or_else(|| "Fecha desconocida".to_string());
+
+        // Formatear garantía
+        let garantia = if orden.has_garantia.unwrap_or(false) { "✅ Sí" } else { "❌ No" };
+
+        // Formatear prioridad (color dot)
+        let prioridad = orden.prioridad.as_deref().unwrap_or("Normal");
+        let prioridad_color = match prioridad.to_lowercase().as_str() {
+            "alta" | "urgente" | "critica" => "red",
+            "media" => "orange",
+            _ => "green"
+        };
+
         let html_content = format!(
             r#"
             <!DOCTYPE html>
             <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }}
+                    .container {{ max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                    .header {{ text-align: center; margin-bottom: 30px; }}
+                    .header h1 {{ margin: 0; font-size: 28px; color: #2c3e50; letter-spacing: 1px; }}
+                    .header p {{ margin: 5px 0 0; color: #7f8c8d; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }}
+                    .title-bar {{ border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 20px; }}
+                    .title {{ color: #3498db; font-size: 22px; font-weight: 600; margin: 0; }}
+                    .intro {{ margin-bottom: 25px; color: #555; }}
+                    .section {{ background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #e9ecef; }}
+                    .section-title {{ font-weight: 700; font-size: 16px; margin-bottom: 15px; color: #2c3e50; border-bottom: 1px solid #dee2e6; padding-bottom: 5px; }}
+                    .field {{ margin-bottom: 8px; font-size: 14px; }}
+                    .label {{ font-weight: 600; color: #555; width: 140px; display: inline-block; }}
+                    .value {{ color: #333; }}
+                    .priority-dot {{ height: 10px; width: 10px; background-color: {prioridad_color}; border-radius: 50%; display: inline-block; margin-right: 6px; }}
+                    .footer {{ text-align: center; font-size: 12px; color: #95a5a6; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }}
+                </style>
+            </head>
             <body>
-                <h2>Detalles de su Orden de Trabajo</h2>
-                <p>Estimado/a {},</p>
-                <p>Adjuntamos los detalles de su orden de trabajo.</p>
-                <ul>
-                    <li><strong>Orden:</strong> {}</li>
-                    <li><strong>Equipo:</strong> {} {}</li>
-                    <li><strong>Estado:</strong> {}</li>
-                </ul>
-                <p>Atentamente,<br>Equipo Toscanini</p>
+                <div class="container">
+                    <div class="header">
+                        <h1>Toscanini</h1>
+                        <p>Servicio Técnico Especializado</p>
+                    </div>
+
+                    <div class="title-bar">
+                        <h2 class="title">Nueva Orden de Trabajo Creada</h2>
+                    </div>
+
+                    <p class="intro">Se ha creado una nueva orden de trabajo en el sistema con los siguientes detalles:</p>
+
+                    <div class="section">
+                        <div class="section-title">Detalles de la Orden</div>
+                        <div class="field"><span class="label">Código de Orden:</span> <span class="value">{orden_codigo}</span></div>
+                        <div class="field"><span class="label">Descripción:</span> <span class="value">{orden_desc}</span></div>
+                        <div class="field"><span class="label">Prioridad:</span> <span class="priority-dot"></span><span class="value">{prioridad}</span></div>
+                        <div class="field"><span class="label">Estado:</span> <span class="value">{estado}</span></div>
+                        <div class="field"><span class="label">Garantía:</span> <span class="value">{garantia}</span></div>
+                        <div class="field"><span class="label">Fecha de Creación:</span> <span class="value">{fecha_creacion}</span></div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Información del Equipo</div>
+                        <div class="field"><span class="label">Cliente:</span> <span class="value">{cliente_nombre}</span></div>
+                        <div class="field"><span class="label">Número de Serie:</span> <span class="value">{numero_serie}</span></div>
+                        <div class="field"><span class="label">Marca:</span> <span class="value">{marca}</span></div>
+                        <div class="field"><span class="label">Modelo:</span> <span class="value">{modelo}</span></div>
+                        <div class="field"><span class="label">Tipo:</span> <span class="value">{tipo}</span></div>
+                        <div class="field"><span class="label">Ubicación:</span> <span class="value">{ubicacion}</span></div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Pre-informe</div>
+                        <div class="value" style="white-space: pre-wrap;">{pre_informe}</div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Este es un mensaje automático generado por el sistema Toscanini.</p>
+                        <p>Por favor no responder a este correo.</p>
+                    </div>
+                </div>
             </body>
             </html>
             "#,
-            cliente_nombre,
-            orden.orden_codigo.as_deref().unwrap_or("N/A"),
-            equipo.equipo_marca.as_deref().unwrap_or(""),
-            equipo.equipo_modelo.as_deref().unwrap_or(""),
-            orden.estado.as_deref().unwrap_or("Recibido")
+            prioridad_color = prioridad_color,
+            orden_codigo = orden.orden_codigo.as_deref().unwrap_or("N/A"),
+            orden_desc = orden.orden_desc.as_deref().unwrap_or("Sin descripción"),
+            prioridad = prioridad,
+            estado = orden.estado.as_deref().unwrap_or("Recibido"),
+            garantia = garantia,
+            fecha_creacion = fecha_creacion,
+            cliente_nombre = cliente_nombre,
+            numero_serie = equipo.numero_serie.as_deref().unwrap_or("N/A"),
+            marca = equipo.equipo_marca.as_deref().unwrap_or("N/A"),
+            modelo = equipo.equipo_modelo.as_deref().unwrap_or("N/A"),
+            tipo = equipo.equipo_tipo.as_deref().unwrap_or("N/A"),
+            ubicacion = equipo.equipo_ubicacion.as_deref().unwrap_or("N/A"),
+            pre_informe = orden.pre_informe.as_deref().unwrap_or("Sin observaciones iniciales")
+        );
+        
+        self.send_email_internal(to_email, &subject, &html_content, None).await
+    }
+
+    // Enviar notificación interna a staff (admin/tecnico)
+    pub async fn send_orden_trabajo_staff_notification(&self, to_email: &str, staff_nombre: &str, orden: &OrdenTrabajo, equipo: &Equipo, cliente_nombre: &str) -> Result<(), String> {
+        let subject = format!("🔔 Nueva OT Asignada - {}", orden.orden_codigo.as_deref().unwrap_or("???"));
+        
+        // Formatear fecha
+        let fecha_creacion = orden.created_at
+            .map(|d| d.format("%d/%m/%Y %H:%M").to_string())
+            .unwrap_or_else(|| "Fecha desconocida".to_string());
+
+        // Formatear prioridad (color dot)
+        let prioridad = orden.prioridad.as_deref().unwrap_or("Normal");
+        let prioridad_color = match prioridad.to_lowercase().as_str() {
+            "alta" | "urgente" | "critica" => "red",
+            "media" => "orange",
+            _ => "green"
+        };
+
+        let html_content = format!(
+            r#"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }}
+                    .container {{ max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-left: 5px solid #e74c3c; }}
+                    .header {{ margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+                    .header h2 {{ margin: 0; color: #c0392b; font-size: 20px; }}
+                    .meta {{ font-size: 12px; color: #7f8c8d; margin-top: 5px; }}
+                    .section {{ margin-bottom: 15px; }}
+                    .field {{ margin-bottom: 5px; font-size: 14px; }}
+                    .label {{ font-weight: 700; color: #555; width: 120px; display: inline-block; }}
+                    .priority-badge {{ background-color: {prioridad_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }}
+                    .footer {{ margin-top: 30px; font-size: 12px; color: #95a5a6; border-top: 1px solid #eee; padding-top: 10px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2>Nueva Orden de Trabajo Ingresada</h2>
+                        <div class="meta">Notificación automática para Staff</div>
+                    </div>
+
+                    <p>Hola {staff_nombre}, se ha ingresado una nueva orden al sistema:</p>
+
+                    <div class="section">
+                        <div class="field"><span class="label">Orden:</span> <strong>{orden_codigo}</strong></div>
+                        <div class="field"><span class="label">Prioridad:</span> <span class="priority-badge">{prioridad}</span></div>
+                        <div class="field"><span class="label">Fecha:</span> {fecha_creacion}</div>
+                        <div class="field"><span class="label">Cliente:</span> {cliente_nombre}</div>
+                    </div>
+
+                    <div class="section" style="background-color: #f9f9f9; padding: 15px; border-radius: 4px;">
+                        <div class="field"><span class="label">Equipo:</span> {marca} {modelo}</div>
+                        <div class="field"><span class="label">Serie:</span> {numero_serie}</div>
+                        <div class="field"><span class="label">Problema:</span></div>
+                        <div style="margin-top: 5px; font-style: italic;">"{orden_desc}"</div>
+                    </div>
+
+                    <div class="footer">
+                        <p>Sistema Toscanini - Panel de Control</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            "#,
+            prioridad_color = prioridad_color,
+            staff_nombre = staff_nombre,
+            orden_codigo = orden.orden_codigo.as_deref().unwrap_or("N/A"),
+            prioridad = prioridad,
+            fecha_creacion = fecha_creacion,
+            cliente_nombre = cliente_nombre,
+            marca = equipo.equipo_marca.as_deref().unwrap_or(""),
+            modelo = equipo.equipo_modelo.as_deref().unwrap_or(""),
+            numero_serie = equipo.numero_serie.as_deref().unwrap_or("N/A"),
+            orden_desc = orden.orden_desc.as_deref().unwrap_or("Sin descripción")
         );
         
         self.send_email_internal(to_email, &subject, &html_content, None).await

@@ -42,13 +42,39 @@ impl Default for AppConfig {
 }
 
 pub fn load_email_config() -> Option<EmailConfig> {
-    let host = std::env::var("SMTP_HOST").ok()?;
-    let port = std::env::var("SMTP_PORT").ok()?.parse().ok()?;
-    let user = std::env::var("SMTP_USER").ok()?;
-    let pass = std::env::var("SMTP_PASS").ok()?;
-    let from = std::env::var("SMTP_FROM").ok()?;
+    let host = match std::env::var("SMTP_SERVER") {
+        Ok(v) => v,
+        Err(_) => { println!("❌ Missing SMTP_SERVER"); return None; }
+    };
+    
+    let port_str = match std::env::var("SMTP_PORT") {
+        Ok(v) => v,
+        Err(_) => { println!("❌ Missing SMTP_PORT"); return None; }
+    };
+    
+    let port = match port_str.parse() {
+        Ok(v) => v,
+        Err(_) => { println!("❌ Invalid SMTP_PORT: {}", port_str); return None; }
+    };
+    
+    let user = match std::env::var("SMTP_USERNAME") {
+        Ok(v) => v,
+        Err(_) => { println!("❌ Missing SMTP_USERNAME"); return None; }
+    };
+    
+    let pass = match std::env::var("SMTP_PASSWORD") {
+        Ok(v) => v,
+        Err(_) => { println!("❌ Missing SMTP_PASSWORD"); return None; }
+    };
+    
+    let from = match std::env::var("SMTP_FROM_EMAIL") {
+        Ok(v) => v,
+        Err(_) => { println!("❌ Missing SMTP_FROM_EMAIL"); return None; }
+    };
+    
     let name = std::env::var("SMTP_NAME").unwrap_or_else(|_| "Toscanini".to_string());
 
+    println!("✅ Email config loaded successfully");
     Some(EmailConfig {
         smtp_server: host,
         smtp_port: port,
