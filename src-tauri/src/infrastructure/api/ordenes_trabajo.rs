@@ -200,7 +200,8 @@ pub async fn cambiar_estado_orden_trabajo(orden_id: i32, nuevo_estado: String, u
 
 pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let (client, base_url) = get_base_url()?;
-    let url = format!("{}/associate/cotizacion", base_url);
+    // Intentamos primero con el endpoint corregido
+    let url = format!("{}/associate-cotizacion", base_url);
     
     let body = serde_json::json!({
         "orden_id": orden_id,
@@ -208,13 +209,36 @@ pub async fn asignar_cotizacion_orden_trabajo(orden_id: i32, cotizacion_id: i32,
         "updated_by": updated_by
     });
     
+    println!("🔗 Asignando cotización {} a orden {} en URL: {}", cotizacion_id, orden_id, url);
+
     let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
-    response.json::<Option<OrdenTrabajo>>().await.map_err(|e| e.to_string())
+    
+    if !response.status().is_success() {
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            println!("⚠️ Endpoint /associate-cotizacion no encontrado (404). Intentando fallback a /associate/cotizacion");
+            let fallback_url = format!("{}/associate/cotizacion", base_url);
+            let fallback_response = client.post(&fallback_url).json(&body).send().await.map_err(|e| e.to_string())?;
+            
+            if !fallback_response.status().is_success() {
+                let error_msg = fallback_response.text().await.unwrap_or_default();
+                println!("❌ Error en fallback asignando cotización: {}", error_msg);
+                return Err(format!("Error API (Fallback): {}", error_msg));
+            }
+        } else {
+            let error_msg = response.text().await.unwrap_or_default();
+            println!("❌ Error asignando cotización: {}", error_msg);
+            return Err(format!("Error API: {}", error_msg));
+        }
+    }
+
+    // Hacemos un get explícito para devolver la orden actualizada.
+    get_orden_trabajo_by_id(orden_id).await
 }
 
 pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
     let (client, base_url) = get_base_url()?;
-    let url = format!("{}/associate/informe", base_url);
+    // Corregido según API_MAPPING_ORDEN_TRABAJO.md: /associate-informe
+    let url = format!("{}/associate-informe", base_url);
     
     let body = serde_json::json!({
         "orden_id": orden_id,
@@ -222,8 +246,17 @@ pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updat
         "updated_by": updated_by
     });
     
+    println!("🔗 Asignando informe {} a orden {} en URL: {}", informe_id, orden_id, url);
+
     let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
-    response.json::<Option<OrdenTrabajo>>().await.map_err(|e| e.to_string())
+    
+    if !response.status().is_success() {
+        let error_msg = response.text().await.unwrap_or_default();
+        println!("❌ Error asignando informe: {}", error_msg);
+        return Err(format!("Error API: {}", error_msg));
+    }
+
+    get_orden_trabajo_by_id(orden_id).await
 }
 
 pub async fn get_ordenes_trabajo_stats() -> Result<serde_json::Value, String> {

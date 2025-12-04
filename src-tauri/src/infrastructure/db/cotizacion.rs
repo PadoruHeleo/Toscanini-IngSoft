@@ -173,6 +173,17 @@ pub async fn create_cotizacion(request: CreateCotizacionRequest) -> Result<Cotiz
     } else {
         println!("⚠️ No se proporcionaron piezas, solo se eliminaron las existentes");
     }
+
+    // Vincular con orden de trabajo si se proporciona orden_id
+    if let Some(orden_id) = request.orden_id {
+        println!("🔗 create_cotizacion: Vinculando cotización {} a orden {}", cotizacion_id, orden_id);
+        sqlx::query("UPDATE ORDEN_TRABAJO SET cotizacion_id = ? WHERE orden_id = ?")
+            .bind(cotizacion_id)
+            .bind(orden_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Database error linking order: {}", e))?;
+    }
     
     // Confirmar transacción
     tx.commit().await.map_err(|e| format!("Database error: {}", e))?;

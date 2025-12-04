@@ -66,6 +66,7 @@ pub struct CreateCotizacionRequest {
     pub informe: String,
     pub created_by: i32,
     pub piezas: Option<Vec<PiezaCotizacionRequest>>,
+    pub orden_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

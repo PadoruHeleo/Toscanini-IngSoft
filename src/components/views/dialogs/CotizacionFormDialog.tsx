@@ -687,6 +687,7 @@ export default function CotizacionFormDialog({
                   return piezaData;
                 })
               : undefined,
+          orden_id: ordenTrabajoId,
         };
 
         console.log("📤 Enviando datos de cotización:", createData);
@@ -711,6 +712,8 @@ export default function CotizacionFormDialog({
         // Agregar piezas a la cotización
         await updateCotizacionPiezas(cotizacionId);
 
+        // La asociación ahora se maneja en el backend al crear la cotización
+        /*
         let asociadaAOrden = false;
         // Si se proporciona ordenTrabajoId, asociar la cotización a la orden
         if (ordenTrabajoId) {
@@ -738,6 +741,7 @@ export default function CotizacionFormDialog({
             );
           }
         }
+        */
 
         // Aplicar términos y condiciones seleccionados
         if (selectedTerminos.length > 0) {
@@ -764,11 +768,7 @@ export default function CotizacionFormDialog({
         success(
           "Cotización creada",
           `La cotización ha sido creada exitosamente.` +
-            (ordenTrabajoId
-              ? asociadaAOrden
-                ? " (Asociada a la orden de trabajo)"
-                : " (No se pudo asociar a la orden de trabajo)"
-              : "")
+            (ordenTrabajoId ? " (Asociada a la orden de trabajo)" : "")
         );
         onCotizacionAdded();
       }
