@@ -47,7 +47,16 @@ pub async fn get_orden_trabajo_by_id(orden_id: i32) -> Result<Option<OrdenTrabaj
 pub async fn create_orden_trabajo(request: CreateOrdenTrabajoRequest) -> Result<OrdenTrabajo, String> {
     let (client, base_url) = get_base_url()?;
     let response = client.post(&base_url).json(&request).send().await.map_err(|e| e.to_string())?;
-    response.json::<OrdenTrabajo>().await.map_err(|e| e.to_string())
+    
+    if !response.status().is_success() {
+        let error_msg = response.text().await.unwrap_or_default();
+        return Err(format!("Error API: {}", error_msg));
+    }
+
+    let body_text = response.text().await.map_err(|e| e.to_string())?;
+    println!("📦 Respuesta Create Orden: {}", body_text);
+
+    serde_json::from_str(&body_text).map_err(|e| format!("Error decoding response: {} - Body: {}", e, body_text))
 }
 
 pub async fn update_orden_trabajo(orden_id: i32, request: UpdateOrdenTrabajoRequest, _updated_by: i32) -> Result<Option<OrdenTrabajo>, String> {
