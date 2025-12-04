@@ -31,7 +31,7 @@ pub struct Pieza {
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct PiezaCotizacion {
     pub pieza_id: i32,
-    pub cotizacion_id: i32,
+    pub cotizacion_id: Option<i32>,
     pub cantidad: Option<i32>,
     // Campos adicionales para JOINs
     pub pieza_nombre: Option<String>,
@@ -86,6 +86,7 @@ pub struct CreatePiezaRequest {
     pub pieza_marca: Option<String>,
     pub pieza_desc: Option<String>,
     pub pieza_precio: Option<i32>,
+    pub pieza_stock: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -106,29 +107,50 @@ pub struct UpdatePiezaRequest {
     pub pieza_marca: Option<String>,
     pub pieza_desc: Option<String>,
     pub pieza_precio: Option<i32>,
+    pub pieza_stock: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct InventarioEquipo {
+    #[serde(alias = "inventario_equipo_id")]
     pub equipo_id: i32,
+    pub equipo_codigo: Option<String>,
+    pub equipo_nombre: Option<String>,
     pub equipo_tipo: Option<String>,
     pub equipo_marca: Option<String>,
     pub equipo_modelo: Option<String>,
+    pub equipo_descripcion: Option<String>,
+    pub equipo_precio: Option<i32>,
+    pub equipo_stock: Option<i32>,
     pub numero_serie: Option<String>,
     pub equipo_estado: Option<String>,
     pub equipo_ubicacion: Option<String>,
+    pub fecha_adquisicion: Option<DateTime<Utc>>,
+    pub proveedor: Option<String>,
+    pub garantia_vencimiento: Option<DateTime<Utc>>,
+    pub observaciones: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InventarioEquipoRequest {
+    pub equipo_codigo: Option<String>,
+    pub equipo_nombre: Option<String>,
     pub equipo_tipo: Option<String>,
     pub equipo_marca: Option<String>,
     pub equipo_modelo: Option<String>,
+    pub equipo_descripcion: Option<String>,
+    pub equipo_precio: Option<i32>,
+    pub equipo_stock: Option<i32>,
     pub numero_serie: Option<String>,
     pub equipo_estado: Option<String>,
     pub equipo_ubicacion: Option<String>,
+    pub fecha_adquisicion: Option<DateTime<Utc>>,
+    pub proveedor: Option<String>,
+    pub garantia_vencimiento: Option<DateTime<Utc>>,
+    pub observaciones: Option<String>,
+    pub created_by: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
