@@ -455,12 +455,72 @@ pub async fn update_cotizacion_piezas(cotizacion_id: i32, piezas: Vec<PiezaCotiz
     Ok(true)
 }
 
-// Stubs for missing functions
+pub async fn aprobar_cotizacion(cotizacion_id: i32, approved_by: i32) -> Result<bool, String> {
+    let (client, base_url) = get_base_url("cotizaciones")?;
+    let url = format!("{}/aprobar", base_url);
+    
+    let body = json!({
+        "cotizacion_id": cotizacion_id,
+        "approved_by": approved_by
+    });
+    
+    let response = client.post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    if !response.status().is_success() {
+        return Err(response.text().await.unwrap_or_default());
+    }
+    
+    Ok(true)
+}
+
+pub async fn duplicate_cotizacion(cotizacion_id: i32, created_by: i32, new_informe_id: Option<i32>) -> Result<Cotizacion, String> {
+    let (client, base_url) = get_base_url("cotizaciones")?;
+    let url = format!("{}/duplicar", base_url);
+    
+    let body = json!({
+        "cotizacion_id": cotizacion_id,
+        "created_by": created_by,
+        "new_informe_id": new_informe_id
+    });
+    
+    let response = client.post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    if !response.status().is_success() {
+        return Err(response.text().await.unwrap_or_default());
+    }
+    
+    response.json::<Cotizacion>().await.map_err(|e| e.to_string())
+}
+
+pub async fn get_cotizacion_pdf_data(cotizacion_id: i32) -> Result<serde_json::Value, String> {
+    let (client, base_url) = get_base_url("cotizaciones")?;
+    let url = format!("{}/{}/pdf-data", base_url, cotizacion_id);
+    
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Error API: {}", response.status()));
+    }
+    
+    response.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
 
 pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
-    Err("Not implemented via API yet".to_string())
+    // Mapping: /api/piezas (Catálogo)
+    get_piezas().await
 }
 
 pub async fn update_pieza_stock(_pieza_id: i32, _cantidad: i32, _tipo: String) -> Result<bool, String> {
+    // Mapping: No hay endpoint específico para stock de piezas en el catálogo, 
+    // solo para inventario de equipos (/api/inventario-equipos/:id/stock).
+    // Si se refiere a stock de piezas, se usa update_pieza.
     Err("Not implemented via API yet".to_string())
 }
