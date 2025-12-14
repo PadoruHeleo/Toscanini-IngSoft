@@ -574,7 +574,8 @@ pub async fn send_cotizacion_email(config: &EmailConfig, cotizacion_id: i32, sen
     use crate::infrastructure::db::ordenes_trabajo::{get_orden_trabajo_by_id, cambiar_estado_orden_trabajo};
     use crate::infrastructure::db::equipos::get_equipo_by_id;
     use crate::infrastructure::db::clientes::get_cliente_by_id;
-    use crate::pdf::commands::generate_cotizacion_pdf_command;
+    use crate::pdf::db_data::get_cotizacion_pdf_data;
+    use crate::pdf::CotizacionPdfGenerator;
     use crate::database::get_db_pool_safe;
 
     // Obtener la cotización
@@ -582,7 +583,8 @@ pub async fn send_cotizacion_email(config: &EmailConfig, cotizacion_id: i32, sen
         .ok_or_else(|| "Cotización no encontrada".to_string())?;
 
     // Generar el PDF
-    let pdf_bytes = generate_cotizacion_pdf_command(cotizacion_id).await?;
+    let pdf_data = get_cotizacion_pdf_data(cotizacion_id).await?;
+    let pdf_bytes = CotizacionPdfGenerator::new().generate_cotizacion_pdf(pdf_data).await?;
 
     // Buscar la orden de trabajo asociada
     let pool = get_db_pool_safe()?;
@@ -662,7 +664,8 @@ pub async fn send_informe_email(config: &EmailConfig, orden_id: i32, _sent_by: i
     use crate::infrastructure::db::informe::get_informe_by_id;
     use crate::infrastructure::db::equipos::get_equipo_by_id;
     use crate::infrastructure::db::clientes::get_cliente_by_id;
-    use crate::pdf::commands::generate_informe_pdf_command;
+    use crate::pdf::db_data::get_informe_pdf_data;
+    use crate::pdf::InformePdfGenerator;
 
     // Obtener la orden de trabajo
     let orden_trabajo = get_orden_trabajo_by_id(orden_id).await?
@@ -677,7 +680,8 @@ pub async fn send_informe_email(config: &EmailConfig, orden_id: i32, _sent_by: i
         .ok_or_else(|| "Informe no encontrado".to_string())?;
 
     // Generar el PDF del informe
-    let pdf_bytes = generate_informe_pdf_command(informe_id).await?;
+    let pdf_data = get_informe_pdf_data(informe_id).await?;
+    let pdf_bytes = InformePdfGenerator::new().generate_informe_pdf(pdf_data).await?;
 
     // Obtener el equipo
     let equipo_id = orden_trabajo.equipo_id.ok_or_else(|| "La orden no tiene equipo asociado".to_string())?;
