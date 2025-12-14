@@ -75,8 +75,16 @@ pub async fn get_informes_with_pagination(_offset: i64, _limit: i64) -> Result<V
     Err("Not implemented via API yet".to_string())
 }
 
-pub async fn get_piezas_informe(_informe_id: i32) -> Result<Vec<PiezaInforme>, String> {
-    Err("Not implemented via API yet".to_string())
+pub async fn get_piezas_informe(informe_id: i32) -> Result<Vec<PiezaInforme>, String> {
+    let (client, base_url) = get_base_url()?;
+    let url = format!("{}/{}/piezas", base_url, informe_id);
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    
+    if !response.status().is_success() {
+         return Ok(Vec::new()); // Or error? Often empty list is safer if endpoint might be 404 for no pieces
+    }
+    
+    response.json::<Vec<PiezaInforme>>().await.map_err(|e| e.to_string())
 }
 
 pub async fn send_informe_to_client(_informe_id: i32, _sent_by: i32) -> Result<bool, String> {

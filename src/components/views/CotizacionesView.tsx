@@ -185,6 +185,7 @@ export function CotizacionesView() {
       const result = await invoke<boolean>("update_cotizacion", {
         cotizacionId: cotizacion.cotizacion_id,
         request: updateData,
+        updatedBy: user.usuario_id,
       });
 
       if (result) {

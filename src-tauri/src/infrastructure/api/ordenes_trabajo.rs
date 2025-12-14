@@ -251,9 +251,21 @@ pub async fn asignar_informe_orden_trabajo(orden_id: i32, informe_id: i32, updat
     let response = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
     
     if !response.status().is_success() {
-        let error_msg = response.text().await.unwrap_or_default();
-        println!("❌ Error asignando informe: {}", error_msg);
-        return Err(format!("Error API: {}", error_msg));
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            println!("⚠️ Endpoint /associate-informe no encontrado (404). Intentando fallback a /associate/informe");
+            let fallback_url = format!("{}/associate/informe", base_url);
+            let fallback_response = client.post(&fallback_url).json(&body).send().await.map_err(|e| e.to_string())?;
+            
+            if !fallback_response.status().is_success() {
+                let error_msg = fallback_response.text().await.unwrap_or_default();
+                println!("❌ Error en fallback asignando informe: {}", error_msg);
+                return Err(format!("Error API (Fallback): {}", error_msg));
+            }
+        } else {
+            let error_msg = response.text().await.unwrap_or_default();
+            println!("❌ Error asignando informe: {}", error_msg);
+            return Err(format!("Error API: {}", error_msg));
+        }
     }
 
     get_orden_trabajo_by_id(orden_id).await
