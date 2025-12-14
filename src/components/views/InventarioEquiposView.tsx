@@ -44,7 +44,7 @@ import { useToastContext } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface InventarioEquipo {
-  inventario_equipo_id: number;
+  equipo_id: number; // Changed from inventario_equipo_id
   equipo_codigo?: string;
   equipo_nombre?: string;
   equipo_marca?: string;
@@ -64,7 +64,7 @@ interface InventarioEquipo {
 }
 
 interface StockUpdateData {
-  inventario_equipo_id: number;
+  equipo_id: number; // Changed from inventario_equipo_id
   cantidad: number;
   tipo: "entrada" | "salida";
 }
@@ -100,7 +100,7 @@ export function InventarioEquiposView() {
     null
   );
   const [stockUpdate, setStockUpdate] = useState<StockUpdateData>({
-    inventario_equipo_id: 0,
+    equipo_id: 0,
     cantidad: 0,
     tipo: "entrada",
   });
@@ -146,7 +146,7 @@ export function InventarioEquiposView() {
   ) => {
     setSelectedEquipo(equipo);
     setStockUpdate({
-      inventario_equipo_id: equipo.inventario_equipo_id,
+      equipo_id: equipo.equipo_id,
       cantidad: 1,
       tipo: tipo,
     });
@@ -156,7 +156,7 @@ export function InventarioEquiposView() {
   const handleCloseStockDialog = () => {
     setShowStockDialog(false);
     setSelectedEquipo(null);
-    setStockUpdate({ inventario_equipo_id: 0, cantidad: 0, tipo: "entrada" });
+    setStockUpdate({ equipo_id: 0, cantidad: 0, tipo: "entrada" });
   };
 
   const handleOpenCreateDialog = () => {
@@ -228,7 +228,7 @@ export function InventarioEquiposView() {
     try {
       if (editingEquipo) {
         await invoke("update_inventario_equipo", {
-          equipo_id: editingEquipo.inventario_equipo_id,
+          equipoId: editingEquipo.equipo_id,
           request: {
             equipo_codigo: formData.equipo_codigo,
             equipo_nombre: formData.equipo_nombre,
@@ -301,7 +301,7 @@ export function InventarioEquiposView() {
       return;
     try {
       await invoke("delete_inventario_equipo", {
-        equipo_id: equipo.inventario_equipo_id,
+        equipoId: equipo.equipo_id,
       });
 
       // Toast de éxito
@@ -326,12 +326,15 @@ export function InventarioEquiposView() {
     if (!selectedEquipo) return;
 
     try {
-      await invoke("update_inventario_equipo_stock", {
-        equipo_id: stockUpdate.inventario_equipo_id,
+      const payload = {
+        equipoId: stockUpdate.equipo_id,
         cantidad: stockUpdate.cantidad,
         tipo: stockUpdate.tipo === "entrada" ? "add" : "subtract",
-        updated_by: user?.usuario_id || 0,
-      });
+        updatedBy: user?.usuario_id || 0,
+      };
+      console.log("Invoking update_inventario_equipo_stock with:", payload);
+
+      await invoke("update_inventario_equipo_stock", payload);
 
       // Toast de éxito
       const accion = stockUpdate.tipo === "entrada" ? "agregado" : "reducido";
@@ -551,7 +554,7 @@ export function InventarioEquiposView() {
                 const TipoIcon = getTipoIcon(equipo.equipo_tipo || "");
 
                 return (
-                  <TableRow key={equipo.inventario_equipo_id}>
+                  <TableRow key={equipo.equipo_id}>
                     <TableCell className="font-mono text-sm font-medium">
                       {equipo.equipo_codigo}
                     </TableCell>
