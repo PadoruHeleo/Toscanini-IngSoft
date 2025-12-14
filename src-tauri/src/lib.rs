@@ -187,6 +187,7 @@ pub fn run() {
             commands::cotizacion::create_inventario_equipo,
             commands::cotizacion::update_inventario_equipo,
             commands::cotizacion::delete_inventario_equipo,
+            commands::cotizacion::update_inventario_equipo_stock,
 
             // Comandos para salidas de equipos (NUEVA FUNCIONALIDAD)
             commands::cotizacion::registrar_salida_equipo_v2,

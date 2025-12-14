@@ -41,6 +41,7 @@ import { ViewTitle } from "@/components/layout/ViewTitle";
 import { useInventarioEquipoPermissions } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/common/AccessDenied";
 import { useToastContext } from "@/contexts/ToastContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface InventarioEquipo {
   inventario_equipo_id: number;
@@ -86,6 +87,7 @@ interface EquipoFormData {
 export function InventarioEquiposView() {
   const { canViewEquipment } = useInventarioEquipoPermissions();
   const { success, error } = useToastContext();
+  const { user } = useAuth();
   const [equipos, setEquipos] = useState<InventarioEquipo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStockDialog, setShowStockDialog] = useState(false);
@@ -226,7 +228,7 @@ export function InventarioEquiposView() {
     try {
       if (editingEquipo) {
         await invoke("update_inventario_equipo", {
-          equipoId: editingEquipo.inventario_equipo_id,
+          equipo_id: editingEquipo.inventario_equipo_id,
           request: {
             equipo_codigo: formData.equipo_codigo,
             equipo_nombre: formData.equipo_nombre,
@@ -299,7 +301,7 @@ export function InventarioEquiposView() {
       return;
     try {
       await invoke("delete_inventario_equipo", {
-        equipoId: equipo.inventario_equipo_id,
+        equipo_id: equipo.inventario_equipo_id,
       });
 
       // Toast de éxito
@@ -325,9 +327,10 @@ export function InventarioEquiposView() {
 
     try {
       await invoke("update_inventario_equipo_stock", {
-        equipoId: stockUpdate.inventario_equipo_id,
+        equipo_id: stockUpdate.inventario_equipo_id,
         cantidad: stockUpdate.cantidad,
-        tipo: stockUpdate.tipo,
+        tipo: stockUpdate.tipo === "entrada" ? "add" : "subtract",
+        updated_by: user?.usuario_id || 0,
       });
 
       // Toast de éxito

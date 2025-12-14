@@ -347,13 +347,14 @@ pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
     Ok(true)
 }
 
-pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
+pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo: String, updated_by: i32) -> Result<bool, String> {
     let (client, base_url) = get_base_url("inventario-equipos")?;
     let url = format!("{}/{}/stock", base_url, equipo_id);
     
     let body = json!({
         "cantidad": cantidad,
-        "tipo": tipo
+        "tipo": tipo,
+        "updated_by": updated_by
     });
     
     let response = client.post(&url)

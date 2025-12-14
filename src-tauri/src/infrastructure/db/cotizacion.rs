@@ -1122,3 +1122,39 @@ pub async fn get_cotizacion_pdf_data(cotizacion_id: i32) -> Result<CotizacionPdf
 
     Ok(pdf_data)
 }
+
+pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo: String, updated_by: i32) -> Result<bool, String> {
+    let pool = get_db_pool_safe()?;
+    
+    // Validar tipo
+    if tipo != "add" && tipo != "subtract" {
+        return Err("Tipo de ajuste inválido (use 'add' o 'subtract')".to_string());
+    }
+
+    let operation = if tipo == "add" { "+" } else { "-" };
+    // Usamos COALESCE para tratar null como 0
+    let query = format!("UPDATE INVENTARIO_EQUIPO SET equipo_stock = COALESCE(equipo_stock, 0) {} ? WHERE equipo_id = ?", operation);
+    
+    let result = sqlx::query(&query)
+        .bind(cantidad)
+        .bind(equipo_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    
+    if result.rows_affected() == 0 {
+        return Err("Equipo no encontrado".to_string());
+    }
+
+    // Log action
+    let _ = log_action(
+        "UPDATE_INVENTARIO_STOCK",
+        Some(updated_by),
+        "INVENTARIO_EQUIPO",
+        Some(equipo_id),
+        None,
+        Some(&format!("Stock {} por {}", if tipo == "add" { "aumentado" } else { "disminuido" }, cantidad))
+    ).await;
+        
+    Ok(true)
+}

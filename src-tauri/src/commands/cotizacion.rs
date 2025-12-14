@@ -166,3 +166,12 @@ pub async fn update_inventario_equipo(state: State<'_, AppConfig>, equipo_id: i3
 pub async fn delete_inventario_equipo(state: State<'_, AppConfig>, equipo_id: i32) -> Result<bool, String> {
     if state.use_api { api_impl::delete_inventario_equipo(equipo_id).await } else { db_impl::delete_inventario_equipo(equipo_id).await }
 }
+
+#[tauri::command]
+pub async fn update_inventario_equipo_stock(state: State<'_, AppConfig>, equipo_id: i32, cantidad: i32, tipo: String, updated_by: i32) -> Result<bool, String> {
+    if state.use_api { 
+        api_impl::update_inventario_equipo_stock(equipo_id, cantidad, tipo, updated_by).await 
+    } else { 
+        db_impl::update_inventario_equipo_stock(equipo_id, cantidad, tipo, updated_by).await 
+    }
+}
