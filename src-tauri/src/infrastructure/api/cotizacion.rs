@@ -522,9 +522,24 @@ pub async fn get_piezas_inventario() -> Result<Vec<Pieza>, String> {
     get_piezas().await
 }
 
-pub async fn update_pieza_stock(_pieza_id: i32, _cantidad: i32, _tipo: String) -> Result<bool, String> {
-    // Mapping: No hay endpoint específico para stock de piezas en el catálogo, 
-    // solo para inventario de equipos (/api/inventario-equipos/:id/stock).
-    // Si se refiere a stock de piezas, se usa update_pieza.
-    Err("Not implemented via API yet".to_string())
+pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
+    let (client, base_url) = get_base_url("piezas")?;
+    let url = format!("{}/{}/stock", base_url, pieza_id);
+    
+    let body = json!({
+        "cantidad": cantidad,
+        "tipo": tipo
+    });
+    
+    let response = client.post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    if !response.status().is_success() {
+        return Err(response.text().await.unwrap_or_default());
+    }
+    
+    Ok(true)
 }

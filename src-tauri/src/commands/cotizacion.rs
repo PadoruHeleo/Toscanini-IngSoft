@@ -105,8 +105,9 @@ pub async fn get_piezas_inventario(state: State<'_, AppConfig>) -> Result<Vec<Pi
 }
 
 #[tauri::command]
-pub async fn update_pieza_stock(state: State<'_, AppConfig>, pieza_id: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
-    if state.use_api { api_impl::update_pieza_stock(pieza_id, cantidad, tipo).await } else { db_impl::update_pieza_stock(pieza_id, cantidad, tipo).await }
+#[allow(non_snake_case)]
+pub async fn update_pieza_stock(state: State<'_, AppConfig>, piezaId: i32, cantidad: i32, tipo: String) -> Result<bool, String> {
+    if state.use_api { api_impl::update_pieza_stock(piezaId, cantidad, tipo).await } else { db_impl::update_pieza_stock(piezaId, cantidad, tipo).await }
 }
 
 #[tauri::command]

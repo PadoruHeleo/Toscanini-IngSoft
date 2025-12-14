@@ -205,7 +205,7 @@ export function InventarioPiezasView() {
       await invoke("update_pieza_stock", {
         piezaId: stockUpdate.pieza_id,
         cantidad: stockUpdate.cantidad,
-        tipo: stockUpdate.tipo,
+        tipo: stockUpdate.tipo === "entrada" ? "add" : "subtract",
       });
 
       // Toast de éxito
@@ -222,14 +222,15 @@ export function InventarioPiezasView() {
 
       loadPiezas();
       handleCloseStockDialog();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error updating stock:", e);
 
-      // Toast de error
-      error(
-        "Error al actualizar stock",
-        "No se pudo actualizar el stock de la pieza"
-      );
+      // Toast de error con mensaje específico si está disponible
+      const errorMessage =
+        typeof e === "string"
+          ? e
+          : "No se pudo actualizar el stock de la pieza";
+      error("Error al actualizar stock", errorMessage);
 
       // Si no existe el comando, simular actualización local
       setPiezas((prevPiezas) =>
