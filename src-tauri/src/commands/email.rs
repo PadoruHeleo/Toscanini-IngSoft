@@ -11,6 +11,16 @@ use crate::infrastructure::api::users as api_users;
 use crate::infrastructure::db::users as db_users;
 use crate::infrastructure::db::email::EmailService;
 
+use crate::infrastructure::api::cotizacion as api_cot;
+use crate::infrastructure::db::cotizacion as db_cot;
+use crate::infrastructure::api::informe as api_inf;
+use crate::infrastructure::db::informe as db_inf;
+
+use crate::pdf::api_data;
+use crate::pdf::db_data;
+use crate::pdf::CotizacionPdfGenerator;
+use crate::pdf::InformePdfGenerator;
+
 #[tauri::command]
 pub async fn test_email_send(state: State<'_, AppConfig>, to_email: String) -> Result<String, String> {
     let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
@@ -22,12 +32,9 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
     println!("📧 [Command] send_orden_trabajo_cliente called for Orden ID: {}", orden_id);
     
     let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
-    println!("📧 [Command] Email config found. Host: {}", config.smtp_server);
 
-    // 1. Fetch Data (Orden, Equipo, Cliente)
-    println!("📧 [Command] Fetching data... Mode API: {}", state.use_api);
+    // 1. Fetch Data
     let (orden, equipo, cliente) = if state.use_api {
-        // Fetch via API
         let orden = api_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
         let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
         let equipo = api_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
@@ -35,7 +42,6 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
         let cliente = api_cl::get_cliente_by_id(cliente_id).await?.ok_or("Cliente no encontrado")?;
         (orden, equipo, cliente)
     } else {
-        // Fetch via DB
         let orden = db_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
         let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
         let equipo = db_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
@@ -43,33 +49,22 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
         let cliente = db_cl::get_cliente_by_id(cliente_id).await?.ok_or("Cliente no encontrado")?;
         (orden, equipo, cliente)
     };
-    println!("📧 [Command] Data fetched. Cliente: {:?}, Email: {:?}", cliente.cliente_nombre, cliente.cliente_correo);
 
     // 2. Validate Email
     let to_email = cliente.cliente_correo.as_ref().ok_or("El cliente no tiene email configurado")?;
-    if to_email.trim().is_empty() {
-        return Err("El cliente tiene un email vacío".to_string());
-    }
+    if to_email.trim().is_empty() { return Err("El cliente tiene un email vacío".to_string()); }
 
-    // 3. Send Email using SMTP (always local)
-    println!("📧 [Command] Initializing EmailService...");
+    // 3. Send Email
     let email_service = EmailService::new(config).map_err(|e| format!("Error init EmailService: {}", e))?;
     
-    println!("📧 [Command] Sending email to client: {}", to_email);
-    // Send to Client
-    if let Err(e) = email_service.send_orden_trabajo_cliente(
+    email_service.send_orden_trabajo_cliente(
         to_email,
         cliente.cliente_nombre.as_deref().unwrap_or("Cliente"),
         &orden,
         &equipo
-    ).await {
-        println!("❌ [Command] Error sending email to client: {}", e);
-        return Err(format!("Error enviando email al cliente: {}", e));
-    }
-    println!("📧 [Command] Email sent to client successfully!");
+    ).await.map_err(|e| format!("Error enviando email: {}", e))?;
 
-    // 4. Notify Staff (Admin & Tecnico)
-    println!("📧 [Command] Fetching staff users for notification...");
+    // 4. Notify Staff
     let users_result = if state.use_api {
         api_users::get_usuarios().await
     } else {
@@ -84,28 +79,19 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
             })
             .collect();
 
-        println!("📧 [Command] Found {} staff users to notify", staff_users.len());
-
         for user in staff_users {
             if let Some(email) = &user.usuario_correo {
                 if !email.trim().is_empty() {
-                    let user_name = user.usuario_nombre.as_deref().unwrap_or("Staff");
-                    println!("📧 [Command] Sending notification to staff: {} ({})", user_name, email);
-                    
-                    if let Err(e) = email_service.send_orden_trabajo_staff_notification(
+                    let _ = email_service.send_orden_trabajo_staff_notification(
                         email,
-                        user_name,
+                        user.usuario_nombre.as_deref().unwrap_or("Staff"),
                         &orden,
                         &equipo,
                         cliente.cliente_nombre.as_deref().unwrap_or("Cliente")
-                    ).await {
-                        println!("❌ [Command] Failed to notify staff {}: {}", email, e);
-                    }
+                    ).await;
                 }
             }
         }
-    } else {
-        println!("❌ [Command] Failed to fetch users for notification");
     }
 
     Ok("Emails enviados exitosamente".to_string())
@@ -114,21 +100,131 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
 #[tauri::command]
 pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i32, sent_by: i32) -> Result<String, String> {
     let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
-    // Por ahora, para cotizaciones y informes (que requieren PDF), seguimos usando db_impl
-    // TODO: Refactorizar generación de PDF para soportar API mode
+
+    // 1. Fetch Data
+    let (cotizacion, orden_trabajo, equipo, cliente) = if state.use_api {
+        let cotizacion = api_cot::get_cotizacion_by_id(cotizacion_id).await?.ok_or("Cotización no encontrada")?;
+        let ordenes = api_ot::get_ordenes_trabajo().await?;
+        let orden = ordenes.into_iter().find(|o| o.cotizacion_id == Some(cotizacion_id))
+            .ok_or("La cotización no está asociada a ninguna orden de trabajo")?;
+        let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
+        let equipo = api_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
+        let cliente_id = equipo.cliente_id.ok_or("Equipo sin cliente asociado")?;
+        let cliente = api_cl::get_cliente_by_id(cliente_id).await?.ok_or("Cliente no encontrado")?;
+        (cotizacion, orden, equipo, cliente)
+    } else {
+        let cotizacion = db_cot::get_cotizacion_by_id(cotizacion_id).await?.ok_or("Cotización no encontrada")?;
+        
+        // Manual SQL
+        use crate::database::get_db_pool_safe;
+        let pool = get_db_pool_safe()?;
+        let orden_id: Option<i32> = sqlx::query_scalar("SELECT orden_id FROM ORDEN_TRABAJO WHERE cotizacion_id = ? LIMIT 1")
+            .bind(cotizacion_id)
+            .fetch_optional(&*pool).await.map_err(|e| e.to_string())?;
+            
+        let orden_id = orden_id.ok_or("La cotización no está asociada a ninguna orden de trabajo")?;
+        let orden = db_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
+        let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
+        let equipo = db_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
+        let cliente_id = equipo.cliente_id.ok_or("Equipo sin cliente asociado")?;
+        let cliente = db_cl::get_cliente_by_id(cliente_id).await?.ok_or("Cliente no encontrado")?;
+        (cotizacion, orden, equipo, cliente)
+    };
+
+    let to_email = cliente.cliente_correo.as_ref().ok_or("El cliente no tiene email configurado")?;
+    if to_email.trim().is_empty() { return Err("Email cliente vacío".to_string()); }
+
+    // 2. Generate PDF
+    let pdf_bytes = if state.use_api {
+        let data = api_data::get_cotizacion_pdf_data(cotizacion_id).await?;
+        CotizacionPdfGenerator::new().generate_cotizacion_pdf(data).await?
+    } else {
+        let data = db_data::get_cotizacion_pdf_data(cotizacion_id).await?;
+        CotizacionPdfGenerator::new().generate_cotizacion_pdf(data).await?
+    };
+
+    // 3. Send Email
+    let email_service = EmailService::new(config).map_err(|e| format!("{}", e))?;
+    email_service.send_cotizacion_email_with_pdf(
+        to_email, 
+        cliente.cliente_nombre.as_deref().unwrap_or("Cliente"), 
+        &cotizacion, 
+        &orden_trabajo, 
+        &equipo, 
+        &pdf_bytes
+    ).await.map_err(|e| format!("Error enviando email: {}", e))?;
+
+    // 4. Update Status
     if state.use_api {
-        return Err("El envío de cotizaciones con PDF no está soportado en modo API todavía".to_string());
+        let _ = api_cot::update_cotizacion(cotizacion_id, crate::models::cotizacion::UpdateCotizacionRequest {
+             cotizacion_codigo: None, costo_revision: None, costo_reparacion: None, 
+             costo_total: None, is_aprobada: None, is_borrador: Some(false), informe: None, piezas: None
+        }, sent_by).await;
+        
+        if orden_trabajo.estado.as_deref() == Some("recibido") {
+             let _ = api_ot::cambiar_estado_orden_trabajo(orden_trabajo.orden_id, "cotizacion_enviada".to_string(), sent_by).await;
+        }
+    } else {
+        let _ = db_cot::update_cotizacion(cotizacion_id, crate::models::cotizacion::UpdateCotizacionRequest {
+             cotizacion_codigo: None, costo_revision: None, costo_reparacion: None, 
+             costo_total: None, is_aprobada: None, is_borrador: Some(false), informe: None, piezas: None
+        }, sent_by).await;
+
+         if orden_trabajo.estado.as_deref() == Some("recibido") {
+             let _ = db_ot::cambiar_estado_orden_trabajo(orden_trabajo.orden_id, "cotizacion_enviada".to_string(), sent_by).await;
+        }
     }
-    db_impl::send_cotizacion_email(config, cotizacion_id, sent_by).await
+
+    Ok("Email enviado con éxito".to_string())
 }
 
 #[tauri::command]
-pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, sent_by: i32) -> Result<String, String> {
+pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
     let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
-    // Por ahora, para cotizaciones y informes (que requieren PDF), seguimos usando db_impl
-    // TODO: Refactorizar generación de PDF para soportar API mode
-    if state.use_api {
-        return Err("El envío de informes con PDF no está soportado en modo API todavía".to_string());
-    }
-    db_impl::send_informe_email(config, orden_id, sent_by).await
+
+    // 1. Fetch Data
+    let (informe, orden, equipo, cliente) = if state.use_api {
+        let orden = api_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
+        let informe_id = orden.informe_id.ok_or("La orden no tiene informe asociado")?;
+        let informe = api_inf::get_informe_by_id(informe_id).await?.ok_or("Informe no encontrado")?;
+        let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
+        let equipo = api_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
+        let cliente_id = equipo.cliente_id.ok_or("Equipo sin cliente asociado")?;
+        let cliente = api_cl::get_cliente_by_id(cliente_id).await?.ok_or("Cliente no encontrado")?;
+        (informe, orden, equipo, cliente)
+    } else {
+        let orden = db_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
+        let informe_id = orden.informe_id.ok_or("La orden no tiene informe asociado")?;
+        let informe = db_inf::get_informe_by_id(informe_id).await?.ok_or("Informe no encontrado")?;
+        let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
+        let equipo = db_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
+        let cliente_id = equipo.cliente_id.ok_or("Equipo sin cliente asociado")?;
+        let cliente = db_cl::get_cliente_by_id(cliente_id).await?.ok_or("Cliente no encontrado")?;
+        (informe, orden, equipo, cliente)
+    };
+
+    let to_email = cliente.cliente_correo.as_ref().ok_or("El cliente no tiene email configurado")?;
+    if to_email.trim().is_empty() { return Err("Email cliente vacío".to_string()); }
+
+    // 2. Generate PDF
+    let pdf_bytes = if state.use_api {
+        let data = api_data::get_informe_pdf_data(informe.informe_id).await?;
+        InformePdfGenerator::new().generate_informe_pdf(data).await?
+    } else {
+        let data = db_data::get_informe_pdf_data(informe.informe_id).await?;
+        InformePdfGenerator::new().generate_informe_pdf(data).await?
+    };
+
+    // 3. Send Email
+    let email_service = EmailService::new(config).map_err(|e| format!("{}", e))?;
+    email_service.send_informe_email_with_pdf(
+        to_email, 
+        cliente.cliente_nombre.as_deref().unwrap_or("Cliente"), 
+        &informe, 
+        &orden, 
+        &equipo, 
+        &pdf_bytes
+    ).await.map_err(|e| format!("Error enviando email: {}", e))?;
+
+    Ok("Email enviado con éxito".to_string())
 }
