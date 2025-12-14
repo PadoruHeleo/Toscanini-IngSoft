@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Informe {
+    #[serde(alias = "id")]
     pub informe_id: i32,
     pub informe_codigo: Option<String>,
     pub informe_acciones: Option<String>,

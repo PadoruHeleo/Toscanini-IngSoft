@@ -14,7 +14,9 @@ pub struct OrdenTrabajo {
     pub equipo_id: Option<i32>,
     pub cliente_id: Option<i32>, // A veces útil tenerlo directo
     pub created_by: Option<i32>,
+    #[serde(default)]
     pub cotizacion_id: Option<i32>,
+    #[serde(default)]
     pub informe_id: Option<i32>,
     pub pre_informe: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
