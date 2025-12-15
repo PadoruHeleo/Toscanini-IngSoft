@@ -116,22 +116,39 @@ pub struct UpdatePiezaRequest {
 pub struct InventarioEquipo {
     #[serde(alias = "inventario_equipo_id")]
     pub equipo_id: i32,
+    #[sqlx(default)]
     pub equipo_codigo: Option<String>,
+    #[sqlx(default)]
     pub equipo_nombre: Option<String>,
+    #[sqlx(default)]
     pub equipo_tipo: Option<String>,
+    #[sqlx(default)]
     pub equipo_marca: Option<String>,
+    #[sqlx(default)]
     pub equipo_modelo: Option<String>,
+    #[sqlx(default)]
     pub equipo_descripcion: Option<String>,
+    #[sqlx(default)]
     pub equipo_precio: Option<i32>,
+    #[sqlx(default)]
     pub equipo_stock: Option<i32>,
+    #[sqlx(default)]
     pub numero_serie: Option<String>,
+    #[sqlx(default)]
     pub equipo_estado: Option<String>,
+    #[sqlx(default)]
     pub equipo_ubicacion: Option<String>,
+    #[sqlx(default)]
     pub fecha_adquisicion: Option<DateTime<Utc>>,
+    #[sqlx(default)]
     pub proveedor: Option<String>,
+    #[sqlx(default)]
     pub garantia_vencimiento: Option<DateTime<Utc>>,
+    #[sqlx(default)]
     pub observaciones: Option<String>,
+    #[sqlx(default)]
     pub created_at: Option<DateTime<Utc>>,
+    #[sqlx(default)]
     pub updated_at: Option<DateTime<Utc>>,
 }
 

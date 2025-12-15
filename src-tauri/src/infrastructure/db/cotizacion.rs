@@ -805,15 +805,28 @@ pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> R
 pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
     let pool = get_db_pool_safe()?;
     
-    let equipos = sqlx::query_as::<_, InventarioEquipo>(
-        "SELECT equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie, 
-                equipo_estado, equipo_ubicacion, created_at, updated_at
-         FROM INVENTARIO_EQUIPO
-         ORDER BY created_at DESC"
-    )
-    .fetch_all(&*pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
+    // CORRECCIÓN: Usamos alias para mapear 'inventario_equipo_id' a 'equipo_id'
+    let query = r#"
+        SELECT 
+            inventario_equipo_id AS equipo_id,
+            equipo_tipo, 
+            equipo_marca, 
+            equipo_modelo, 
+            numero_serie, 
+            equipo_estado, 
+            equipo_ubicacion, 
+            equipo_stock,
+            equipo_precio,
+            created_at, 
+            updated_at
+        FROM INVENTARIO_EQUIPO
+        ORDER BY created_at DESC
+    "#;
+    
+    let equipos = sqlx::query_as::<_, InventarioEquipo>(query)
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
     
     Ok(equipos)
 }
@@ -836,11 +849,11 @@ pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Resul
     .execute(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
+
     let equipo_id = result.last_insert_id() as i32;
-    
+
     let equipo = sqlx::query_as::<_, InventarioEquipo>(
-        "SELECT equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie, 
+        "SELECT equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie,
                 equipo_estado, equipo_ubicacion, created_at, updated_at
          FROM INVENTARIO_EQUIPO
          WHERE equipo_id = ?"
@@ -849,14 +862,13 @@ pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Resul
     .fetch_one(&*pool)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
-    
+
     Ok(equipo)
 }
 
 /// Actualizar registro de inventario
 pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoRequest) -> Result<InventarioEquipo, String> {
     let pool = get_db_pool_safe()?;
-    
     let result = sqlx::query(
         "UPDATE INVENTARIO_EQUIPO 
          SET equipo_tipo = ?, equipo_marca = ?, equipo_modelo = ?, numero_serie = ?, 
