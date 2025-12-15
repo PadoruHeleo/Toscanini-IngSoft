@@ -805,10 +805,12 @@ pub async fn update_pieza_stock(pieza_id: i32, cantidad: i32, tipo: String) -> R
 pub async fn get_inventario_equipos() -> Result<Vec<InventarioEquipo>, String> {
     let pool = get_db_pool_safe()?;
     
-    // CORRECCIÓN: Usamos alias para mapear 'inventario_equipo_id' a 'equipo_id'
+    // CORRECCIÓN FINAL: Alineado con 015_create_inventario_equipo_table.sql
     let query = r#"
         SELECT 
             inventario_equipo_id AS equipo_id,
+            equipo_codigo,
+            equipo_nombre,
             equipo_tipo, 
             equipo_marca, 
             equipo_modelo, 
@@ -853,10 +855,10 @@ pub async fn create_inventario_equipo(request: InventarioEquipoRequest) -> Resul
     let equipo_id = result.last_insert_id() as i32;
 
     let equipo = sqlx::query_as::<_, InventarioEquipo>(
-        "SELECT equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie,
+        "SELECT inventario_equipo_id AS equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie,
                 equipo_estado, equipo_ubicacion, created_at, updated_at
          FROM INVENTARIO_EQUIPO
-         WHERE equipo_id = ?"
+         WHERE inventario_equipo_id = ?"
     )
     .bind(equipo_id)
     .fetch_one(&*pool)
@@ -873,7 +875,7 @@ pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoR
         "UPDATE INVENTARIO_EQUIPO 
          SET equipo_tipo = ?, equipo_marca = ?, equipo_modelo = ?, numero_serie = ?, 
              equipo_estado = ?, equipo_ubicacion = ?
-         WHERE equipo_id = ?"
+         WHERE inventario_equipo_id = ?"
     )
     .bind(&request.equipo_tipo)
     .bind(&request.equipo_marca)
@@ -891,10 +893,10 @@ pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoR
     }
     
     let equipo = sqlx::query_as::<_, InventarioEquipo>(
-        "SELECT equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie, 
+        "SELECT inventario_equipo_id AS equipo_id, equipo_tipo, equipo_marca, equipo_modelo, numero_serie, 
                 equipo_estado, equipo_ubicacion, created_at, updated_at
          FROM INVENTARIO_EQUIPO
-         WHERE equipo_id = ?"
+         WHERE inventario_equipo_id = ?"
     )
     .bind(equipo_id)
     .fetch_one(&*pool)
@@ -908,7 +910,7 @@ pub async fn update_inventario_equipo(equipo_id: i32, request: InventarioEquipoR
 pub async fn delete_inventario_equipo(equipo_id: i32) -> Result<bool, String> {
     let pool = get_db_pool_safe()?;
     
-    let result = sqlx::query("DELETE FROM INVENTARIO_EQUIPO WHERE equipo_id = ?")
+    let result = sqlx::query("DELETE FROM INVENTARIO_EQUIPO WHERE inventario_equipo_id = ?")
         .bind(equipo_id)
         .execute(&*pool)
         .await
@@ -1145,7 +1147,7 @@ pub async fn update_inventario_equipo_stock(equipo_id: i32, cantidad: i32, tipo:
 
     let operation = if tipo == "add" { "+" } else { "-" };
     // Usamos COALESCE para tratar null como 0
-    let query = format!("UPDATE INVENTARIO_EQUIPO SET equipo_stock = COALESCE(equipo_stock, 0) {} ? WHERE equipo_id = ?", operation);
+    let query = format!("UPDATE INVENTARIO_EQUIPO SET equipo_stock = COALESCE(equipo_stock, 0) {} ? WHERE inventario_equipo_id = ?", operation);
     
     let result = sqlx::query(&query)
         .bind(cantidad)
