@@ -4,7 +4,6 @@ pub mod utils;
 
 pub mod config;
 pub mod pdf;
-pub mod ssh_tunnel;
 pub mod infrastructure;
 pub mod models;
 
@@ -33,9 +32,9 @@ pub fn run() {
         // Crear runtime de Tokio que se mantenga vivo
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         
-        // Inicializar la base de datos con timeout de 5 segundos
+        // Inicializar la base de datos con timeout de 4 segundos
         let db_init_result = rt.block_on(async {
-            tokio::time::timeout(Duration::from_secs(5), init_database()).await
+            tokio::time::timeout(Duration::from_secs(4), init_database()).await
         });
 
         match db_init_result {
@@ -64,7 +63,7 @@ pub fn run() {
                 app_config.is_fallback_mode = true;
             },
             Err(_) => {
-                eprintln!("❌ Timeout al conectar con base de datos local (5s)");
+                eprintln!("❌ Timeout al conectar con base de datos local (4s)");
                 eprintln!("⚠️ CAMBIANDO A MODO FALLBACK (API)");
                 app_config.use_api = true;
                 app_config.is_fallback_mode = true;
@@ -254,6 +253,7 @@ pub fn run() {
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
             commands::config::get_app_state,
+            commands::config::get_app_config,
             commands::email::send_orden_trabajo_cliente,
             commands::email::send_cotizacion_email,
             commands::email::send_informe_email,

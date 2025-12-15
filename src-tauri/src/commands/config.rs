@@ -112,3 +112,10 @@ pub async fn get_app_state(state: State<'_, RwLock<AppConfig>>) -> Result<AppSta
         is_fallback_mode: config.is_fallback_mode,
     })
 }
+
+/// Obtiene la configuración completa de la aplicación
+#[tauri::command]
+pub async fn get_app_config(state: State<'_, RwLock<AppConfig>>) -> Result<AppConfig, String> {
+    let config = state.read().map_err(|_| "Error de lectura de configuración")?;
+    Ok(config.clone())
+}
