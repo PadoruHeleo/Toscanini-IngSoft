@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use crate::database::{get_database_status as get_db_status, check_database_connection as check_db_connection};
 use crate::config::AppConfig;
 use tauri::State;
@@ -14,8 +15,9 @@ pub struct DatabaseStatusResponse {
 }
 
 #[tauri::command]
-pub async fn get_database_status(state: State<'_, AppConfig>) -> Result<DatabaseStatusResponse, String> {
-    if state.use_api {
+pub async fn get_database_status(state: State<'_, RwLock<AppConfig>>) -> Result<DatabaseStatusResponse, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
         return Ok(DatabaseStatusResponse {
             is_connected: false,
             error_message: Some("Base de datos no disponible en modo API".to_string()),
@@ -32,8 +34,9 @@ pub async fn get_database_status(state: State<'_, AppConfig>) -> Result<Database
 }
 
 #[tauri::command]
-pub async fn check_database_connection(state: State<'_, AppConfig>) -> Result<DatabaseStatusResponse, String> {
-    if state.use_api {
+pub async fn check_database_connection(state: State<'_, RwLock<AppConfig>>) -> Result<DatabaseStatusResponse, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
         return Ok(DatabaseStatusResponse {
             is_connected: false,
             error_message: Some("Operación no disponible en modo API".to_string()),
@@ -51,8 +54,15 @@ pub async fn check_database_connection(state: State<'_, AppConfig>) -> Result<Da
 }
 
 #[tauri::command]
-pub async fn retry_database_connection(state: State<'_, AppConfig>) -> Result<DatabaseStatusResponse, String> {
-    if state.use_api {
+pub async fn retry_database_connection(state: State<'_, RwLock<AppConfig>>) -> Result<DatabaseStatusResponse, String> {
+    // Read config to check if we are allowed to retry
+    let (use_api, is_fallback_mode) = {
+        let config = state.read().map_err(|_| "Error de lectura de configuración")?;
+        (config.use_api, config.is_fallback_mode)
+    };
+
+    // If we are in PURE API mode (not fallback), we don't retry DB connection
+    if use_api && !is_fallback_mode {
         return Ok(DatabaseStatusResponse {
             is_connected: false,
             error_message: Some("Operación no disponible en modo API".to_string()),
@@ -62,6 +72,14 @@ pub async fn retry_database_connection(state: State<'_, AppConfig>) -> Result<Da
     
     match crate::database::retry_database_connection().await {
         Ok(_) => {
+            // Success! If we were in fallback mode, we should revert to DB mode
+            if is_fallback_mode {
+                let mut config = state.write().map_err(|_| "Error de escritura de configuración")?;
+                config.use_api = false;
+                config.is_fallback_mode = false;
+                println!("Connectivity restored: Switching back to DATABASE mode.");
+            }
+
             let status = get_db_status();
             Ok(DatabaseStatusResponse {
                 is_connected: true,
@@ -80,8 +98,9 @@ pub async fn retry_database_connection(state: State<'_, AppConfig>) -> Result<Da
 }
 
 #[tauri::command]
-pub async fn force_run_migrations(state: State<'_, AppConfig>) -> Result<String, String> {
-    if state.use_api {
+pub async fn force_run_migrations(state: State<'_, RwLock<AppConfig>>) -> Result<String, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
         return Err("Operación no disponible en modo API".to_string());
     }
     
@@ -94,8 +113,9 @@ pub async fn force_run_migrations(state: State<'_, AppConfig>) -> Result<String,
 }
 
 #[tauri::command]  
-pub async fn insert_test_data(state: State<'_, AppConfig>) -> Result<String, String> {
-    if state.use_api {
+pub async fn insert_test_data(state: State<'_, RwLock<AppConfig>>) -> Result<String, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
         return Err("Operación no disponible en modo API".to_string());
     }
     
@@ -127,8 +147,9 @@ pub async fn insert_test_data(state: State<'_, AppConfig>) -> Result<String, Str
 }
 
 #[tauri::command]  
-pub async fn check_equipo_ids(state: State<'_, AppConfig>) -> Result<String, String> {
-    if state.use_api {
+pub async fn check_equipo_ids(state: State<'_, RwLock<AppConfig>>) -> Result<String, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
         return Err("Operación no disponible en modo API".to_string());
     }
     

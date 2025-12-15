@@ -27,6 +27,8 @@ use crate::models::email::EmailConfig;
 pub struct AppConfig {
     pub use_api: bool,
     pub email_config: Option<EmailConfig>,
+    #[serde(skip)]
+    pub is_fallback_mode: bool,
 }
 
 impl Default for AppConfig {
@@ -37,6 +39,7 @@ impl Default for AppConfig {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(false),
             email_config: load_email_config(),
+            is_fallback_mode: false,
         }
     }
 }

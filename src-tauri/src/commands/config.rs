@@ -1,5 +1,7 @@
-use crate::config::{DatabaseConfig, SecureConfig};
+use crate::config::{DatabaseConfig, SecureConfig, AppConfig};
 use serde::{Deserialize, Serialize};
+use std::sync::RwLock;
+use tauri::State;
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigResponse {
@@ -11,6 +13,12 @@ pub struct ConfigResponse {
 pub struct ConfigTestResult {
     pub success: bool,
     pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AppStateResponse {
+    pub use_api: bool,
+    pub is_fallback_mode: bool,
 }
 
 /// Verifica si existe una configuración de base de datos guardada
@@ -93,4 +101,14 @@ pub async fn delete_database_config() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_default_database_config() -> Result<DatabaseConfig, String> {
     Ok(DatabaseConfig::default())
+}
+
+/// Obtiene el estado actual de la aplicación (modo API vs DB, modo recuperación)
+#[tauri::command]
+pub async fn get_app_state(state: State<'_, RwLock<AppConfig>>) -> Result<AppStateResponse, String> {
+    let config = state.read().map_err(|_| "Error de lectura de configuración")?;
+    Ok(AppStateResponse {
+        use_api: config.use_api,
+        is_fallback_mode: config.is_fallback_mode,
+    })
 }

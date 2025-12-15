@@ -8,6 +8,8 @@ pub mod ssh_tunnel;
 pub mod infrastructure;
 pub mod models;
 
+use std::sync::RwLock;
+use std::time::Duration;
 use database::{init_database, start_auto_reconnect_task, start_periodic_connection_check};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -22,7 +24,7 @@ pub fn run() {
     dotenv::dotenv().ok();
     
     // Cargar AppConfig para determinar el modo de operación
-    let app_config = config::AppConfig::default();
+    let mut app_config = config::AppConfig::default();
     
     // Solo inicializar DB/SSH si NO estamos en modo API
     if !app_config.use_api {
@@ -31,35 +33,50 @@ pub fn run() {
         // Crear runtime de Tokio que se mantenga vivo
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         
-        // Inicializar la base de datos
-        rt.block_on(async {
-            if let Err(e) = init_database().await {
-                eprintln!("Warning: Failed to initialize database: {}", e);
+        // Inicializar la base de datos con timeout de 5 segundos
+        let db_init_result = rt.block_on(async {
+            tokio::time::timeout(Duration::from_secs(5), init_database()).await
+        });
+
+        match db_init_result {
+            Ok(Ok(_)) => {
+                println!("✅ Base de datos local conectada correctamente.");
+                
+                // Tareas periódicas solo si conectó bien
+                rt.block_on(async {
+                    start_auto_reconnect_task();
+                    start_periodic_connection_check(10);
+                });
+
+                // Mantener el runtime vivo
+                std::thread::spawn(move || {
+                    rt.block_on(async {
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+                        }
+                    });
+                });
+            },
+            Ok(Err(e)) => {
+                eprintln!("❌ Error al inicializar base de datos: {}", e);
+                eprintln!("⚠️ CAMBIANDO A MODO FALLBACK (API)");
+                app_config.use_api = true;
+                app_config.is_fallback_mode = true;
+            },
+            Err(_) => {
+                eprintln!("❌ Timeout al conectar con base de datos local (5s)");
+                eprintln!("⚠️ CAMBIANDO A MODO FALLBACK (API)");
+                app_config.use_api = true;
+                app_config.is_fallback_mode = true;
             }
-            
-            // Iniciar la tarea de reconexión automática (solo cuando no está conectada)
-            start_auto_reconnect_task();
-            
-            // Iniciar verificación periódica cada 10 segundos
-            start_periodic_connection_check(10);
-        });
-        
-        // Mantener el runtime vivo usando spawn_blocking
-        std::thread::spawn(move || {
-            rt.block_on(async {
-                // Mantener el runtime corriendo indefinidamente
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-                }
-            });
-        });
+        }
     } else {
         println!("🌐 Inicializando en modo API-ONLY (sin base de datos local)...");
         println!("   Las consultas se realizarán mediante llamadas a la API remota");
     }
     
     tauri::Builder::default()
-        .manage(app_config)  // Hacer AppConfig disponible para todos los comandos
+        .manage(RwLock::new(app_config))  // Hacer RwLock<AppConfig> disponible
         .plugin(tauri_plugin_opener::init())        
         .invoke_handler(tauri::generate_handler![
             commands::users::get_usuarios,
@@ -236,6 +253,7 @@ pub fn run() {
             commands::config::test_database_connection,
             commands::config::delete_database_config,
             commands::config::get_default_database_config,
+            commands::config::get_app_state,
             commands::email::send_orden_trabajo_cliente,
             commands::email::send_cotizacion_email,
             commands::email::send_informe_email,

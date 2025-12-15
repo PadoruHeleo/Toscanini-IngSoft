@@ -16,6 +16,8 @@ import {
   CheckCircle,
   Wifi,
   WifiOff,
+  Cloud,
+  AlertTriangle,
 } from "lucide-react";
 
 interface DatabaseStatus {
@@ -24,16 +26,26 @@ interface DatabaseStatus {
   last_check?: string;
 }
 
+interface AppState {
+  use_api: boolean;
+  is_fallback_mode: boolean;
+}
+
 export function DatabaseConnectionStatus() {
   const [status, setStatus] = useState<DatabaseStatus | null>(null);
+  const [appState, setAppState] = useState<AppState | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
 
   const checkDatabaseStatus = async () => {
     try {
       setIsChecking(true);
-      const result = await invoke<DatabaseStatus>("get_database_status");
-      setStatus(result);
+      const [dbResult, stateResult] = await Promise.all([
+        invoke<DatabaseStatus>("get_database_status"),
+        invoke<AppState>("get_app_state"),
+      ]);
+      setStatus(dbResult);
+      setAppState(stateResult);
     } catch (error) {
       console.error("Error checking database status:", error);
       setStatus({
@@ -89,6 +101,9 @@ export function DatabaseConnectionStatus() {
       setIsRetrying(true);
       const result = await invoke<DatabaseStatus>("retry_database_connection");
       setStatus(result);
+      // Actualizar estado completo
+      const stateResult = await invoke<AppState>("get_app_state");
+      setAppState(stateResult);
     } catch (error) {
       console.error("Error retrying database connection:", error);
       setStatus({
@@ -105,6 +120,8 @@ export function DatabaseConnectionStatus() {
       setIsChecking(true);
       const result = await invoke<DatabaseStatus>("check_database_connection");
       setStatus(result);
+      const stateResult = await invoke<AppState>("get_app_state");
+      setAppState(stateResult);
     } catch (error) {
       console.error("Error rechecking database connection:", error);
       setStatus({
@@ -123,7 +140,7 @@ export function DatabaseConnectionStatus() {
     return () => clearInterval(interval);
   }, []);
 
-  if (!status) {
+  if (!status || !appState) {
     return (
       <Card className="w-full max-w-md mx-auto">
         <CardHeader>
@@ -160,7 +177,37 @@ export function DatabaseConnectionStatus() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-3">
-          {status.is_connected ? (
+          {appState.use_api ? (
+            appState.is_fallback_mode ? (
+              // Fallback Mode
+              <>
+                <div className="flex items-center gap-2 text-amber-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  <Cloud className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-amber-600 font-medium block">
+                    Modo Recuperación
+                  </span>
+                  <span className="text-xs text-amber-700">
+                    Usando API (DB Local no disponible)
+                  </span>
+                </div>
+              </>
+            ) : (
+              // API Mode
+              <>
+                <div className="flex items-center gap-2 text-blue-600">
+                  <Cloud className="h-5 w-5" />
+                  <Wifi className="h-4 w-4" />
+                </div>
+                <span className="text-blue-600 font-medium">
+                  Conectado (API)
+                </span>
+              </>
+            )
+          ) : // DB Mode
+          status.is_connected ? (
             <>
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="h-5 w-5" />

@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use tauri::State;
 use crate::config::AppConfig;
 use crate::models::logs::{
@@ -7,37 +8,21 @@ use crate::infrastructure::db::logs as db_impl;
 use crate::infrastructure::api::logs as api_impl;
 
 #[tauri::command]
-pub async fn create_audit_log(state: State<'_, AppConfig>, request: CreateAuditLogRequest) -> Result<AuditLog, String> {
-    if state.use_api { api_impl::create_audit_log(request).await } else { db_impl::create_audit_log(request).await }
+pub async fn create_audit_log(state: State<'_, RwLock<AppConfig>>, request: CreateAuditLogRequest) -> Result<AuditLog, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api { api_impl::create_audit_log(request).await } else { db_impl::create_audit_log(request).await }
 }
 
 #[tauri::command]
-pub async fn get_audit_log_by_id(state: State<'_, AppConfig>, log_id: i32) -> Result<Option<AuditLog>, String> {
-    if state.use_api { api_impl::get_audit_log_by_id(log_id).await } else { db_impl::get_audit_log_by_id(log_id).await }
+pub async fn get_audit_log_by_id(state: State<'_, RwLock<AppConfig>>, log_id: i32) -> Result<Option<AuditLog>, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api { api_impl::get_audit_log_by_id(log_id).await } else { db_impl::get_audit_log_by_id(log_id).await }
 }
 
 #[tauri::command]
-pub async fn get_audit_logs(state: State<'_, AppConfig>, filters: Option<LogFilters>) -> Result<Vec<AuditLogWithUser>, String> {
-    // Note: api_impl might not support all filters or return AuditLogWithUser exactly as DB.
-    // Assuming api_impl has been updated or we need to handle discrepancy.
-    // api_impl::get_logs returns Vec<AuditLog>.
-    // api_impl::get_logs_filtrados returns Vec<AuditLog>.
-    // We need to match the return type.
-    // If API doesn't support returning user info joined, we might have a problem or need to fetch it separately.
-    // For now, let's assume we use DB implementation mostly or API needs update.
-    // But the task is to refactor commands.
-    // Let's check api_impl again.
-    
-    // api_impl::get_logs returns Result<Vec<AuditLog>, String>
-    // db_impl::get_audit_logs returns Result<Vec<AuditLogWithUser>, String>
-    
-    // This is a mismatch.
-    // I should probably wrap the API result to match or update API implementation.
-    // Given the constraints, I will use conditional compilation or just call the appropriate function and map if needed.
-    // But I cannot change the return type of the command easily without breaking frontend.
-    // The command returns Result<Vec<AuditLogWithUser>, String>.
-    
-    if state.use_api { 
+pub async fn get_audit_logs(state: State<'_, RwLock<AppConfig>>, filters: Option<LogFilters>) -> Result<Vec<AuditLogWithUser>, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api { 
         // API implementation currently returns Vec<AuditLog>, not AuditLogWithUser.
         // We might need to map it or fail.
         // For now, let's assume we can map it (missing user info).
@@ -67,8 +52,9 @@ pub async fn get_audit_logs(state: State<'_, AppConfig>, filters: Option<LogFilt
 }
 
 #[tauri::command]
-pub async fn get_audit_logs_by_user(state: State<'_, AppConfig>, usuario_id: i32, limit: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
-    if state.use_api {
+pub async fn get_audit_logs_by_user(state: State<'_, RwLock<AppConfig>>, usuario_id: i32, limit: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
         // Similar mapping needed
         // For now, falling back to DB or implementing mapping
          let filters = LogFilters {
@@ -96,8 +82,9 @@ pub async fn get_audit_logs_by_user(state: State<'_, AppConfig>, usuario_id: i32
 }
 
 #[tauri::command]
-pub async fn get_audit_logs_by_entity(state: State<'_, AppConfig>, entidad_tabla: String, entidad_id: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
-    if state.use_api {
+pub async fn get_audit_logs_by_entity(state: State<'_, RwLock<AppConfig>>, entidad_tabla: String, entidad_id: Option<i32>) -> Result<Vec<AuditLogWithUser>, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api {
             // API might not support this specific filter via get_logs_filtrados if it's not in LogFilters.
             // I'll assume for now we map what we can.
             // ..Default::default()
@@ -110,9 +97,10 @@ pub async fn get_audit_logs_by_entity(state: State<'_, AppConfig>, entidad_tabla
 }
 
 #[tauri::command]
-pub async fn cleanup_old_audit_logs(state: State<'_, AppConfig>, days_old: i32) -> Result<u64, String> {
+pub async fn cleanup_old_audit_logs(state: State<'_, RwLock<AppConfig>>, days_old: i32) -> Result<u64, String> {
     // API might not expose cleanup
-    if state.use_api { 
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api { 
         Err("Cleanup not supported via API".to_string()) 
     } else { 
         db_impl::cleanup_old_audit_logs(days_old).await 
@@ -120,8 +108,9 @@ pub async fn cleanup_old_audit_logs(state: State<'_, AppConfig>, days_old: i32) 
 }
 
 #[tauri::command]
-pub async fn count_audit_logs(state: State<'_, AppConfig>) -> Result<i64, String> {
-    if state.use_api { 
+pub async fn count_audit_logs(state: State<'_, RwLock<AppConfig>>) -> Result<i64, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api { 
         // API might not expose count
         // We can fetch all and count? No, too expensive.
         // Assuming API has a count endpoint or we fail.
@@ -132,8 +121,9 @@ pub async fn count_audit_logs(state: State<'_, AppConfig>) -> Result<i64, String
 }
 
 #[tauri::command]
-pub async fn get_audit_stats(state: State<'_, AppConfig>) -> Result<serde_json::Value, String> {
-    if state.use_api { 
+pub async fn get_audit_stats(state: State<'_, RwLock<AppConfig>>) -> Result<serde_json::Value, String> {
+    let use_api = state.read().map_err(|_| "Error de lectura de configuración")?.use_api;
+    if use_api { 
         Err("Stats not supported via API".to_string())
     } else { 
         db_impl::get_audit_stats().await 

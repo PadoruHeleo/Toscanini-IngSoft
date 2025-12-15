@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use tauri::State;
 use crate::config::AppConfig;
 use crate::infrastructure::db::email as db_impl;
@@ -22,19 +23,25 @@ use crate::pdf::CotizacionPdfGenerator;
 use crate::pdf::InformePdfGenerator;
 
 #[tauri::command]
-pub async fn test_email_send(state: State<'_, AppConfig>, to_email: String) -> Result<String, String> {
-    let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
-    db_impl::send_test_email(config, to_email).await
+pub async fn test_email_send(state: State<'_, RwLock<AppConfig>>, to_email: String) -> Result<String, String> {
+    let email_config = state.read().map_err(|_| "Error de lectura de configuración")?.email_config.clone();
+    let config = email_config.ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
+    db_impl::send_test_email(&config, to_email).await
 }
 
 #[tauri::command]
-pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
+pub async fn send_orden_trabajo_cliente(state: State<'_, RwLock<AppConfig>>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
     println!("📧 [Command] send_orden_trabajo_cliente called for Orden ID: {}", orden_id);
     
-    let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
+    let (email_config, use_api) = {
+        let config_guard = state.read().map_err(|_| "Error de lectura de configuración")?;
+        (config_guard.email_config.clone(), config_guard.use_api)
+    };
+
+    let config = email_config.ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
 
     // 1. Fetch Data
-    let (orden, equipo, cliente) = if state.use_api {
+    let (orden, equipo, cliente) = if use_api {
         let orden = api_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
         let equipo_id = orden.equipo_id.ok_or("La orden no tiene equipo asociado")?;
         let equipo = api_eq::get_equipo_by_id(equipo_id).await?.ok_or("Equipo no encontrado")?;
@@ -55,7 +62,7 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
     if to_email.trim().is_empty() { return Err("El cliente tiene un email vacío".to_string()); }
 
     // 3. Send Email
-    let email_service = EmailService::new(config).map_err(|e| format!("Error init EmailService: {}", e))?;
+    let email_service = EmailService::new(&config).map_err(|e| format!("Error init EmailService: {}", e))?;
     
     email_service.send_orden_trabajo_cliente(
         to_email,
@@ -65,7 +72,7 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
     ).await.map_err(|e| format!("Error enviando email: {}", e))?;
 
     // 4. Notify Staff
-    let users_result = if state.use_api {
+    let users_result = if use_api {
         api_users::get_usuarios().await
     } else {
         db_users::get_usuarios().await
@@ -98,11 +105,16 @@ pub async fn send_orden_trabajo_cliente(state: State<'_, AppConfig>, orden_id: i
 }
 
 #[tauri::command]
-pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i32, sent_by: i32) -> Result<String, String> {
-    let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
+pub async fn send_cotizacion_email(state: State<'_, RwLock<AppConfig>>, cotizacion_id: i32, sent_by: i32) -> Result<String, String> {
+    let (email_config, use_api) = {
+        let config_guard = state.read().map_err(|_| "Error de lectura de configuración")?;
+        (config_guard.email_config.clone(), config_guard.use_api)
+    };
+
+    let config = email_config.ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
 
     // 1. Fetch Data
-    let (cotizacion, orden_trabajo, equipo, cliente) = if state.use_api {
+    let (cotizacion, orden_trabajo, equipo, cliente) = if use_api {
         let cotizacion = api_cot::get_cotizacion_by_id(cotizacion_id).await?.ok_or("Cotización no encontrada")?;
         let ordenes = api_ot::get_ordenes_trabajo().await?;
         let orden = ordenes.into_iter().find(|o| o.cotizacion_id == Some(cotizacion_id))
@@ -135,7 +147,7 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
     if to_email.trim().is_empty() { return Err("Email cliente vacío".to_string()); }
 
     // 2. Generate PDF
-    let pdf_bytes = if state.use_api {
+    let pdf_bytes = if use_api {
         let data = api_data::get_cotizacion_pdf_data(cotizacion_id).await?;
         CotizacionPdfGenerator::new().generate_cotizacion_pdf(data).await?
     } else {
@@ -144,7 +156,7 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
     };
 
     // 3. Send Email
-    let email_service = EmailService::new(config).map_err(|e| format!("{}", e))?;
+    let email_service = EmailService::new(&config).map_err(|e| format!("{}", e))?;
     email_service.send_cotizacion_email_with_pdf(
         to_email, 
         cliente.cliente_nombre.as_deref().unwrap_or("Cliente"), 
@@ -155,7 +167,7 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
     ).await.map_err(|e| format!("Error enviando email: {}", e))?;
 
     // 4. Update Status
-    if state.use_api {
+    if use_api {
         let _ = api_cot::update_cotizacion(cotizacion_id, crate::models::cotizacion::UpdateCotizacionRequest {
              cotizacion_codigo: None, costo_revision: None, costo_reparacion: None, 
              costo_total: None, is_aprobada: None, is_borrador: Some(false), informe: None, piezas: None
@@ -179,11 +191,16 @@ pub async fn send_cotizacion_email(state: State<'_, AppConfig>, cotizacion_id: i
 }
 
 #[tauri::command]
-pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
-    let config = state.email_config.as_ref().ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
+pub async fn send_informe_email(state: State<'_, RwLock<AppConfig>>, orden_id: i32, _sent_by: i32) -> Result<String, String> {
+    let (email_config, use_api) = {
+        let config_guard = state.read().map_err(|_| "Error de lectura de configuración")?;
+        (config_guard.email_config.clone(), config_guard.use_api)
+    };
+
+    let config = email_config.ok_or("Configuración de email no encontrada. Verifique variables SMTP en .env")?;
 
     // 1. Fetch Data
-    let (informe, orden, equipo, cliente) = if state.use_api {
+    let (informe, orden, equipo, cliente) = if use_api {
         let orden = api_ot::get_orden_trabajo_by_id(orden_id).await?.ok_or("Orden no encontrada")?;
         let informe_id = orden.informe_id.ok_or("La orden no tiene informe asociado")?;
         let informe = api_inf::get_informe_by_id(informe_id).await?.ok_or("Informe no encontrado")?;
@@ -207,7 +224,7 @@ pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sen
     if to_email.trim().is_empty() { return Err("Email cliente vacío".to_string()); }
 
     // 2. Generate PDF
-    let pdf_bytes = if state.use_api {
+    let pdf_bytes = if use_api {
         let data = api_data::get_informe_pdf_data(informe.informe_id).await?;
         InformePdfGenerator::new().generate_informe_pdf(data).await?
     } else {
@@ -216,7 +233,7 @@ pub async fn send_informe_email(state: State<'_, AppConfig>, orden_id: i32, _sen
     };
 
     // 3. Send Email
-    let email_service = EmailService::new(config).map_err(|e| format!("{}", e))?;
+    let email_service = EmailService::new(&config).map_err(|e| format!("{}", e))?;
     email_service.send_informe_email_with_pdf(
         to_email, 
         cliente.cliente_nombre.as_deref().unwrap_or("Cliente"), 
