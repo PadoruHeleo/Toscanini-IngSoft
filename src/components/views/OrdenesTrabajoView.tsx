@@ -53,6 +53,7 @@ interface OrdenTrabajo {
   created_at?: string;
   finished_at?: string;
   estado_updated_at?: string;
+  cliente_id?: number;
 }
 
 const getEstadoStyles = (estado?: string) => {

@@ -21,7 +21,8 @@ pub async fn get_ordenes_trabajo() -> Result<Vec<OrdenTrabajo>, String> {
 
     let ordenes = sqlx::query_as::<_, OrdenTrabajo>(
         "SELECT orden_id, orden_codigo, orden_desc, prioridad, estado, has_garantia, 
-                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at 
+                equipo_id, created_by, cotizacion_id, informe_id, pre_informe, created_at, finished_at,
+                NULL as cliente_id
          FROM ORDEN_TRABAJO 
          ORDER BY created_at DESC"
     )

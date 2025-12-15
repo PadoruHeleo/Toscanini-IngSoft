@@ -12,6 +12,7 @@ pub struct OrdenTrabajo {
     pub estado: Option<String>,
     pub has_garantia: Option<bool>,
     pub equipo_id: Option<i32>,
+    #[sqlx(default)]
     pub cliente_id: Option<i32>, // A veces útil tenerlo directo
     pub created_by: Option<i32>,
     #[serde(default)]
@@ -21,6 +22,7 @@ pub struct OrdenTrabajo {
     pub pre_informe: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
+    #[sqlx(default)]
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
